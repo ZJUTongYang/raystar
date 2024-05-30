@@ -1,0 +1,5 @@
+ <library path="lib/libraystar">
+  <class name="raystar/Raystar" type="raystar::Raystar" base_class_type="nav_core::BaseGlobalPlanner">
+    <description>This is a global planner plugin called Ray*.</description>
+  </class>
+ </library>
