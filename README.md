@@ -3,7 +3,7 @@ Ray* is a C++ ROS implementation of a novel planner to solve the k-shortest non-
 
 The package is compatible with the ```global_planner``` package in ROS Navigation: It visualizes the k-paths as markers and reports the shortest path to the ```move_base``` framework. Designed for grid-based maps, Ray* offers an efficient solution, making it a suitable replacement for the ```global_planner```. 
 
-![Demonstration of Some Tests](https://github.com/ZJUTongYang/raystar/blob/main/doc/raystar_ros_demo.mp4)
+![Demonstration of Some Tests](https://github.com/ZJUTongYang/raystar/blob/main/doc/raystar_ros_demo.gif)
 
 ## Citation
 If you use Ray* in your project, please cite the following paper: 
