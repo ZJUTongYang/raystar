@@ -29,12 +29,15 @@ pages={1-7},
 
 ### Installation
 (1) Clone this repository
+
 (2) Build it with ```catkin_make```
 
 ### Usage
 To use Ray* with ROS Navigation stack, replace the default global planner setting with Ray*: 
 (1) Open the ```move_base``` launch file. 
+
 (2) Find the parameter for the global planner and change it from ```global_planner/GlobalPlanner``` to ```raystar/Raystar```. 
+
 (3) Run the ROS Navigation stack as you normally would.
 
 ## Interface
@@ -46,6 +49,7 @@ The number of required non-homotopic locally shortest path, ```K``` (default: ``
 ### Output
 
 (1) ```non_homotopic_paths```(type: ```visualization_msgs::MarkerArray```): A topic that visualises all the k paths.
+
 (2) ```poly_obstacles```(type: ```visualization_msgs::MarkerArray```): A topic that visualises polygonal obstacles (for debugging purposes).
 
 ## License
