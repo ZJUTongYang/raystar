@@ -9,7 +9,7 @@ The package is compatible with the ```global_planner``` package in ROS Navigatio
 If you use Ray* in your project, please cite the following paper: 
  ```bibtex
 @article{Yang2024Tree, 
-author={Tong Yang, Li Huang, Yue Wang, and Rong Xiong}, 
+author={Yang, Tong and Huang, Li and Wang, Yue and Xiong, Rong}, 
 journal={Proceedings of the IEEE International Conference on Robotic and Automation (ICRA) 2024}, 
 title={Tree-based Representation of Locally Shortest Paths for 2D k-Shortest Non-homotopic Path Planning},
 year={2024}, 
