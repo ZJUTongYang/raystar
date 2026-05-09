@@ -1,0 +1,11 @@
+nav_msgs/OccupancyGrid    map                  # Occupancy grid (0=free, 100=occupied, -1=unknown)
+geometry_msgs/PoseStamped start                # Start pose (frame_id should match map frame)
+geometry_msgs/PoseStamped goal                 # Goal pose (frame_id should match map frame)
+int32                     k                    # Max number of non-homotopic paths to return
+bool                      allow_self_crossing  # Allow paths that cross themselves
+bool                      allow_unknown        # Treat unknown cells (-1) as free
+---
+bool                      success              # True if at least one path was found
+string                    message              # Error description if success=false
+nav_msgs/Path[]           paths                # Planned non-homotopic paths (world frame)
+float64[]                 path_costs           # Cost of each path (same order as paths)
