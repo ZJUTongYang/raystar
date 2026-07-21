@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 #include <utility>
 #include <functional>
@@ -108,7 +109,7 @@ struct PlanResult
   std::vector<PathSolution> path_solutions;
   double map_time_ms = 0.0;
   double plan_time_ms = 0.0;
-  const Polymap* polymap = nullptr;
+  std::shared_ptr<const Polymap> polymap;  // owns the Polymap; safe to use after plan() returns
 };
 
 class RaystarCore

@@ -23,7 +23,13 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr non_homotopic_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr poly_obstacle_pub_;
 
+  rclcpp::TimerBase::SharedPtr visualize_timer_;
+
   RaystarCore core_;
+
+  std::shared_ptr<const Polymap> last_polymap_;
+  std::vector<PathSolution> last_solutions_;
+  GridMap last_map_;
 
   void handleService(
     const std::shared_ptr<raystar_interfaces::srv::GetRaystarPaths::Request> request,
@@ -38,6 +44,8 @@ private:
 
   nav_msgs::msg::Path buildPathMsg(
     const std::vector<std::pair<int, int>>& path, const GridMap& grid_map) const;
+
+  void republishVisualizations();
 };
 
 }  // namespace raystar

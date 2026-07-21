@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 project(raystar_rviz_plugins)
 
+set(CMAKE_AUTOMOC ON)
+
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
@@ -31,6 +33,7 @@ set(rviz_plugins_deps
 
 add_library(raystar_rviz_plugins SHARED
   src/raystar_panel.cpp
+  include/raystar_rviz_plugins/raystar_panel.h
 )
 target_include_directories(raystar_rviz_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

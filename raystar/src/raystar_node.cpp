@@ -14,10 +14,14 @@ RaystarNode::RaystarNode(const rclcpp::NodeOptions& options)
     std::bind(&RaystarNode::handleService, this,
       std::placeholders::_1, std::placeholders::_2));
 
+  auto latched = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
   non_homotopic_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
-    "~/non_homotopic_paths", 1);
+    "~/non_homotopic_paths", latched);
   poly_obstacle_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
-    "~/poly_obstacles", 1);
+    "~/poly_obstacles", latched);
+
+  visualize_timer_ = create_wall_timer(std::chrono::seconds(2),
+    std::bind(&RaystarNode::republishVisualizations, this));
 
   RCLCPP_INFO(get_logger(), "Raystar node initialized");
 }
@@ -103,6 +107,10 @@ void RaystarNode::handleService(
     response->path_costs.push_back(sol.path_cost_);
   }
 
+  last_polymap_ = result.polymap;
+  last_solutions_ = result.path_solutions;
+  last_map_ = work_map;
+
   if (result.polymap) {
     publishPolyObstacles(*result.polymap, work_map);
     publishNonHomotopicPaths(result.path_solutions, work_map);
@@ -172,7 +180,7 @@ void RaystarNode::publishPolyObstacles(const Polymap& polymap, const GridMap& gr
   marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
   marker.action = visualization_msgs::msg::Marker::ADD;
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.1;
+  marker.scale.x = 0.05;
   marker.color.r = 1.0;
   marker.color.a = 1.0;
 
@@ -222,7 +230,6 @@ void RaystarNode::publishNonHomotopicPaths(
   visualization_msgs::msg::Marker marker;
   marker.header.frame_id = "map";
   marker.header.stamp = now();
-  marker.ns = "non_homotopic_paths";
   marker.id = 0;
   marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
   marker.action = visualization_msgs::msg::Marker::ADD;
@@ -236,6 +243,7 @@ void RaystarNode::publishNonHomotopicPaths(
   for (size_t si = 0; si < solutions.size(); ++si)
   {
     marker.id++;
+    marker.ns = "path_" + std::to_string(si + 1);
     marker.points.clear();
     marker.colors.clear();
 
@@ -271,6 +279,13 @@ void RaystarNode::publishNonHomotopicPaths(
     array.markers.push_back(marker);
   }
   non_homotopic_pub_->publish(array);
+}
+
+void RaystarNode::republishVisualizations()
+{
+  if (!last_polymap_) return;
+  publishPolyObstacles(*last_polymap_, last_map_);
+  publishNonHomotopicPaths(last_solutions_, last_map_);
 }
 
 }  // namespace raystar

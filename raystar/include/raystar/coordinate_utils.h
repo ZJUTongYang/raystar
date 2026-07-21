@@ -49,12 +49,12 @@ inline bool worldToMap(const GridMap& map, double wx, double wy,
   return mx < map.width && my < map.height;
 }
 
-/// Grid coordinates (cells) -> World coordinates (meters, cell center).
+/// Grid coordinates (cells) -> World coordinates (meters).
 inline void mapToWorld(const GridMap& map, unsigned int mx, unsigned int my,
                        double& wx, double& wy)
 {
-  wx = map.origin_x + (static_cast<double>(mx) + 0.5) * map.resolution;
-  wy = map.origin_y + (static_cast<double>(my) + 0.5) * map.resolution;
+  wx = map.origin_x + static_cast<double>(mx) * map.resolution;
+  wy = map.origin_y + static_cast<double>(my) * map.resolution;
 }
 
 /// Normalize angle to [-PI, PI]

@@ -261,15 +261,15 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
   outlineMap(work_map.data, work_map.width, work_map.height);
 
   auto map_start_time = std::chrono::high_resolution_clock::now();
-  Polymap theMap(work_map, start_x, start_y, goal_x, goal_y);
+  auto theMap = std::make_shared<Polymap>(work_map, start_x, start_y, goal_x, goal_y);
   auto map_end_time = std::chrono::high_resolution_clock::now();
   result.map_time_ms = std::chrono::duration_cast<std::chrono::microseconds>(
     map_end_time - map_start_time).count() / 1000.0;
 
-  if (!theMap.solution_exist_) {
+  if (!theMap->solution_exist_) {
     result.success = false;
     result.message = "No path exists between start and goal";
-    result.polymap = &theMap;
+    result.polymap = theMap;
     return result;
   }
 
@@ -295,10 +295,10 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
     {
       std::vector<std::pair<double, double>> Vtemp;
       std::vector<std::pair<int, int>> topo_Vtemp;
-      theMap.getVisibilityRegion(start_x, start_y, Vtemp, topo_Vtemp);
-      N_.emplace_back(Node(&theMap, 0, start_x, start_y, 0.0,
+      theMap->getVisibilityRegion(start_x, start_y, Vtemp, topo_Vtemp);
+      N_.emplace_back(Node(theMap.get(), 0, start_x, start_y, 0.0,
         best_candidate.Fcost_, Vtemp, topo_Vtemp));
-      N_.back().generateChild(&theMap);
+      N_.back().generateChild(theMap.get());
     }
     else
     {
@@ -333,9 +333,9 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
 
       std::vector<std::pair<double, double>> Vtemp;
       std::vector<std::pair<int, int>> topo_Vtemp;
-      getScopedVisibilityRegion(theMap, best_candidate, Vtemp, topo_Vtemp);
+      getScopedVisibilityRegion(*theMap, best_candidate, Vtemp, topo_Vtemp);
 
-      N_.emplace_back(Node(&theMap, new_node_index,
+      N_.emplace_back(Node(theMap.get(), new_node_index,
         new_source_point.first, new_source_point.second,
         N_[parent_index].C_[child_index].c_gcost_,
         N_[parent_index].C_[child_index].c_hcost_,
@@ -349,7 +349,7 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
       N_.back().start_angle_ = N_[parent_index].C_[child_index].start_angle_;
       N_.back().end_angle_ = N_[parent_index].C_[child_index].end_angle_;
 
-      N_.back().generateChild(&theMap);
+      N_.back().generateChild(theMap.get());
     }
 
     for (auto& child : N_.back().C_)
@@ -381,7 +381,7 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
   result.success = !result.path_solutions.empty();
   if (!result.success)
     result.message = "Planning completed but no path found";
-  result.polymap = &theMap;
+  result.polymap = theMap;
   return result;
 }
 
