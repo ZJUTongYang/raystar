@@ -1,6 +1,7 @@
 <library path="raystar_rviz_plugins">
-  <class type="raystar_rviz_plugins::RaystarPanel"
+  <class name="raystar_rviz_plugins/RaystarPanel"
+         type="raystar_rviz_plugins::RaystarPanel"
          base_class_type="rviz_common::Panel">
-    <description>Panel for Ray* non-homotopic path planner. Provides UI to set parameters and call the planning service.</description>
+    <description>Panel for the Ray* non-homotopic path planning Action, including cooperative cancellation.</description>
   </class>
 </library>

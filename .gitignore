@@ -1,0 +1,28 @@
+# ROS 2 / colcon generated trees
+/build/
+/install/
+/log/
+
+# Local build and tooling metadata
+compile_commands.json
+.cache/
+.clangd/
+.ccls-cache/
+
+# Editors and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Coverage and sanitizer output
+coverage/
+coverage.info
+*.gcda
+*.gcno
+*.profraw
+*.profdata

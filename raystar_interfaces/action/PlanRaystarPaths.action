@@ -1,0 +1,25 @@
+# Cancellable cached-map planning goal. The server subscribes to its configured
+# map_topic and accepts this goal only when map_id identifies that exact cached
+# OccupancyGrid snapshot. This keeps the large map out of each Action sample.
+unique_identifier_msgs/UUID map_id
+geometry_msgs/PoseStamped start
+geometry_msgs/PoseStamped goal
+int32                     k
+# When false, consecutive segments may share their construction waypoint, but
+# a new segment may not revisit an earlier waypoint or intersect a
+# non-consecutive segment by crossing, touching, or collinear overlap.
+bool                      allow_self_crossing
+bool                      allow_unknown        # Treat only unknown cells (-1) as free; values below -1 are rejected
+bool                      include_debug        # Opt in to bounded DebugNode output; server default budget is zero
+---
+# The Action terminal state is authoritative. In particular, a canceled goal
+# has terminal state CANCELED and success=false; bounded diagnostic/output
+# arrays may be empty when cancellation is observed.
+bool                                  success
+raystar_interfaces/PlanningResultInfo result_info
+string                                message
+raystar_interfaces/PathResult[]       path_results
+raystar_interfaces/DebugNode[]        debug_nodes
+---
+# Raystar currently reports completion through the result only. This section
+# is intentionally empty; the Action is used for goal identity and cancel.

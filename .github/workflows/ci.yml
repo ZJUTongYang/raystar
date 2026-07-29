@@ -1,0 +1,349 @@
+name: Raystar ROS 2 CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: raystar-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ROS_DISTRO: humble
+  ROS_PYTHON_VERSION: "3"
+  ROS_LOG_DIR: /tmp/raystar_ros_logs
+  AMENT_TRACE_SETUP_FILES: ""
+
+jobs:
+  build-test:
+    name: Build and test (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: minimum Humble / CGAL 5.4
+            os: ubuntu-22.04
+            ros_distro: humble
+          - label: current Jazzy / CGAL 5.6
+            os: ubuntu-24.04
+            ros_distro: jazzy
+    env:
+      ROS_DISTRO: ${{ matrix.ros_distro }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ matrix.ros_distro }}
+      - name: Install workspace dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions python3-rosdep libxml2-utils
+          rosdep update --rosdistro "${ROS_DISTRO}"
+          rosdep install --from-paths . --ignore-src --rosdistro "${ROS_DISTRO}" \
+            --reinstall -r -y
+      - name: Record dependency matrix lane
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          echo "ROS_DISTRO=${ROS_DISTRO}"
+          dpkg-query -W -f='${Package}\t${Version}\n' \
+            libcgal-dev libgmp-dev libmpfr-dev qtbase5-dev \
+            "ros-${ROS_DISTRO}-rclcpp" "ros-${ROS_DISTRO}-rviz-common" \
+            "ros-${ROS_DISTRO}-pluginlib"
+      - name: Check whitespace and build
+        shell: bash
+        run: |
+          set -eo pipefail
+          git diff --check
+          xmllint --noout raystar/package.xml raystar_interfaces/package.xml \
+            raystar_rviz_plugins/package.xml raystar_rviz_plugins/raystar_rviz_plugins.xml
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          colcon build --merge-install --event-handlers console_cohesion+ \
+            --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+      - name: Run tests and lint contracts
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          source install/setup.bash
+          colcon test --merge-install --event-handlers console_cohesion+ \
+            --return-code-on-test-failure
+          colcon test-result --verbose
+
+  sanitizers:
+    name: Address/UB sanitizers
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions python3-rosdep
+          rosdep update --rosdistro "${ROS_DISTRO}"
+          rosdep install --from-paths . --ignore-src --rosdistro "${ROS_DISTRO}" \
+            --reinstall -r -y
+      - name: Build with ASan and UBSan
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          colcon build --merge-install --event-handlers console_cohesion+ \
+            --cmake-args -DCMAKE_BUILD_TYPE=Debug \
+              -DBUILD_TESTING=ON \
+              "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer" \
+              "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer" \
+              "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined" \
+              "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined"
+      - name: Run non-process-isolation tests under sanitizers
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          source install/setup.bash
+          # The integration fixture deliberately forks a ROS process; its
+          # lifecycle is covered by the normal job.  Unit, interface, and
+          # plugin tests still exercise the instrumented production code.
+          colcon test --merge-install --event-handlers console_cohesion+ \
+            --return-code-on-test-failure --ctest-args -E test_integration
+          colcon test-result --verbose
+
+  coverage:
+    name: Native coverage
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions python3-rosdep lcov
+          rosdep update --rosdistro "${ROS_DISTRO}"
+          rosdep install --from-paths . --ignore-src --rosdistro "${ROS_DISTRO}" \
+            --reinstall -r -y
+      - name: Build and test with coverage instrumentation
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          colcon build --merge-install --event-handlers console_cohesion+ \
+            --cmake-args -DCMAKE_BUILD_TYPE=Debug \
+              -DBUILD_TESTING=ON \
+              "-DCMAKE_CXX_FLAGS=--coverage -fno-omit-frame-pointer" \
+              "-DCMAKE_C_FLAGS=--coverage" \
+              "-DCMAKE_EXE_LINKER_FLAGS=--coverage" \
+              "-DCMAKE_SHARED_LINKER_FLAGS=--coverage"
+          source install/setup.bash
+          colcon test --merge-install --event-handlers console_cohesion+ \
+            --return-code-on-test-failure --ctest-args -E test_integration
+          colcon test-result --verbose
+      - name: Collect coverage report
+        shell: bash
+        run: |
+          set -eo pipefail
+          mkdir -p coverage
+          lcov --capture --directory build --output-file coverage/coverage.info \
+            --ignore-errors mismatch,unused
+          lcov --remove coverage/coverage.info '/opt/ros/*' '/usr/*' \
+            --output-file coverage/coverage.info --ignore-errors mismatch,unused
+          genhtml coverage/coverage.info --output-directory coverage/html \
+            --title "Raystar ROS 2 coverage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raystar-coverage
+          path: coverage
+
+  static-analysis:
+    name: Format and clang-tidy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+      - name: Install analysis tools and dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang-format clang-tidy python3-colcon-common-extensions \
+            python3-rosdep
+          rosdep update --rosdistro "${ROS_DISTRO}"
+          rosdep install --from-paths . --ignore-src --rosdistro "${ROS_DISTRO}" \
+            --reinstall -r -y
+      - name: Check changed C++ formatting
+        shell: bash
+        run: |
+          set -eo pipefail
+          git diff --check
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          mapfile -t files < <(git diff --name-only "${base}" HEAD -- \
+            '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx')
+          if ((${#files[@]})); then
+            clang-format --dry-run --Werror --style=file "${files[@]}"
+          else
+            echo "No changed C/C++ files require formatting check."
+          fi
+      - name: Build compile commands
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          colcon build --merge-install --event-handlers console_cohesion+ \
+            --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=OFF
+      - name: Run clang-tidy on changed production files
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          mapfile -t files < <(git diff --name-only "${base}" HEAD -- \
+            'raystar/src/*.cpp' 'raystar/include/**/*.h' 'raystar/include/**/*.hpp' \
+            'raystar_rviz_plugins/src/*.cpp' 'raystar_rviz_plugins/include/**/*.h' \
+            'raystar_rviz_plugins/include/**/*.hpp')
+          for file in "${files[@]}"; do
+            case "${file}" in
+              raystar/*) db=build/raystar ;;
+              raystar_rviz_plugins/*) db=build/raystar_rviz_plugins ;;
+              *) continue ;;
+            esac
+            clang-tidy "${file}" -p "${db}" --quiet
+          done
+
+  relocated-install:
+    name: Relocated non-symlink install contract (Humble)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -eo pipefail
+          sudo apt-get update
+          sudo apt-get install -y python3-colcon-common-extensions python3-rosdep
+          rosdep update --rosdistro "${ROS_DISTRO}"
+          rosdep install --from-paths . --ignore-src --rosdistro "${ROS_DISTRO}" \
+            --reinstall -r -y
+      - name: Build a non-symlink install and move it
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          colcon --log-base log-relocated build --merge-install \
+            --event-handlers console_cohesion+ \
+            --build-base build-relocated --install-base install-relocated \
+            --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DBUILD_TESTING=OFF
+          mv install-relocated install-moved
+          test ! -e install-relocated
+      - name: Load and run only from the moved install
+        shell: bash
+        run: |
+          set -eo pipefail
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          source install-moved/setup.bash
+          moved_prefix="$(realpath install-moved)"
+          test "$(realpath "$(ros2 pkg prefix raystar)")" = "${moved_prefix}"
+          test "$(realpath "$(ros2 pkg prefix raystar_interfaces)")" = "${moved_prefix}"
+          test "$(realpath "$(ros2 pkg prefix raystar_rviz_plugins)")" = "${moved_prefix}"
+          ros2 launch raystar raystar_demo.launch.py --show-args
+          raystar_prefix="$(ros2 pkg prefix raystar)"
+          plugin_prefix="$(ros2 pkg prefix raystar_rviz_plugins)"
+          test -f "${raystar_prefix}/share/raystar/launch/raystar_demo.launch.py"
+          test -f "${raystar_prefix}/share/raystar/rviz/raystar_test.rviz"
+          test -f "${raystar_prefix}/share/raystar/test/testmap.yaml"
+          test -f "${plugin_prefix}/share/raystar_rviz_plugins/raystar_rviz_plugins.xml"
+          grep -q 'raystar_rviz_plugins/RaystarPanel' \
+            "${plugin_prefix}/share/raystar_rviz_plugins/raystar_rviz_plugins.xml"
+
+          if ldd "${raystar_prefix}/lib/raystar/raystar_node" | grep -q 'not found'; then
+            echo "raystar_node has an unresolved relocated runtime dependency" >&2
+            exit 1
+          fi
+          if ldd "${plugin_prefix}/lib/libraystar_rviz_plugins.so" | grep -q 'not found'; then
+            echo "RaystarPanel has an unresolved relocated runtime dependency" >&2
+            exit 1
+          fi
+
+          cmake -S .github/relocated_install_smoke \
+            -B build-relocated-install-smoke \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build-relocated-install-smoke --parallel 2
+          export QT_QPA_PLATFORM=offscreen
+          export XDG_RUNTIME_DIR="$(pwd)/build-relocated-install-smoke/xdg"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
+          build-relocated-install-smoke/export_target_smoke
+          build-relocated-install-smoke/plugin_loader_smoke "${moved_prefix}"
+
+          export ROS_DOMAIN_ID=73
+          export ROS_LOCALHOST_ONLY=1
+          export ROS_LOG_DIR="$(pwd)/build-relocated-install-smoke/ros-logs"
+          mkdir -p "${ROS_LOG_DIR}"
+
+          set +e
+          timeout --signal=INT --kill-after=5s 3s \
+            ros2 run raystar raystar_node --ros-args \
+              -p enable_legacy_map_service:=false \
+              -p path_visualization_republish_period_ms:=0 \
+            >build-relocated-install-smoke/node.log 2>&1
+          node_status=$?
+          set -e
+          if [ "${node_status}" -ne 124 ]; then
+            cat build-relocated-install-smoke/node.log
+            echo "relocated raystar_node exited before the smoke timeout" >&2
+            exit 1
+          fi
+          grep -q 'Raystar node initialized:' \
+            build-relocated-install-smoke/node.log
+
+          set +e
+          timeout --signal=INT --kill-after=5s 5s \
+            ros2 launch raystar raystar_demo.launch.py \
+              start_map_server:=false start_rviz:=false \
+              enable_legacy_map_service:=false \
+              path_visualization_republish_period_ms:=0 \
+            >build-relocated-install-smoke/launch.log 2>&1
+          launch_status=$?
+          set -e
+          if [ "${launch_status}" -ne 124 ]; then
+            cat build-relocated-install-smoke/launch.log
+            echo "relocated launch exited before the smoke timeout" >&2
+            exit 1
+          fi
+          grep -q 'Raystar node initialized:' \
+            build-relocated-install-smoke/launch.log

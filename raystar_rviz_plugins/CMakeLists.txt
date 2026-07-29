@@ -12,21 +12,23 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
-find_package(rviz_common REQUIRED)
-find_package(rviz_rendering REQUIRED)
-find_package(pluginlib REQUIRED)
+find_package(rviz_common 11.2 REQUIRED)
+find_package(pluginlib 5.1 REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(raystar_interfaces REQUIRED)
+find_package(unique_identifier_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
+find_package(Qt5 5.15 REQUIRED COMPONENTS Widgets)
 
 set(rviz_plugins_deps
   rviz_common
-  rviz_rendering
   pluginlib
   rclcpp
+  rclcpp_action
   raystar_interfaces
+  unique_identifier_msgs
   nav_msgs
   geometry_msgs
 )
@@ -51,9 +53,71 @@ install(DIRECTORY include/
 )
 
 install(TARGETS raystar_rviz_plugins
+  EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-ament_package()
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+
+  # Some ROS 2 logging backends open a file as soon as a Qt/RViz test creates
+  # its first node.  Keep the test hermetic when colcon is invoked without a
+  # user-provided ROS_LOG_DIR (for example, on a read-only CI home).
+  set(_raystar_plugin_test_log_dir
+    "${CMAKE_CURRENT_BINARY_DIR}/test_ros_logs")
+  file(MAKE_DIRECTORY "${_raystar_plugin_test_log_dir}")
+
+  pluginlib_enable_plugin_testing(
+    PACKAGE_NAME ${PROJECT_NAME}
+    PLUGIN_CATEGORY rviz_common
+    PLUGIN_DESCRIPTIONS raystar_rviz_plugins.xml
+    PLUGIN_LIBRARIES raystar_rviz_plugins
+    CMAKE_TARGET_VAR plugin_test_mock_target
+    AMENT_PREFIX_PATH_VAR plugin_test_prefix
+  )
+
+  ament_add_gtest(test_raystar_panel_plugin
+    test/test_raystar_panel_plugin.cpp
+    SKIP_LINKING_MAIN_LIBRARIES
+    ENV "QT_QPA_PLATFORM=offscreen"
+        "ROS_LOG_DIR=${_raystar_plugin_test_log_dir}"
+    APPEND_ENV "AMENT_PREFIX_PATH=${plugin_test_prefix}"
+  )
+  if(TARGET test_raystar_panel_plugin)
+    ament_target_dependencies(test_raystar_panel_plugin
+      pluginlib
+      rviz_common
+      rclcpp
+      rclcpp_action
+      raystar_interfaces
+      unique_identifier_msgs
+      nav_msgs
+      geometry_msgs
+    )
+    target_include_directories(test_raystar_panel_plugin PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_raystar_panel_plugin
+      raystar_rviz_plugins
+      Qt5::Widgets
+    )
+    add_dependencies(test_raystar_panel_plugin
+      raystar_rviz_plugins
+      "${plugin_test_mock_target}"
+    )
+  endif()
+endif()
+
+# The panel header is installed as a public plugin API.  Export the target,
+# include path, and all transitive ROS/Qt dependencies so a downstream CMake
+# package can link to it without relying on this source tree's build paths.
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_include_directories(include)
+ament_export_libraries(raystar_rviz_plugins)
+ament_export_dependencies(${rviz_plugins_deps})
+
+ament_package(CONFIG_EXTRAS cmake/raystar_rviz_plugins-extras.cmake)

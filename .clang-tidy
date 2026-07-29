@@ -1,0 +1,16 @@
+Checks: >-
+  -*,
+  clang-analyzer-core.*,
+  clang-analyzer-cplusplus.NewDelete,
+  clang-analyzer-cplusplus.Move,
+  clang-analyzer-unix.Malloc,
+  bugprone-use-after-move,
+  bugprone-sizeof-expression,
+  performance-move-const-arg,
+  performance-for-range-copy,
+  portability-simd-intrinsics
+WarningsAsErrors: ''
+HeaderFilterRegex: '(^|/)(raystar|raystar_interfaces|raystar_rviz_plugins)/(include|src)/.*'
+FormatStyle: file
+SystemHeaders: false
+UseColor: false

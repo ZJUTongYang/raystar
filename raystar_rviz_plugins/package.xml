@@ -10,13 +10,32 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>rviz_common</depend>
-  <depend>rviz_rendering</depend>
+  <depend>rclcpp_action</depend>
+  <depend version_gte="11.2.0">rviz_common</depend>
   <depend>raystar_interfaces</depend>
+  <depend>unique_identifier_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>pluginlib</depend>
-  <depend>Qt5</depend>
+  <depend version_gte="5.1.0">pluginlib</depend>
+
+  <!-- The installed public Panel header and exported CMake target need the Qt
+       development package; deployed binaries only need the shared libraries. -->
+  <build_depend version_gte="5.15">qtbase5-dev</build_depend>
+  <build_export_depend version_gte="5.15">qtbase5-dev</build_export_depend>
+  <exec_depend>libqt5-core</exec_depend>
+  <exec_depend>libqt5-widgets</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>rclcpp</test_depend>
+  <test_depend>rclcpp_action</test_depend>
+  <test_depend>raystar_interfaces</test_depend>
+  <test_depend>nav_msgs</test_depend>
+  <test_depend>geometry_msgs</test_depend>
+  <test_depend>unique_identifier_msgs</test_depend>
+  <test_depend>pluginlib</test_depend>
+  <test_depend>rviz_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

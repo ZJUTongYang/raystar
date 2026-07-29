@@ -1,11 +1,28 @@
-nav_msgs/OccupancyGrid    map                  # Occupancy grid (0=free, 100=occupied, -1=unknown)
-geometry_msgs/PoseStamped start                # Start pose (frame_id should match map frame)
-geometry_msgs/PoseStamped goal                 # Goal pose (frame_id should match map frame)
-int32                     k                    # Max number of non-homotopic paths to return
-bool                      allow_self_crossing  # Allow paths that cross themselves
-bool                      allow_unknown        # Treat unknown cells (-1) as free
+# Coordinate contract:
+# - map.header.frame_id must be non-empty and all three frame IDs are limited to
+#   256 UTF-8 bytes. start/goal frame_id must match the map exactly;
+#   the service does not perform TF transforms. The configured response budget
+#   also bounds the corresponding visualization MarkerArrays.
+# - The map must be a finite, axis-aligned 2D OccupancyGrid: resolution > 0,
+#   origin z = 0, and origin orientation is the identity rotation.
+# - start/goal positions must be finite, have z = 0, lie inside the map, and be
+#   strict interiors of the reachable free space (boundary points are rejected).
+#   The outermost ring of grid cells is reserved as the planner boundary, so
+#   start/goal cells in that ring are rejected as well.
+#   Their pose orientations are ignored by the 2D planner.
+nav_msgs/OccupancyGrid    map                  # Values must be -1 or 0..100; values >= server occupied_threshold are occupied
+geometry_msgs/PoseStamped start                # Start position in map.header.frame_id
+geometry_msgs/PoseStamped goal                 # Goal position in map.header.frame_id
+int32                     k                    # Max paths to return; must not exceed the server max_k parameter
+# When false, consecutive segments may share their construction waypoint, but
+# a new segment may not revisit an earlier waypoint or intersect a
+# non-consecutive segment by crossing, touching, or collinear overlap.
+bool                      allow_self_crossing
+bool                      allow_unknown        # Treat only unknown cells (-1) as free; values below -1 are rejected
+bool                      include_debug        # Opt in to bounded DebugNode output; false avoids debug response work
 ---
-bool                      success              # True if at least one path was found
-string                    message              # Error description if success=false
-nav_msgs/Path[]           paths                # Planned non-homotopic paths (world frame)
-float64[]                 path_costs           # Cost of each path (same order as paths)
+bool                                  success       # Compatibility convenience: true iff at least one PathResult is returned
+raystar_interfaces/PlanningResultInfo result_info   # Authoritative machine-readable status, counts, limits, and timings
+string                                message       # Bounded human-readable diagnostic; clients must not parse it for status
+raystar_interfaces/PathResult[]       path_results  # Bounded planned paths with inseparable metric costs
+raystar_interfaces/DebugNode[]        debug_nodes   # Bounded prefix of search-tree debug records

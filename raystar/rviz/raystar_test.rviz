@@ -1,0 +1,244 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 0
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Map1
+        - /Non-Homotopic Paths1
+        - /Non-Homotopic Paths1/Namespaces1
+        - /Poly Obstacles1
+        - /Debug Tree1
+        - /Debug Tree1/Namespaces1
+        - /MarkerArray1
+      Splitter Ratio: 0.5
+    Tree Height: 269
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: raystar_rviz_plugins/RaystarPanel
+    Name: RaystarPanel
+    action_name: /raystar/plan_paths
+    allow_self_crossing: false
+    allow_unknown: false
+    request_debug: false
+    goal_x: 6.7
+    goal_y: 7.7
+    k: 3
+    map_topic: /map
+    start_x: 2.3
+    start_y: 3.3
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 0.699999988079071
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_updates
+      Use Timestamp: false
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Non-Homotopic Paths
+      Namespaces:
+        path_1: true
+        path_2: true
+        path_3: true
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raystar/non_homotopic_paths
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Poly Obstacles
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raystar/poly_obstacles
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Debug Tree
+      Namespaces:
+        costs: false
+        full_visreg_1: true
+        full_visreg_10: false
+        full_visreg_11: false
+        full_visreg_12: false
+        full_visreg_13: false
+        full_visreg_14: false
+        full_visreg_15: false
+        full_visreg_16: false
+        full_visreg_17: false
+        full_visreg_18: false
+        full_visreg_19: false
+        full_visreg_2: true
+        full_visreg_20: false
+        full_visreg_21: false
+        full_visreg_22: false
+        full_visreg_23: false
+        full_visreg_24: false
+        full_visreg_25: false
+        full_visreg_26: false
+        full_visreg_27: false
+        full_visreg_28: false
+        full_visreg_29: false
+        full_visreg_3: true
+        full_visreg_30: false
+        full_visreg_31: false
+        full_visreg_32: false
+        full_visreg_33: false
+        full_visreg_34: false
+        full_visreg_35: false
+        full_visreg_36: false
+        full_visreg_4: true
+        full_visreg_5: true
+        full_visreg_6: true
+        full_visreg_7: true
+        full_visreg_8: true
+        full_visreg_9: true
+        node_0: true
+        node_1: false
+        node_10: false
+        node_11: false
+        node_12: false
+        node_13: false
+        node_14: false
+        node_15: false
+        node_16: false
+        node_17: false
+        node_18: false
+        node_19: false
+        node_2: false
+        node_20: false
+        node_21: false
+        node_22: false
+        node_23: false
+        node_24: false
+        node_25: false
+        node_26: false
+        node_27: false
+        node_28: false
+        node_29: false
+        node_3: false
+        node_30: false
+        node_31: false
+        node_32: false
+        node_33: false
+        node_34: false
+        node_35: false
+        node_36: false
+        node_4: false
+        node_5: false
+        node_6: false
+        node_7: false
+        node_8: false
+        node_9: false
+        seeds: false
+        tree_edges: false
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raystar/debug_tree
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: CDT
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /raystar/cdt
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Angle: 0
+      Class: rviz_default_plugins/TopDownOrtho
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Scale: 186.4063262939453
+      Target Frame: <Fixed Frame>
+      Value: TopDownOrtho (rviz_default_plugins)
+      X: 4.5
+      Y: 5.5
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1376
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000001000000000000031600000506fc0200000004fb000000100044006900730070006c006100790073010000003d0000014a000000c900fffffffb0000000a00560069006500770073010000018d00000104000000a400fffffffb0000001a0052006100790073007400610072002000700061006e0065006c000000061b000001b40000006e00fffffffb00000018005200610079007300740061007200500061006e0065006c0100000297000002ac0000021f00ffffff000003ea0000050600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  RaystarPanel:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1798
+  X: 5257
+  Y: 170

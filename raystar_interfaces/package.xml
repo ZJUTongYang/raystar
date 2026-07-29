@@ -3,7 +3,7 @@
 <package format="3">
   <name>raystar_interfaces</name>
   <version>0.1.0</version>
-  <description>Service definitions for Ray* non-homotopic path planner</description>
+  <description>Action and Service definitions for the Ray* non-homotopic path planner</description>
   <maintainer email="tong.yang@zju.edu.cn">Tong Yang</maintainer>
   <license>MIT</license>
 
@@ -12,11 +12,17 @@
 
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>unique_identifier_msgs</depend>
+  <depend>action_msgs</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_cppcheck</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 

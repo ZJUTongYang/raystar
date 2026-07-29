@@ -10,16 +10,38 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rcl_interfaces</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>raystar_interfaces</depend>
-  <depend>angles</depend>
+  <depend>unique_identifier_msgs</depend>
 
-  <build_depend>CGAL</build_depend>
+  <!-- The installed RViz configuration instantiates this panel at runtime. -->
+  <exec_depend>raystar_rviz_plugins</exec_depend>
+
+  <!-- Optional demo bringup dependencies.  The core node does not require a
+       map server or RViz to run, but the bundled launch file does. -->
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <!-- CGAL is a private, header-only build dependency here.  The exact
+       kernel is linked into raystar_node and dynamically uses GMP/MPFR. -->
+  <build_depend version_gte="5.4">cgal</build_depend>
+  <build_depend>libgmp</build_depend>
+  <build_depend>mpfr</build_depend>
+  <exec_depend>libgmp</exec_depend>
+  <exec_depend>mpfr</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
