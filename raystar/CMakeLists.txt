@@ -58,6 +58,33 @@ if(CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE)
   set_property(TARGET raystar_core PROPERTY CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE ON)
 endif()
 
+option(RAYSTAR_BUILD_PROFILING
+  "Build the deterministic Raystar profiling and acceptance runner" OFF)
+if(RAYSTAR_BUILD_PROFILING)
+  add_executable(raystar_profile
+    tools/raystar_profile.cpp
+  )
+  target_include_directories(raystar_profile PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/test
+  )
+  target_compile_features(raystar_profile PRIVATE cxx_std_17)
+  target_compile_definitions(raystar_profile PRIVATE
+    RAYSTAR_PROFILE_TESTMAP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/testmap.pgm"
+  )
+  target_link_libraries(raystar_profile raystar_core)
+  ament_target_dependencies(raystar_profile
+    geometry_msgs
+    nav_msgs
+  )
+  install(TARGETS raystar_profile
+    DESTINATION lib/${PROJECT_NAME}
+  )
+  install(PROGRAMS tools/summarize_profile.py
+    DESTINATION lib/${PROJECT_NAME}
+    RENAME raystar_profile_summary
+  )
+endif()
+
 # ROS2 node executable
 add_executable(raystar_node
   src/raystar_node_main.cpp
@@ -218,6 +245,20 @@ if(BUILD_TESTING)
       -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_rviz_config.cmake
   )
   set_tests_properties(test_rviz_config_contract PROPERTIES LABELS "lint;rviz")
+
+  if(RAYSTAR_BUILD_PROFILING)
+    add_test(NAME test_profile_smoke
+      COMMAND $<TARGET_FILE:raystar_profile>
+        --scenario open_256
+        --k-values 1
+        --warmups 0
+        --iterations 1
+    )
+    set_tests_properties(test_profile_smoke PROPERTIES
+      LABELS "profiling"
+      TIMEOUT 30
+    )
+  endif()
 
   ament_add_gtest(test_integration
     test/test_integration.cpp
