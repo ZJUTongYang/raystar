@@ -35,7 +35,7 @@ jobs:
     env:
       ROS_DISTRO: ${{ matrix.ros_distro }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: ros-tooling/setup-ros@v0.7
@@ -78,15 +78,15 @@ jobs:
           set -eo pipefail
           source "/opt/ros/${ROS_DISTRO}/setup.bash"
           source install/setup.bash
-          colcon test --merge-install --event-handlers console_cohesion+ \
+          bash .github/scripts/run_colcon_tests.sh \
+            --merge-install --event-handlers console_cohesion+ \
             --return-code-on-test-failure
-          colcon test-result --verbose
 
   sanitizers:
     name: Address/UB sanitizers
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: humble
@@ -123,15 +123,15 @@ jobs:
           # The integration fixture deliberately forks a ROS process; its
           # lifecycle is covered by the normal job.  Unit, interface, and
           # plugin tests still exercise the instrumented production code.
-          colcon test --merge-install --event-handlers console_cohesion+ \
+          bash .github/scripts/run_colcon_tests.sh \
+            --merge-install --event-handlers console_cohesion+ \
             --return-code-on-test-failure --ctest-args -E test_integration
-          colcon test-result --verbose
 
   coverage:
     name: Native coverage
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: humble
@@ -157,9 +157,9 @@ jobs:
               "-DCMAKE_EXE_LINKER_FLAGS=--coverage" \
               "-DCMAKE_SHARED_LINKER_FLAGS=--coverage"
           source install/setup.bash
-          colcon test --merge-install --event-handlers console_cohesion+ \
+          bash .github/scripts/run_colcon_tests.sh \
+            --merge-install --event-handlers console_cohesion+ \
             --return-code-on-test-failure --ctest-args -E test_integration
-          colcon test-result --verbose
       - name: Collect coverage report
         shell: bash
         run: |
@@ -181,7 +181,7 @@ jobs:
     name: Format and clang-tidy
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: ros-tooling/setup-ros@v0.7
@@ -252,7 +252,7 @@ jobs:
     name: Relocated non-symlink install contract (Humble)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: humble

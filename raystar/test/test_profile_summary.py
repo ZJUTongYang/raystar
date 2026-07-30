@@ -113,6 +113,7 @@ def write_csv(path, rows):
 
 
 class ProfileSummaryContractTest(unittest.TestCase):
+
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.directory = pathlib.Path(self.temporary_directory.name)
