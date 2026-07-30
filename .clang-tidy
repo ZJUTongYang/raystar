@@ -12,5 +12,4 @@ Checks: >-
 WarningsAsErrors: ''
 HeaderFilterRegex: '(^|/)(raystar|raystar_interfaces|raystar_rviz_plugins)/(include|src)/.*'
 FormatStyle: file
-SystemHeaders: false
 UseColor: false

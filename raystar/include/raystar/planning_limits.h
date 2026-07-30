@@ -7,14 +7,12 @@
 
 #include <raystar/cooperative_stop.h>
 
-namespace raystar
-{
+namespace raystar {
 
 // Request-wide limits shared by the Core, ROS boundary, and Polymap factory.
 // Keeping this type independent of raystar_core.h prevents Polymap's
 // resource-admission API from depending on the search-tree declarations.
-struct PlanningLimits
-{
+struct PlanningLimits {
   static constexpr size_t kDefaultMaxMapCells = 8u * 1024u * 1024u;
   static constexpr size_t kDefaultMaxMapBytes = 512u * 1024u * 1024u;
   static constexpr size_t kDefaultMaxPathPoints = 100000u;
@@ -28,8 +26,7 @@ struct PlanningLimits
   size_t max_nodes = static_cast<size_t>(std::numeric_limits<int>::max());
   // Cooperative deadline. Zero requests an immediate timeout; max() disables
   // the deadline for direct Core callers.
-  std::chrono::milliseconds planning_timeout =
-    std::chrono::milliseconds::max();
+  std::chrono::milliseconds planning_timeout = std::chrono::milliseconds::max();
   // Optional cooperative-cancellation hook. Callers that signal it from
   // another thread must provide a thread-safe predicate.
   StopPredicate cancel_requested;
@@ -42,8 +39,7 @@ struct PlanningLimits
   size_t max_response_bytes = kDefaultMaxResponseBytes;
 };
 
-struct MapResourceEstimate
-{
+struct MapResourceEstimate {
   size_t cell_count = 0;
   size_t estimated_bytes = 0;
 };
@@ -53,9 +49,11 @@ struct MapResourceEstimate
 inline constexpr size_t kEstimatedPlannerMapBytesPerCell = 32u;
 
 /// Validate map shape and its resource admission budget without allocating.
-[[nodiscard]] bool validateMapResourceBudget(
-  size_t width, size_t height, size_t data_size,
-  const PlanningLimits& limits, MapResourceEstimate& estimate,
-  std::string& error);
+[[nodiscard]] bool validateMapResourceBudget(size_t width,
+                                             size_t height,
+                                             size_t data_size,
+                                             const PlanningLimits& limits,
+                                             MapResourceEstimate& estimate,
+                                             std::string& error);
 
 }  // namespace raystar

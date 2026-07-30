@@ -13,11 +13,9 @@
 
 PLUGINLIB_EXPORT_CLASS(raystar_rviz_plugins::RaystarPanel, rviz_common::Panel)
 
-namespace raystar_rviz_plugins
-{
+namespace raystar_rviz_plugins {
 
-namespace
-{
+namespace {
 
 constexpr std::size_t kMaxUiRows = 10000;
 constexpr std::size_t kMaxUiMessageBytes = 2048;
@@ -29,10 +27,8 @@ using PlanningGoalHandle = rclcpp_action::ClientGoalHandle<PlanningAction>;
 using PlanningActionClient = rclcpp_action::Client<PlanningAction>;
 using PlanningResultInfo = raystar_interfaces::msg::PlanningResultInfo;
 
-void cancelGoalBestEffort(
-  const PlanningActionClient::SharedPtr & client,
-  const PlanningGoalHandle::SharedPtr & goal_handle) noexcept
-{
+void cancelGoalBestEffort(const PlanningActionClient::SharedPtr& client,
+                          const PlanningGoalHandle::SharedPtr& goal_handle) noexcept {
   if (!client || !goal_handle) {
     return;
   }
@@ -44,60 +40,54 @@ void cancelGoalBestEffort(
   }
 }
 
-std::string boundedStdString(const std::string & value)
-{
+std::string boundedStdString(const std::string& value) {
   if (value.size() <= kMaxUiMessageBytes) {
     return value;
   }
   return value.substr(0, kMaxUiMessageBytes) + " ...[truncated]";
 }
 
-QString boundedQString(const std::string & value)
-{
+QString boundedQString(const std::string& value) {
   return QString::fromStdString(boundedStdString(value));
 }
 
-int boundedRowCount(std::size_t count)
-{
+int boundedRowCount(std::size_t count) {
   return static_cast<int>(std::min(count, kMaxUiRows));
 }
 
-std::uint64_t nextCounter(std::uint64_t value)
-{
+std::uint64_t nextCounter(std::uint64_t value) {
   return value == std::numeric_limits<std::uint64_t>::max() ? 1 : value + 1;
 }
 
-QString planningStatusText(std::uint8_t status)
-{
+QString planningStatusText(std::uint8_t status) {
   switch (status) {
-    case PlanningResultInfo::STATUS_COMPLETE:
-      return QStringLiteral("Complete");
-    case PlanningResultInfo::STATUS_FEWER_PATHS:
-      return QStringLiteral("Complete: fewer paths exist");
-    case PlanningResultInfo::STATUS_NO_PATH:
-      return QStringLiteral("No path");
-    case PlanningResultInfo::STATUS_PARTIAL_SEARCH:
-      return QStringLiteral("Partial search");
-    case PlanningResultInfo::STATUS_PARTIAL_OUTPUT:
-      return QStringLiteral("Partial output");
-    case PlanningResultInfo::STATUS_INVALID_REQUEST:
-      return QStringLiteral("Invalid request");
-    case PlanningResultInfo::STATUS_INVALID_CONFIGURATION:
-      return QStringLiteral("Invalid server configuration");
-    case PlanningResultInfo::STATUS_BUSY:
-      return QStringLiteral("Planner busy");
-    case PlanningResultInfo::STATUS_CANCELLED:
-      return QStringLiteral("Canceled");
-    case PlanningResultInfo::STATUS_FAILED:
-      return QStringLiteral("Failed");
-    case PlanningResultInfo::STATUS_UNKNOWN:
-    default:
-      return QStringLiteral("Unknown status");
+  case PlanningResultInfo::STATUS_COMPLETE:
+    return QStringLiteral("Complete");
+  case PlanningResultInfo::STATUS_FEWER_PATHS:
+    return QStringLiteral("Complete: fewer paths exist");
+  case PlanningResultInfo::STATUS_NO_PATH:
+    return QStringLiteral("No path");
+  case PlanningResultInfo::STATUS_PARTIAL_SEARCH:
+    return QStringLiteral("Partial search");
+  case PlanningResultInfo::STATUS_PARTIAL_OUTPUT:
+    return QStringLiteral("Partial output");
+  case PlanningResultInfo::STATUS_INVALID_REQUEST:
+    return QStringLiteral("Invalid request");
+  case PlanningResultInfo::STATUS_INVALID_CONFIGURATION:
+    return QStringLiteral("Invalid server configuration");
+  case PlanningResultInfo::STATUS_BUSY:
+    return QStringLiteral("Planner busy");
+  case PlanningResultInfo::STATUS_CANCELLED:
+    return QStringLiteral("Canceled");
+  case PlanningResultInfo::STATUS_FAILED:
+    return QStringLiteral("Failed");
+  case PlanningResultInfo::STATUS_UNKNOWN:
+  default:
+    return QStringLiteral("Unknown status");
   }
 }
 
-QString planningLimitsText(std::uint16_t limits)
-{
+QString planningLimitsText(std::uint16_t limits) {
   if (limits == PlanningResultInfo::LIMIT_NONE) {
     return QStringLiteral("none");
   }
@@ -122,34 +112,29 @@ QString planningLimitsText(std::uint16_t limits)
 
 }  // namespace
 
-RaystarPanel::RaystarPanel(QWidget* parent)
-  : RaystarPanel(parent, kDefaultRequestTimeout)
-{
-}
+RaystarPanel::RaystarPanel(QWidget* parent) : RaystarPanel(parent, kDefaultRequestTimeout) {}
 
-RaystarPanel::RaystarPanel(
-  QWidget* parent, std::chrono::milliseconds request_timeout)
-  : rviz_common::Panel(parent),
-    start_x_edit_(new QLineEdit("0.0")),
-    start_y_edit_(new QLineEdit("0.0")),
-    goal_x_edit_(new QLineEdit("1.0")),
-    goal_y_edit_(new QLineEdit("1.0")),
-    k_spinbox_(new QSpinBox()),
-    allow_self_crossing_cb_(new QCheckBox("Allow Self Crossing")),
-    allow_unknown_cb_(new QCheckBox("Allow Unknown")),
-    request_debug_cb_(new QCheckBox("Request Debug")),
-    action_name_edit_(new QLineEdit(kDefaultPlanningActionName)),
-    map_topic_edit_(new QLineEdit("/map")),
-    plan_button_(new QPushButton("Plan")),
-    status_label_(new QLabel("Ready")),
-    results_table_(new QTableWidget()),
-    node_table_(new QTableWidget()),
-    timing_label_(new QLabel("")),
-    callback_state_(std::make_shared<CallbackState>()),
-    callback_timer_(new QTimer(this)),
-    request_timeout_(request_timeout > std::chrono::milliseconds::zero() ?
-      request_timeout : kDefaultRequestTimeout)
-{
+RaystarPanel::RaystarPanel(QWidget* parent, std::chrono::milliseconds request_timeout)
+  : rviz_common::Panel(parent)
+  , start_x_edit_(new QLineEdit("0.0"))
+  , start_y_edit_(new QLineEdit("0.0"))
+  , goal_x_edit_(new QLineEdit("1.0"))
+  , goal_y_edit_(new QLineEdit("1.0"))
+  , k_spinbox_(new QSpinBox())
+  , allow_self_crossing_cb_(new QCheckBox("Allow Self Crossing"))
+  , allow_unknown_cb_(new QCheckBox("Allow Unknown"))
+  , request_debug_cb_(new QCheckBox("Request Debug"))
+  , action_name_edit_(new QLineEdit(kDefaultPlanningActionName))
+  , map_topic_edit_(new QLineEdit("/map"))
+  , plan_button_(new QPushButton("Plan"))
+  , status_label_(new QLabel("Ready"))
+  , results_table_(new QTableWidget())
+  , node_table_(new QTableWidget())
+  , timing_label_(new QLabel(""))
+  , callback_state_(std::make_shared<CallbackState>())
+  , callback_timer_(new QTimer(this))
+  , request_timeout_(request_timeout > std::chrono::milliseconds::zero() ? request_timeout
+                                                                         : kDefaultRequestTimeout) {
   k_spinbox_->setRange(1, 100);
   k_spinbox_->setValue(5);
   start_x_edit_->setObjectName("start_x_edit");
@@ -185,8 +170,7 @@ RaystarPanel::RaystarPanel(
   callback_timer_->start();
 }
 
-RaystarPanel::~RaystarPanel()
-{
+RaystarPanel::~RaystarPanel() {
   // Stop GUI polling before invalidating the handoff.  ROS callbacks do not
   // capture `this`; they can safely finish while the shared state is alive.
   if (callback_timer_) {
@@ -206,8 +190,7 @@ RaystarPanel::~RaystarPanel()
   callback_state_.reset();
 }
 
-void RaystarPanel::setupUi()
-{
+void RaystarPanel::setupUi() {
   auto* main_layout = new QVBoxLayout;
 
   auto* action_group = new QGroupBox("Planner Action");
@@ -262,24 +245,18 @@ void RaystarPanel::setupUi()
   setLayout(main_layout);
 
   connect(plan_button_, &QPushButton::clicked, this, &RaystarPanel::onPlanClicked);
-  connect(
-    map_topic_edit_, &QLineEdit::textChanged,
-    this, &RaystarPanel::onMapTopicChanged);
+  connect(map_topic_edit_, &QLineEdit::textChanged, this, &RaystarPanel::onMapTopicChanged);
   connect(map_topic_edit_, &QLineEdit::editingFinished, this, &RaystarPanel::subscribeToMap);
+  connect(action_name_edit_, &QLineEdit::textChanged, this, &RaystarPanel::onActionNameChanged);
   connect(
-    action_name_edit_, &QLineEdit::textChanged,
-    this, &RaystarPanel::onActionNameChanged);
-  connect(
-    action_name_edit_, &QLineEdit::editingFinished,
-    this, &RaystarPanel::configureActionClient);
+    action_name_edit_, &QLineEdit::editingFinished, this, &RaystarPanel::configureActionClient);
 }
 
-void RaystarPanel::onInitialize()
-{
+void RaystarPanel::onInitialize() {
   if (ros_initialized_) {
     return;
   }
-  auto * context = getDisplayContext();
+  auto* context = getDisplayContext();
   if (!context) {
     status_label_->setText("Error: RViz ROS context is unavailable.");
     return;
@@ -299,18 +276,16 @@ void RaystarPanel::onInitialize()
   configureActionClient();
 }
 
-void RaystarPanel::updatePlanButtonState()
-{
-  const bool action_is_current = action_client_ &&
-    action_name_edit_->text().toStdString() == action_client_name_;
+void RaystarPanel::updatePlanButtonState() {
+  const bool action_is_current =
+    action_client_ && action_name_edit_->text().toStdString() == action_client_name_;
   const bool map_is_current = latest_map_ && !latest_map_->data.empty() &&
-    map_topic_edit_->text().toStdString() == subscribed_topic_;
-  plan_button_->setEnabled(
-    ros_initialized_ && action_is_current && map_is_current && !request_in_flight_);
+                              map_topic_edit_->text().toStdString() == subscribed_topic_;
+  plan_button_->setEnabled(ros_initialized_ && action_is_current && map_is_current &&
+                           !request_in_flight_);
 }
 
-void RaystarPanel::onActionNameChanged(const QString & action_name)
-{
+void RaystarPanel::onActionNameChanged(const QString& action_name) {
   if (action_name.toStdString() == action_client_name_) {
     return;
   }
@@ -323,14 +298,12 @@ void RaystarPanel::onActionNameChanged(const QString & action_name)
   action_client_name_.clear();
   clearResults();
   updatePlanButtonState();
-  status_label_->setText(
-    ros_initialized_ ?
-    "Action name changed; press Enter or leave the field to reconnect." :
-    "Action selected; waiting for RViz ROS initialization.");
+  status_label_->setText(ros_initialized_
+                           ? "Action name changed; press Enter or leave the field to reconnect."
+                           : "Action selected; waiting for RViz ROS initialization.");
 }
 
-void RaystarPanel::configureActionClient()
-{
+void RaystarPanel::configureActionClient() {
   if (!ros_initialized_) {
     status_label_->setText("Action selected; waiting for RViz ROS initialization.");
     return;
@@ -350,7 +323,7 @@ void RaystarPanel::configureActionClient()
     return;
   }
 
-  auto * context = getDisplayContext();
+  auto* context = getDisplayContext();
   auto abstraction = context ? context->getRosNodeAbstraction().lock() : nullptr;
   auto node = abstraction ? abstraction->get_raw_node() : nullptr;
   if (!node) {
@@ -368,9 +341,8 @@ void RaystarPanel::configureActionClient()
   try {
     action_client_ = rclcpp_action::create_client<PlanningAction>(node, action_name);
     action_client_name_ = action_name;
-    status_label_->setText(
-      QString("Using planning Action %1").arg(boundedQString(action_name)));
-  } catch (const std::exception & exception) {
+    status_label_->setText(QString("Using planning Action %1").arg(boundedQString(action_name)));
+  } catch (const std::exception& exception) {
     action_client_.reset();
     status_label_->setText(
       boundedQString(std::string("Could not create Action client: ") + exception.what()));
@@ -381,8 +353,7 @@ void RaystarPanel::configureActionClient()
   updatePlanButtonState();
 }
 
-std::uint64_t RaystarPanel::invalidateMapState()
-{
+std::uint64_t RaystarPanel::invalidateMapState() {
   map_generation_ = nextCounter(map_generation_);
   cancelActiveRequest();
   latest_map_.reset();
@@ -410,20 +381,17 @@ std::uint64_t RaystarPanel::invalidateMapState()
   return subscription_id;
 }
 
-void RaystarPanel::onMapTopicChanged(const QString & topic)
-{
+void RaystarPanel::onMapTopicChanged(const QString& topic) {
   if (topic.toStdString() == subscribed_topic_) {
     return;
   }
   invalidateMapState();
-  status_label_->setText(
-    ros_initialized_ ?
-    "Map topic changed; press Enter or leave the field to subscribe." :
-    "Map topic selected; waiting for RViz ROS initialization.");
+  status_label_->setText(ros_initialized_
+                           ? "Map topic changed; press Enter or leave the field to subscribe."
+                           : "Map topic selected; waiting for RViz ROS initialization.");
 }
 
-void RaystarPanel::subscribeToMap()
-{
+void RaystarPanel::subscribeToMap() {
   const std::string topic = map_topic_edit_->text().toStdString();
   if (topic.empty()) {
     status_label_->setText("Error: Map topic cannot be empty.");
@@ -442,7 +410,7 @@ void RaystarPanel::subscribeToMap()
     return;
   }
 
-  auto * context = getDisplayContext();
+  auto* context = getDisplayContext();
   if (!ros_initialized_ || !context) {
     status_label_->setText("Map topic selected; waiting for RViz ROS initialization.");
     return;
@@ -460,7 +428,8 @@ void RaystarPanel::subscribeToMap()
   const auto weak_state = std::weak_ptr<CallbackState>(callback_state_);
   try {
     map_sub_ = node->create_subscription<nav_msgs::msg::OccupancyGrid>(
-      topic, rclcpp::QoS(1).transient_local().reliable(),
+      topic,
+      rclcpp::QoS(1).transient_local().reliable(),
       [weak_state, subscription_id](nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg) {
         if (!msg) {
           return;
@@ -486,16 +455,14 @@ void RaystarPanel::subscribeToMap()
         state->pending_response.reset();
       });
     subscribed_topic_ = topic;
-    status_label_->setText(
-      QString("Waiting for map on %1").arg(boundedQString(topic)));
-  } catch (const std::exception &) {
+    status_label_->setText(QString("Waiting for map on %1").arg(boundedQString(topic)));
+  } catch (const std::exception&) {
     map_sub_.reset();
     status_label_->setText("Error: Could not subscribe to the selected map topic.");
   }
 }
 
-void RaystarPanel::onPlanClicked()
-{
+void RaystarPanel::onPlanClicked() {
   // Drain a map callback that may have arrived just before the click.  This
   // keeps the request snapshot and the map generation in the GUI thread.
   processCallbacks();
@@ -507,9 +474,7 @@ void RaystarPanel::onPlanClicked()
   }
 
   const std::string selected_action = action_name_edit_->text().toStdString();
-  if (selected_action.empty() || selected_action != action_client_name_ ||
-      !action_client_)
-  {
+  if (selected_action.empty() || selected_action != action_client_name_ || !action_client_) {
     configureActionClient();
     return;
   }
@@ -539,12 +504,9 @@ void RaystarPanel::onPlanClicked()
   const double start_y = start_y_edit_->text().toDouble(&start_y_ok);
   const double goal_x = goal_x_edit_->text().toDouble(&goal_x_ok);
   const double goal_y = goal_y_edit_->text().toDouble(&goal_y_ok);
-  if (!start_x_ok || !start_y_ok || !goal_x_ok || !goal_y_ok ||
-      !std::isfinite(start_x) || !std::isfinite(start_y) ||
-      !std::isfinite(goal_x) || !std::isfinite(goal_y))
-  {
-    status_label_->setText(
-      "Error: Start and goal coordinates must be finite numbers.");
+  if (!start_x_ok || !start_y_ok || !goal_x_ok || !goal_y_ok || !std::isfinite(start_x) ||
+      !std::isfinite(start_y) || !std::isfinite(goal_x) || !std::isfinite(goal_y)) {
+    status_label_->setText("Error: Start and goal coordinates must be finite numbers.");
     return;
   }
 
@@ -589,7 +551,7 @@ void RaystarPanel::onPlanClicked()
     goal.allow_self_crossing = allow_self_crossing_cb_->isChecked();
     goal.allow_unknown = allow_unknown_cb_->isChecked();
     goal.include_debug = request_debug_cb_->isChecked();
-  } catch (const std::exception & exception) {
+  } catch (const std::exception& exception) {
     status_label_->setText(
       boundedQString(std::string("Could not prepare planning request: ") + exception.what()));
     return;
@@ -602,9 +564,7 @@ void RaystarPanel::onPlanClicked()
   // arrived while the potentially large occupancy vector was being scanned.
   {
     std::lock_guard<std::mutex> lock(state->mutex);
-    if (!state->alive || state->map_generation != request_generation ||
-        state->pending_map_update)
-    {
+    if (!state->alive || state->map_generation != request_generation || state->pending_map_update) {
       status_label_->setText("Map changed; wait for the new map before planning.");
       return;
     }
@@ -638,18 +598,16 @@ void RaystarPanel::onPlanClicked()
     PlanningActionClient::SendGoalOptions options;
     options.goal_response_callback =
       [callback_state, action_client, request_id, request_generation](
-        const PlanningGoalHandle::SharedPtr & goal_handle) {
+        const PlanningGoalHandle::SharedPtr& goal_handle) {
         if (!goal_handle) {
           CallbackState::PendingResponse pending;
           pending.request_id = request_id;
           pending.map_generation = request_generation;
           pending.error = "The Raystar action server rejected the goal.";
           std::lock_guard<std::mutex> lock(callback_state->mutex);
-          if (!callback_state->alive ||
-              callback_state->active_request_id != request_id ||
+          if (!callback_state->alive || callback_state->active_request_id != request_id ||
               callback_state->active_map_generation != request_generation ||
-              callback_state->map_generation != request_generation)
-          {
+              callback_state->map_generation != request_generation) {
             return;
           }
           callback_state->pending_response = std::move(pending);
@@ -660,9 +618,9 @@ void RaystarPanel::onPlanClicked()
         {
           std::lock_guard<std::mutex> lock(callback_state->mutex);
           goal_is_current = callback_state->alive &&
-            callback_state->active_request_id == request_id &&
-            callback_state->active_map_generation == request_generation &&
-            callback_state->map_generation == request_generation;
+                            callback_state->active_request_id == request_id &&
+                            callback_state->active_map_generation == request_generation &&
+                            callback_state->map_generation == request_generation;
           if (goal_is_current) {
             callback_state->active_goal = goal_handle;
           }
@@ -676,35 +634,30 @@ void RaystarPanel::onPlanClicked()
         }
       };
 
-    options.result_callback =
-      [callback_state, request_id, request_generation, request_map_id](
-        const PlanningGoalHandle::WrappedResult & wrapped_result) {
-        CallbackState::PendingResponse pending;
-        pending.request_id = request_id;
-        pending.map_generation = request_generation;
-        pending.result_code = wrapped_result.code;
-        if (!wrapped_result.result) {
-          pending.error = "The Raystar action returned an empty result.";
-        } else if (!raystar_interfaces::mapIdsEqual(
-            wrapped_result.result->result_info.map_id, request_map_id))
-        {
-          pending.error =
-            "The Raystar action result refers to a different cached map.";
-        } else {
-          pending.response = wrapped_result.result;
-        }
+    options.result_callback = [callback_state, request_id, request_generation, request_map_id](
+                                const PlanningGoalHandle::WrappedResult& wrapped_result) {
+      CallbackState::PendingResponse pending;
+      pending.request_id = request_id;
+      pending.map_generation = request_generation;
+      pending.result_code = wrapped_result.code;
+      if (!wrapped_result.result) {
+        pending.error = "The Raystar action returned an empty result.";
+      } else if (!raystar_interfaces::mapIdsEqual(wrapped_result.result->result_info.map_id,
+                                                  request_map_id)) {
+        pending.error = "The Raystar action result refers to a different cached map.";
+      } else {
+        pending.response = wrapped_result.result;
+      }
 
-        std::lock_guard<std::mutex> lock(callback_state->mutex);
-        if (!callback_state->alive ||
-            callback_state->active_request_id != request_id ||
-            callback_state->active_map_generation != request_generation ||
-            callback_state->map_generation != request_generation)
-        {
-          return;
-        }
-        callback_state->active_goal.reset();
-        callback_state->pending_response = std::move(pending);
-      };
+      std::lock_guard<std::mutex> lock(callback_state->mutex);
+      if (!callback_state->alive || callback_state->active_request_id != request_id ||
+          callback_state->active_map_generation != request_generation ||
+          callback_state->map_generation != request_generation) {
+        return;
+      }
+      callback_state->active_goal.reset();
+      callback_state->pending_response = std::move(pending);
+    };
 
     (void)action_client->async_send_goal(goal, options);
 
@@ -713,14 +666,13 @@ void RaystarPanel::onPlanClicked()
     bool still_current = false;
     {
       std::lock_guard<std::mutex> lock(state->mutex);
-      still_current = state->alive &&
-        state->active_request_id == request_id &&
-        state->map_generation == request_generation;
+      still_current = state->alive && state->active_request_id == request_id &&
+                      state->map_generation == request_generation;
     }
     if (!still_current) {
       cancelActiveRequest();
     }
-  } catch (const std::exception & exception) {
+  } catch (const std::exception& exception) {
     cancelActiveRequest();
     updatePlanButtonState();
     status_label_->setText(
@@ -732,8 +684,7 @@ void RaystarPanel::onPlanClicked()
   }
 }
 
-void RaystarPanel::clearResults()
-{
+void RaystarPanel::clearResults() {
   results_table_->clearContents();
   results_table_->setRowCount(0);
   node_table_->clearContents();
@@ -741,8 +692,7 @@ void RaystarPanel::clearResults()
   timing_label_->clear();
 }
 
-void RaystarPanel::cancelActiveRequest()
-{
+void RaystarPanel::cancelActiveRequest() {
   // Invalidate the logical request before touching the Action client. A
   // result callback that is already queued will then fail the generation
   // check even if cancellation races with terminal result delivery.
@@ -761,8 +711,7 @@ void RaystarPanel::cancelActiveRequest()
   active_request_map_generation_ = 0;
 }
 
-void RaystarPanel::processCallbacks()
-{
+void RaystarPanel::processCallbacks() {
   auto state = callback_state_;
   if (!state) {
     return;
@@ -791,12 +740,9 @@ void RaystarPanel::processCallbacks()
   bool pending_map_is_current = false;
   if (pending_map) {
     std::lock_guard<std::mutex> lock(state->mutex);
-    pending_map_is_current = state->alive &&
-      state->map_generation == pending_map_generation;
+    pending_map_is_current = state->alive && state->map_generation == pending_map_generation;
   }
-  if (pending_map && pending_map_is_current &&
-      pending_map_generation != map_generation_)
-  {
+  if (pending_map && pending_map_is_current && pending_map_generation != map_generation_) {
     // A new map supersedes any in-flight goal. If it was already accepted,
     // cancelActiveRequest() sends a cooperative Action cancellation request.
     if (request_in_flight_) {
@@ -806,15 +752,14 @@ void RaystarPanel::processCallbacks()
     map_generation_ = pending_map_generation;
     updatePlanButtonState();
     clearResults();
-    status_label_->setText(
-      QString("Map received: %1x%2 @ %3 m/cell")
-        .arg(latest_map_->info.width)
-        .arg(latest_map_->info.height)
-        .arg(latest_map_->info.resolution, 0, 'f', 3));
+    status_label_->setText(QString("Map received: %1x%2 @ %3 m/cell")
+                             .arg(latest_map_->info.width)
+                             .arg(latest_map_->info.height)
+                             .arg(latest_map_->info.resolution, 0, 'f', 3));
   }
 
   if (pending_response) {
-    const auto & result = *pending_response;
+    const auto& result = *pending_response;
     bool response_is_current = false;
     {
       // Atomically claim the response against the callback-side generation.
@@ -822,11 +767,10 @@ void RaystarPanel::processCallbacks()
       // can be rendered; one that arrives later is ordered after the response
       // and its next GUI tick will clear the old result.
       std::lock_guard<std::mutex> lock(state->mutex);
-      response_is_current = state->alive && request_in_flight_ &&
-        result.request_id == active_request_id_ &&
+      response_is_current =
+        state->alive && request_in_flight_ && result.request_id == active_request_id_ &&
         result.map_generation == active_request_map_generation_ &&
-        result.map_generation == map_generation_ &&
-        state->active_request_id == result.request_id &&
+        result.map_generation == map_generation_ && state->active_request_id == result.request_id &&
         state->active_map_generation == result.map_generation &&
         state->map_generation == result.map_generation;
       if (response_is_current) {
@@ -842,11 +786,10 @@ void RaystarPanel::processCallbacks()
       updatePlanButtonState();
       try {
         displayResponse(result);
-      } catch (const std::exception & exception) {
+      } catch (const std::exception& exception) {
         clearResults();
         status_label_->setText(
-          boundedQString(std::string("Could not display action result: ") +
-                         exception.what()));
+          boundedQString(std::string("Could not display action result: ") + exception.what()));
       } catch (...) {
         clearResults();
         status_label_->setText("Error: Could not display action result.");
@@ -855,41 +798,36 @@ void RaystarPanel::processCallbacks()
   }
 
   if (request_in_flight_ && request_deadline_ &&
-      std::chrono::steady_clock::now() >= *request_deadline_)
-  {
+      std::chrono::steady_clock::now() >= *request_deadline_) {
     cancelActiveRequest();
     updatePlanButtonState();
     status_label_->setText("Error: Planning goal timed out and was canceled.");
   }
 }
 
-void RaystarPanel::displayResponse(const CallbackState::PendingResponse & result)
-{
+void RaystarPanel::displayResponse(const CallbackState::PendingResponse& result) {
   if (!result.response) {
     clearResults();
-    status_label_->setText(
-      QStringLiteral("Failed: ") + boundedQString(result.error));
+    status_label_->setText(QStringLiteral("Failed: ") + boundedQString(result.error));
     return;
   }
 
-  const auto & response = *result.response;
-  const bool action_succeeded =
-    result.result_code == rclcpp_action::ResultCode::SUCCEEDED;
-  const bool action_canceled =
-    result.result_code == rclcpp_action::ResultCode::CANCELED;
+  const auto& response = *result.response;
+  const bool action_succeeded = result.result_code == rclcpp_action::ResultCode::SUCCEEDED;
+  const bool action_canceled = result.result_code == rclcpp_action::ResultCode::CANCELED;
   const std::size_t path_count = response.path_results.size();
   const int displayed_path_count = boundedRowCount(path_count);
   results_table_->setRowCount(displayed_path_count);
   for (int i = 0; i < displayed_path_count; ++i) {
     const auto index = static_cast<std::size_t>(i);
-    const auto & path_result = response.path_results[index];
+    const auto& path_result = response.path_results[index];
     results_table_->setItem(
       i, 0, new QTableWidgetItem(QString::number(static_cast<qlonglong>(index + 1))));
-    results_table_->setItem(
-      i, 1, new QTableWidgetItem(QString::number(path_result.cost, 'f', 2)));
-    results_table_->setItem(
-      i, 2, new QTableWidgetItem(
-        QString::number(static_cast<qulonglong>(path_result.path.poses.size()))));
+    results_table_->setItem(i, 1, new QTableWidgetItem(QString::number(path_result.cost, 'f', 2)));
+    results_table_->setItem(i,
+                            2,
+                            new QTableWidgetItem(QString::number(
+                              static_cast<qulonglong>(path_result.path.poses.size()))));
   }
   results_table_->resizeColumnsToContents();
 
@@ -898,47 +836,47 @@ void RaystarPanel::displayResponse(const CallbackState::PendingResponse & result
   node_table_->setRowCount(displayed_debug_count);
   for (int i = 0; i < displayed_debug_count; ++i) {
     const auto index = static_cast<std::size_t>(i);
-    const auto & debug_node = response.debug_nodes[index];
+    const auto& debug_node = response.debug_nodes[index];
     node_table_->setItem(
-      i, 0, new QTableWidgetItem(
-        QString::number(static_cast<qlonglong>(debug_node.index))));
-    node_table_->setItem(
-      i, 1, new QTableWidgetItem(
-        QString::number(debug_node.g_cost, 'f', 2)));
-    node_table_->setItem(
-      i, 2, new QTableWidgetItem(
-        QString::number(debug_node.f_cost, 'f', 2)));
+      i, 0, new QTableWidgetItem(QString::number(static_cast<qlonglong>(debug_node.index))));
+    node_table_->setItem(i, 1, new QTableWidgetItem(QString::number(debug_node.g_cost, 'f', 2)));
+    node_table_->setItem(i, 2, new QTableWidgetItem(QString::number(debug_node.f_cost, 'f', 2)));
   }
   node_table_->resizeColumnsToContents();
 
-  const auto & info = response.result_info;
-  const QString transport_state = action_succeeded ?
-    QStringLiteral("SUCCEEDED") :
-    (action_canceled ? QStringLiteral("CANCELED") :
-      (result.result_code == rclcpp_action::ResultCode::ABORTED ?
-        QStringLiteral("ABORTED") : QStringLiteral("UNKNOWN")));
-  QString status = QString("%1 / %2: returned %3 of %4 requested "
-                           "(%5 found by Core)")
-    .arg(transport_state)
-    .arg(planningStatusText(info.status))
-    .arg(static_cast<qulonglong>(info.returned_path_count))
-    .arg(static_cast<qulonglong>(info.requested_path_count))
-    .arg(static_cast<qulonglong>(info.found_path_count));
-  status += QString("\nSearch complete: %1; path output complete: %2; "
-                    "limits: %3")
-    .arg(info.search_complete ? QStringLiteral("yes") : QStringLiteral("no"))
-    .arg(info.output_complete ? QStringLiteral("yes") : QStringLiteral("no"))
-    .arg(planningLimitsText(info.limits_reached));
+  const auto& info = response.result_info;
+  const QString transport_state =
+    action_succeeded ? QStringLiteral("SUCCEEDED")
+                     : (action_canceled ? QStringLiteral("CANCELED")
+                                        : (result.result_code == rclcpp_action::ResultCode::ABORTED
+                                             ? QStringLiteral("ABORTED")
+                                             : QStringLiteral("UNKNOWN")));
+  QString status = QString(
+                     "%1 / %2: returned %3 of %4 requested "
+                     "(%5 found by Core)")
+                     .arg(transport_state)
+                     .arg(planningStatusText(info.status))
+                     .arg(static_cast<qulonglong>(info.returned_path_count))
+                     .arg(static_cast<qulonglong>(info.requested_path_count))
+                     .arg(static_cast<qulonglong>(info.found_path_count));
+  status += QString(
+              "\nSearch complete: %1; path output complete: %2; "
+              "limits: %3")
+              .arg(info.search_complete ? QStringLiteral("yes") : QStringLiteral("no"))
+              .arg(info.output_complete ? QStringLiteral("yes") : QStringLiteral("no"))
+              .arg(planningLimitsText(info.limits_reached));
   if (!response.message.empty()) {
     status += QStringLiteral("\n") + boundedQString(response.message);
   }
   if (info.returned_path_count != path_count) {
-    status += QStringLiteral("\nWarning: returned_path_count does not match "
-                             "path_results.size().");
+    status += QStringLiteral(
+      "\nWarning: returned_path_count does not match "
+      "path_results.size().");
   }
   if (response.success != !response.path_results.empty()) {
-    status += QStringLiteral("\nWarning: success does not match the structured "
-                             "path result count.");
+    status += QStringLiteral(
+      "\nWarning: success does not match the structured "
+      "path result count.");
   }
   if (info.found_path_count < info.returned_path_count) {
     status += QStringLiteral("\nWarning: returned path count exceeds Core found count.");
@@ -947,22 +885,20 @@ void RaystarPanel::displayResponse(const CallbackState::PendingResponse & result
     status += QStringLiteral("\nWarning: the table view was truncated for safety.");
   }
   status_label_->setText(status);
-  const QString debug_summary = !info.debug_requested ?
-    QStringLiteral("not requested") :
-    QString("%1%2")
-      .arg(static_cast<qulonglong>(debug_count))
-      .arg(info.debug_output_complete ?
-        QString() : QStringLiteral(" (truncated)"));
-  timing_label_->setText(
-    QString("Map: %1 ms | Search: %2 ms | Expanded: %3 | Debug: %4")
-      .arg(info.map_time_ms, 0, 'f', 1)
-      .arg(info.plan_time_ms, 0, 'f', 1)
-      .arg(static_cast<qulonglong>(info.expanded_nodes))
-      .arg(debug_summary));
+  const QString debug_summary =
+    !info.debug_requested
+      ? QStringLiteral("not requested")
+      : QString("%1%2")
+          .arg(static_cast<qulonglong>(debug_count))
+          .arg(info.debug_output_complete ? QString() : QStringLiteral(" (truncated)"));
+  timing_label_->setText(QString("Map: %1 ms | Search: %2 ms | Expanded: %3 | Debug: %4")
+                           .arg(info.map_time_ms, 0, 'f', 1)
+                           .arg(info.plan_time_ms, 0, 'f', 1)
+                           .arg(static_cast<qulonglong>(info.expanded_nodes))
+                           .arg(debug_summary));
 }
 
-void RaystarPanel::save(rviz_common::Config config) const
-{
+void RaystarPanel::save(rviz_common::Config config) const {
   rviz_common::Panel::save(config);
   config.mapSetValue("action_name", action_name_edit_->text());
   config.mapSetValue("map_topic", map_topic_edit_->text());
@@ -976,8 +912,7 @@ void RaystarPanel::save(rviz_common::Config config) const
   config.mapSetValue("request_debug", request_debug_cb_->isChecked());
 }
 
-void RaystarPanel::load(const rviz_common::Config& config)
-{
+void RaystarPanel::load(const rviz_common::Config& config) {
   rviz_common::Panel::load(config);
   bool action_changed = false;
   bool topic_changed = false;
@@ -990,12 +925,17 @@ void RaystarPanel::load(const rviz_common::Config& config)
     topic_changed = (map_topic_edit_->text() != val);
     map_topic_edit_->setText(val);
   }
-  if (config.mapGetString("start_x", &val)) start_x_edit_->setText(val);
-  if (config.mapGetString("start_y", &val)) start_y_edit_->setText(val);
-  if (config.mapGetString("goal_x", &val)) goal_x_edit_->setText(val);
-  if (config.mapGetString("goal_y", &val)) goal_y_edit_->setText(val);
+  if (config.mapGetString("start_x", &val))
+    start_x_edit_->setText(val);
+  if (config.mapGetString("start_y", &val))
+    start_y_edit_->setText(val);
+  if (config.mapGetString("goal_x", &val))
+    goal_x_edit_->setText(val);
+  if (config.mapGetString("goal_y", &val))
+    goal_y_edit_->setText(val);
   int k_val;
-  if (config.mapGetInt("k", &k_val)) k_spinbox_->setValue(k_val);
+  if (config.mapGetInt("k", &k_val))
+    k_spinbox_->setValue(k_val);
   bool bool_val = false;
   if (config.mapGetBool("allow_self_crossing", &bool_val)) {
     allow_self_crossing_cb_->setChecked(bool_val);

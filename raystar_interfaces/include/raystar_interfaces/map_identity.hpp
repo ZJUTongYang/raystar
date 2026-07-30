@@ -10,19 +10,15 @@
 #include <string>
 #include <type_traits>
 
-namespace raystar_interfaces
-{
+namespace raystar_interfaces {
 
 using MapId = unique_identifier_msgs::msg::UUID;
 
-namespace detail
-{
+namespace detail {
 
-class MapIdentityHasher
-{
+class MapIdentityHasher {
 public:
-  void addByte(std::uint8_t value) noexcept
-  {
+  void addByte(std::uint8_t value) noexcept {
     first_ ^= value;
     first_ *= 1099511628211ULL;
 
@@ -31,44 +27,34 @@ public:
     second_ ^= second_ >> 29;
   }
 
-  template<typename IntegerT>
-  void addInteger(IntegerT value) noexcept
-  {
+  template <typename IntegerT>
+  void addInteger(IntegerT value) noexcept {
     using UnsignedT = std::make_unsigned_t<IntegerT>;
     const UnsignedT unsigned_value = static_cast<UnsignedT>(value);
-    for (std::size_t index = 0; index < sizeof(UnsignedT); ++index)
-    {
-      addByte(static_cast<std::uint8_t>(
-        unsigned_value >> static_cast<unsigned int>(index * 8U)));
+    for (std::size_t index = 0; index < sizeof(UnsignedT); ++index) {
+      addByte(static_cast<std::uint8_t>(unsigned_value >> static_cast<unsigned int>(index * 8U)));
     }
   }
 
-  template<typename FloatingT>
-  void addFloating(FloatingT value) noexcept
-  {
-    static_assert(
-      std::is_same<FloatingT, float>::value ||
-      std::is_same<FloatingT, double>::value,
-      "Only ROS floating-point field types are supported");
-    using BitsT = std::conditional_t<
-      std::is_same<FloatingT, float>::value, std::uint32_t, std::uint64_t>;
+  template <typename FloatingT>
+  void addFloating(FloatingT value) noexcept {
+    static_assert(std::is_same<FloatingT, float>::value || std::is_same<FloatingT, double>::value,
+                  "Only ROS floating-point field types are supported");
+    using BitsT =
+      std::conditional_t<std::is_same<FloatingT, float>::value, std::uint32_t, std::uint64_t>;
     BitsT bits = 0;
     std::memcpy(&bits, &value, sizeof(value));
     addInteger(bits);
   }
 
-  void addString(const std::string& value) noexcept
-  {
+  void addString(const std::string& value) noexcept {
     addInteger<std::uint64_t>(static_cast<std::uint64_t>(value.size()));
-    for (const unsigned char character : value)
-      addByte(character);
+    for (const unsigned char character : value) addByte(character);
   }
 
-  [[nodiscard]] MapId finish() const noexcept
-  {
+  [[nodiscard]] MapId finish() const noexcept {
     MapId result;
-    for (std::size_t index = 0; index < 8; ++index)
-    {
+    for (std::size_t index = 0; index < 8; ++index) {
       const unsigned int shift = static_cast<unsigned int>((7U - index) * 8U);
       result.uuid[index] = static_cast<std::uint8_t>(first_ >> shift);
       result.uuid[index + 8] = static_cast<std::uint8_t>(second_ >> shift);
@@ -93,8 +79,7 @@ private:
 /// affect planning or map provenance. The function performs no allocation and
 /// is shared by the server, RViz panel, and tests so requests never need to
 /// carry the full grid merely to identify a cached snapshot.
-inline MapId computeMapId(const nav_msgs::msg::OccupancyGrid& map) noexcept
-{
+inline MapId computeMapId(const nav_msgs::msg::OccupancyGrid& map) noexcept {
   detail::MapIdentityHasher hasher;
   hasher.addString("raystar-occupancy-grid-v1");
   hasher.addString(map.header.frame_id);
@@ -113,20 +98,16 @@ inline MapId computeMapId(const nav_msgs::msg::OccupancyGrid& map) noexcept
   hasher.addFloating(map.info.origin.orientation.z);
   hasher.addFloating(map.info.origin.orientation.w);
   hasher.addInteger<std::uint64_t>(static_cast<std::uint64_t>(map.data.size()));
-  for (const std::int8_t value : map.data)
-    hasher.addByte(static_cast<std::uint8_t>(value));
+  for (const std::int8_t value : map.data) hasher.addByte(static_cast<std::uint8_t>(value));
   return hasher.finish();
 }
 
-inline bool mapIdsEqual(const MapId& first, const MapId& second) noexcept
-{
+inline bool mapIdsEqual(const MapId& first, const MapId& second) noexcept {
   return first.uuid == second.uuid;
 }
 
-inline bool isZeroMapId(const MapId& id) noexcept
-{
-  for (const std::uint8_t byte : id.uuid)
-  {
+inline bool isZeroMapId(const MapId& id) noexcept {
+  for (const std::uint8_t byte : id.uuid) {
     if (byte != 0U)
       return false;
   }

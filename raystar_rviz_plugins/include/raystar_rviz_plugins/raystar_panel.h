@@ -25,17 +25,14 @@
 #include <optional>
 #include <string>
 
-namespace raystar_rviz_plugins
-{
+namespace raystar_rviz_plugins {
 
-class RaystarPanel : public rviz_common::Panel
-{
+class RaystarPanel : public rviz_common::Panel {
   Q_OBJECT
 
 public:
   explicit RaystarPanel(QWidget* parent = nullptr);
-  RaystarPanel(
-    QWidget* parent, std::chrono::milliseconds request_timeout);
+  RaystarPanel(QWidget* parent, std::chrono::milliseconds request_timeout);
   ~RaystarPanel() override;
 
   void onInitialize() override;
@@ -45,21 +42,19 @@ public:
 private Q_SLOTS:
   void onPlanClicked();
   void processCallbacks();
-  void onMapTopicChanged(const QString & topic);
-  void onActionNameChanged(const QString & action_name);
+  void onMapTopicChanged(const QString& topic);
+  void onActionNameChanged(const QString& action_name);
 
 private:
   using PlanningAction = raystar_interfaces::action::PlanRaystarPaths;
   using PlanningGoalHandle = rclcpp_action::ClientGoalHandle<PlanningAction>;
   using PlanningActionClient = rclcpp_action::Client<PlanningAction>;
 
-  struct CallbackState
-  {
+  struct CallbackState {
     using Map = nav_msgs::msg::OccupancyGrid;
     using Response = PlanningAction::Result;
 
-    struct PendingResponse
-    {
+    struct PendingResponse {
       std::uint64_t request_id{0};
       std::uint64_t map_generation{0};
       rclcpp_action::ResultCode result_code{rclcpp_action::ResultCode::UNKNOWN};
@@ -92,7 +87,7 @@ private:
   std::uint64_t invalidateMapState();
   void cancelActiveRequest();
   void clearResults();
-  void displayResponse(const CallbackState::PendingResponse & result);
+  void displayResponse(const CallbackState::PendingResponse& result);
 
   QLineEdit* start_x_edit_;
   QLineEdit* start_y_edit_;

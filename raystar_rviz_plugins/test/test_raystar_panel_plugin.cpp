@@ -33,33 +33,25 @@
 
 #include "raystar_rviz_plugins/raystar_panel.h"
 
-namespace
-{
+namespace {
 
 using PlanningAction = raystar_interfaces::action::PlanRaystarPaths;
 using GoalHandle = rclcpp_action::ServerGoalHandle<PlanningAction>;
 
-class TestRosNodeAbstraction final
-  : public rviz_common::ros_integration::RosNodeAbstractionIface
-{
+class TestRosNodeAbstraction final : public rviz_common::ros_integration::RosNodeAbstractionIface {
 public:
-  explicit TestRosNodeAbstraction(rclcpp::Node::SharedPtr node)
-  : node_(std::move(node)) {}
+  explicit TestRosNodeAbstraction(rclcpp::Node::SharedPtr node) : node_(std::move(node)) {}
 
-  std::string get_node_name() const override
-  {
+  std::string get_node_name() const override {
     return node_ ? node_->get_name() : std::string();
   }
 
-  std::map<std::string, std::vector<std::string>>
-  get_topic_names_and_types() const override
-  {
-    return node_ ? node_->get_topic_names_and_types() :
-      std::map<std::string, std::vector<std::string>>{};
+  std::map<std::string, std::vector<std::string>> get_topic_names_and_types() const override {
+    return node_ ? node_->get_topic_names_and_types()
+                 : std::map<std::string, std::vector<std::string>>{};
   }
 
-  rclcpp::Node::SharedPtr get_raw_node() override
-  {
+  rclcpp::Node::SharedPtr get_raw_node() override {
     return node_;
   }
 
@@ -70,40 +62,69 @@ private:
 // RaystarPanel only needs the ROS-node abstraction from DisplayContext.  The
 // remaining methods are deliberately inert, which keeps this test independent
 // of Ogre/rendering initialization while still exercising Panel::initialize().
-class TestDisplayContext final : public rviz_common::DisplayContext
-{
+class TestDisplayContext final : public rviz_common::DisplayContext {
 public:
-  explicit TestDisplayContext(
-    std::shared_ptr<TestRosNodeAbstraction> abstraction)
-  : abstraction_(std::move(abstraction)) {}
+  explicit TestDisplayContext(std::shared_ptr<TestRosNodeAbstraction> abstraction)
+    : abstraction_(std::move(abstraction)) {}
 
-  Ogre::SceneManager * getSceneManager() const override { return nullptr; }
-  rviz_common::WindowManagerInterface * getWindowManager() const override { return nullptr; }
-  std::shared_ptr<rviz_common::interaction::SelectionManagerIface>
-  getSelectionManager() const override { return nullptr; }
-  std::shared_ptr<rviz_common::interaction::HandlerManagerIface>
-  getHandlerManager() const override { return nullptr; }
-  std::shared_ptr<rviz_common::interaction::ViewPickerIface>
-  getViewPicker() const override { return nullptr; }
-  rviz_common::FrameManagerIface * getFrameManager() const override { return nullptr; }
-  QString getFixedFrame() const override { return QStringLiteral("map"); }
-  uint64_t getFrameCount() const override { return 0; }
-  rviz_common::DisplayFactory * getDisplayFactory() const override { return nullptr; }
-  rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr
-  getRosNodeAbstraction() const override { return abstraction_; }
-  void handleChar(QKeyEvent *, rviz_common::RenderPanel *) override {}
-  void handleMouseEvent(const rviz_common::ViewportMouseEvent &) override {}
-  rviz_common::ToolManager * getToolManager() const override { return nullptr; }
-  rviz_common::ViewManager * getViewManager() const override { return nullptr; }
-  rviz_common::transformation::TransformationManager *
-  getTransformationManager() override { return nullptr; }
-  rviz_common::DisplayGroup * getRootDisplayGroup() const override { return nullptr; }
-  uint32_t getDefaultVisibilityBit() const override { return 0; }
-  rviz_common::BitAllocator * visibilityBits() override { return nullptr; }
-  void setStatus(const QString &) override {}
-  QString getHelpPath() const override { return {}; }
-  std::shared_ptr<rclcpp::Clock> getClock() override
-  {
+  Ogre::SceneManager* getSceneManager() const override {
+    return nullptr;
+  }
+  rviz_common::WindowManagerInterface* getWindowManager() const override {
+    return nullptr;
+  }
+  std::shared_ptr<rviz_common::interaction::SelectionManagerIface> getSelectionManager()
+    const override {
+    return nullptr;
+  }
+  std::shared_ptr<rviz_common::interaction::HandlerManagerIface> getHandlerManager()
+    const override {
+    return nullptr;
+  }
+  std::shared_ptr<rviz_common::interaction::ViewPickerIface> getViewPicker() const override {
+    return nullptr;
+  }
+  rviz_common::FrameManagerIface* getFrameManager() const override {
+    return nullptr;
+  }
+  QString getFixedFrame() const override {
+    return QStringLiteral("map");
+  }
+  uint64_t getFrameCount() const override {
+    return 0;
+  }
+  rviz_common::DisplayFactory* getDisplayFactory() const override {
+    return nullptr;
+  }
+  rviz_common::ros_integration::RosNodeAbstractionIface::WeakPtr getRosNodeAbstraction()
+    const override {
+    return abstraction_;
+  }
+  void handleChar(QKeyEvent*, rviz_common::RenderPanel*) override {}
+  void handleMouseEvent(const rviz_common::ViewportMouseEvent&) override {}
+  rviz_common::ToolManager* getToolManager() const override {
+    return nullptr;
+  }
+  rviz_common::ViewManager* getViewManager() const override {
+    return nullptr;
+  }
+  rviz_common::transformation::TransformationManager* getTransformationManager() override {
+    return nullptr;
+  }
+  rviz_common::DisplayGroup* getRootDisplayGroup() const override {
+    return nullptr;
+  }
+  uint32_t getDefaultVisibilityBit() const override {
+    return 0;
+  }
+  rviz_common::BitAllocator* visibilityBits() override {
+    return nullptr;
+  }
+  void setStatus(const QString&) override {}
+  QString getHelpPath() const override {
+    return {};
+  }
+  std::shared_ptr<rclcpp::Clock> getClock() override {
     return std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);
   }
   void lockRender() override {}
@@ -114,35 +135,30 @@ private:
   std::shared_ptr<TestRosNodeAbstraction> abstraction_;
 };
 
-enum class ServerMode
-{
-  success,
-  mismatched_map,
-  delayed
-};
+enum class ServerMode { success, mismatched_map, delayed };
 
-class TestActionServer
-{
+class TestActionServer {
 public:
-  TestActionServer(std::string action_name, ServerMode mode,
-    std::chrono::milliseconds execution_delay = std::chrono::milliseconds::zero())
-  : node_(rclcpp::Node::make_shared(uniqueName("server"))),
-    client_node_(rclcpp::Node::make_shared(uniqueName("client"))),
-    action_name_(std::move(action_name)), mode_(mode),
-    execution_delay_(execution_delay)
-  {
+  TestActionServer(std::string action_name,
+                   ServerMode mode,
+                   std::chrono::milliseconds execution_delay = std::chrono::milliseconds::zero())
+    : node_(rclcpp::Node::make_shared(uniqueName("server")))
+    , client_node_(rclcpp::Node::make_shared(uniqueName("client")))
+    , action_name_(std::move(action_name))
+    , mode_(mode)
+    , execution_delay_(execution_delay) {
     server_ = rclcpp_action::create_server<PlanningAction>(
-      node_, action_name_,
-      [this](const rclcpp_action::GoalUUID &,
-             std::shared_ptr<const PlanningAction::Goal>) {
+      node_,
+      action_name_,
+      [this](const rclcpp_action::GoalUUID&, std::shared_ptr<const PlanningAction::Goal>) {
         goal_count_.fetch_add(1);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
-      [this](const std::shared_ptr<GoalHandle> &) {
+      [this](const std::shared_ptr<GoalHandle>&) {
         cancel_count_.fetch_add(1);
         return rclcpp_action::CancelResponse::ACCEPT;
       },
-      [this](const std::shared_ptr<GoalHandle> & goal_handle) {
+      [this](const std::shared_ptr<GoalHandle>& goal_handle) {
         std::lock_guard<std::mutex> lock(worker_mutex_);
         workers_.emplace_back([this, goal_handle]() {
           const auto deadline = std::chrono::steady_clock::now() + execution_delay_;
@@ -160,8 +176,7 @@ public:
           }
           auto result = std::make_shared<PlanningAction::Result>();
           result->success = mode_ == ServerMode::success;
-          result->result_info.status =
-            raystar_interfaces::msg::PlanningResultInfo::STATUS_COMPLETE;
+          result->result_info.status = raystar_interfaces::msg::PlanningResultInfo::STATUS_COMPLETE;
           result->result_info.request_satisfied = true;
           result->result_info.search_complete = true;
           result->result_info.output_complete = true;
@@ -187,8 +202,7 @@ public:
     spin_thread_ = std::thread([this]() { executor_.spin(); });
   }
 
-  ~TestActionServer()
-  {
+  ~TestActionServer() {
     executor_.cancel();
     if (spin_thread_.joinable()) {
       spin_thread_.join();
@@ -199,7 +213,7 @@ public:
       stopping_ = true;
     }
     worker_cv_.notify_all();
-    for (auto & worker : workers_) {
+    for (auto& worker : workers_) {
       if (worker.joinable()) {
         worker.join();
       }
@@ -209,32 +223,34 @@ public:
     client_node_.reset();
   }
 
-  rclcpp::Node::SharedPtr clientNode() const { return client_node_; }
-  std::size_t goalCount() const { return goal_count_.load(); }
-  std::size_t cancelCount() const { return cancel_count_.load(); }
-  std::size_t successCount() const { return success_count_.load(); }
+  rclcpp::Node::SharedPtr clientNode() const {
+    return client_node_;
+  }
+  std::size_t goalCount() const {
+    return goal_count_.load();
+  }
+  std::size_t cancelCount() const {
+    return cancel_count_.load();
+  }
+  std::size_t successCount() const {
+    return success_count_.load();
+  }
 
-  bool waitForClient(std::chrono::milliseconds timeout)
-  {
-    auto client = rclcpp_action::create_client<PlanningAction>(
-      client_node_, action_name_);
+  bool waitForClient(std::chrono::milliseconds timeout) {
+    auto client = rclcpp_action::create_client<PlanningAction>(client_node_, action_name_);
     return client->wait_for_action_server(timeout);
   }
 
 private:
-  static std::string uniqueName(const char * suffix)
-  {
+  static std::string uniqueName(const char* suffix) {
     static std::atomic<unsigned int> sequence{0};
-    return std::string("raystar_panel_") + suffix + "_" +
-      std::to_string(sequence.fetch_add(1));
+    return std::string("raystar_panel_") + suffix + "_" + std::to_string(sequence.fetch_add(1));
   }
 
-  void finishCanceled(const std::shared_ptr<GoalHandle> & goal_handle)
-  {
+  void finishCanceled(const std::shared_ptr<GoalHandle>& goal_handle) {
     auto result = std::make_shared<PlanningAction::Result>();
     result->success = false;
-    result->result_info.status =
-      raystar_interfaces::msg::PlanningResultInfo::STATUS_CANCELLED;
+    result->result_info.status = raystar_interfaces::msg::PlanningResultInfo::STATUS_CANCELLED;
     result->result_info.limits_reached =
       raystar_interfaces::msg::PlanningResultInfo::LIMIT_CANCELLED;
     result->result_info.map_id = goal_handle->get_goal()->map_id;
@@ -258,18 +274,15 @@ private:
   std::atomic<std::size_t> success_count_{0};
 };
 
-class TestMapPublisher
-{
+class TestMapPublisher {
 public:
   explicit TestMapPublisher(rclcpp::Node::SharedPtr node, std::string topic)
-  : node_(std::move(node)), topic_(std::move(topic))
-  {
+    : node_(std::move(node)), topic_(std::move(topic)) {
     publisher_ = node_->create_publisher<nav_msgs::msg::OccupancyGrid>(
       topic_, rclcpp::QoS(1).transient_local().reliable());
   }
 
-  nav_msgs::msg::OccupancyGrid publishMap()
-  {
+  nav_msgs::msg::OccupancyGrid publishMap() {
     nav_msgs::msg::OccupancyGrid map;
     map.header.frame_id = "map";
     map.info.width = 4;
@@ -281,8 +294,7 @@ public:
     return map;
   }
 
-  void publish(const nav_msgs::msg::OccupancyGrid & map)
-  {
+  void publish(const nav_msgs::msg::OccupancyGrid& map) {
     publisher_->publish(map);
   }
 
@@ -292,9 +304,8 @@ private:
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr publisher_;
 };
 
-template<typename Predicate>
-bool waitForGui(Predicate predicate, std::chrono::milliseconds timeout)
-{
+template <typename Predicate>
+bool waitForGui(Predicate predicate, std::chrono::milliseconds timeout) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
   while (std::chrono::steady_clock::now() < deadline) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
@@ -307,40 +318,33 @@ bool waitForGui(Predicate predicate, std::chrono::milliseconds timeout)
   return predicate();
 }
 
-std::string nextTestName(const char * stem)
-{
+std::string nextTestName(const char* stem) {
   static std::atomic<unsigned int> sequence{0};
-  return std::string("/") + stem + "_" +
-    std::to_string(sequence.fetch_add(1));
+  return std::string("/") + stem + "_" + std::to_string(sequence.fetch_add(1));
 }
 
 std::unique_ptr<raystar_rviz_plugins::RaystarPanel> makeInitializedPanel(
-  TestDisplayContext & context, const std::string & action_name,
-  const std::string & map_topic, std::chrono::milliseconds timeout)
-{
-  auto panel = std::make_unique<raystar_rviz_plugins::RaystarPanel>(
-    nullptr, timeout);
-  panel->findChild<QLineEdit *>("action_name_edit")->setText(
-    QString::fromStdString(action_name));
-  panel->findChild<QLineEdit *>("map_topic_edit")->setText(
-    QString::fromStdString(map_topic));
+  TestDisplayContext& context,
+  const std::string& action_name,
+  const std::string& map_topic,
+  std::chrono::milliseconds timeout) {
+  auto panel = std::make_unique<raystar_rviz_plugins::RaystarPanel>(nullptr, timeout);
+  panel->findChild<QLineEdit*>("action_name_edit")->setText(QString::fromStdString(action_name));
+  panel->findChild<QLineEdit*>("map_topic_edit")->setText(QString::fromStdString(map_topic));
   panel->initialize(&context);
   return panel;
 }
 
-QLabel * statusLabel(raystar_rviz_plugins::RaystarPanel & panel)
-{
-  return panel.findChild<QLabel *>("status_label");
+QLabel* statusLabel(raystar_rviz_plugins::RaystarPanel& panel) {
+  return panel.findChild<QLabel*>("status_label");
 }
 
-QPushButton * planButton(raystar_rviz_plugins::RaystarPanel & panel)
-{
-  return panel.findChild<QPushButton *>("plan_button");
+QPushButton* planButton(raystar_rviz_plugins::RaystarPanel& panel) {
+  return panel.findChild<QPushButton*>("plan_button");
 }
 
-QTableWidget * resultsTable(raystar_rviz_plugins::RaystarPanel & panel)
-{
-  return panel.findChild<QTableWidget *>("results_table");
+QTableWidget* resultsTable(raystar_rviz_plugins::RaystarPanel& panel) {
+  return panel.findChild<QTableWidget*>("results_table");
 }
 
 constexpr char kPluginId[] = "raystar_rviz_plugins/RaystarPanel";
@@ -349,13 +353,11 @@ constexpr char kPluginType[] = "raystar_rviz_plugins::RaystarPanel";
 
 using PanelLoader = pluginlib::ClassLoader<rviz_common::Panel>;
 
-std::shared_ptr<rviz_common::Panel> loadPanel(PanelLoader & loader)
-{
+std::shared_ptr<rviz_common::Panel> loadPanel(PanelLoader& loader) {
   return loader.createSharedInstance(kPluginId);
 }
 
-TEST(RaystarPanelPlugin, DeclaresOneStableIdAndLoads)
-{
+TEST(RaystarPanelPlugin, DeclaresOneStableIdAndLoads) {
   PanelLoader loader("rviz_common", "rviz_common::Panel");
   const auto declared = loader.getDeclaredClasses();
 
@@ -369,8 +371,7 @@ TEST(RaystarPanelPlugin, DeclaresOneStableIdAndLoads)
   panel.reset();
 }
 
-TEST(RaystarPanelPlugin, PersistsConnectionAndPlanningOptions)
-{
+TEST(RaystarPanelPlugin, PersistsConnectionAndPlanningOptions) {
   PanelLoader loader("rviz_common", "rviz_common::Panel");
   auto panel = loadPanel(loader);
   ASSERT_NE(nullptr, panel);
@@ -418,8 +419,7 @@ TEST(RaystarPanelPlugin, PersistsConnectionAndPlanningOptions)
   panel.reset();
 }
 
-TEST(RaystarPanelPlugin, OlderConfigsKeepSafeDefaultsForNewFields)
-{
+TEST(RaystarPanelPlugin, OlderConfigsKeepSafeDefaultsForNewFields) {
   PanelLoader loader("rviz_common", "rviz_common::Panel");
   auto panel = loadPanel(loader);
   ASSERT_NE(nullptr, panel);
@@ -445,8 +445,7 @@ TEST(RaystarPanelPlugin, OlderConfigsKeepSafeDefaultsForNewFields)
   panel.reset();
 }
 
-TEST(RaystarPanelInteraction, InitializesWithDisplayContextAndRendersActionResult)
-{
+TEST(RaystarPanelInteraction, InitializesWithDisplayContextAndRendersActionResult) {
   const auto action_name = nextTestName("plan_paths");
   const auto map_topic = nextTestName("map");
   TestActionServer server(action_name, ServerMode::success);
@@ -454,36 +453,37 @@ TEST(RaystarPanelInteraction, InitializesWithDisplayContextAndRendersActionResul
   TestMapPublisher map_publisher(server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(
-    context, action_name, map_topic, std::chrono::seconds(2));
+  auto panel = makeInitializedPanel(context, action_name, map_topic, std::chrono::seconds(2));
 
   auto map = map_publisher.publishMap();
-  auto * label = statusLabel(*panel);
-  auto * button = planButton(*panel);
-  auto * table = resultsTable(*panel);
+  auto* label = statusLabel(*panel);
+  auto* button = planButton(*panel);
+  auto* table = resultsTable(*panel);
   ASSERT_NE(nullptr, label);
   ASSERT_NE(nullptr, button);
   ASSERT_NE(nullptr, table);
-  ASSERT_TRUE(waitForGui([&]() {
-    if (!label->text().contains(QStringLiteral("Map received"))) {
-      map_publisher.publish(map);
-    }
-    return label->text().contains(QStringLiteral("Map received"));
-  }, std::chrono::seconds(2))) << label->text().toStdString();
-  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); },
-    std::chrono::seconds(2))) << label->text().toStdString();
+  ASSERT_TRUE(waitForGui(
+    [&]() {
+      if (!label->text().contains(QStringLiteral("Map received"))) {
+        map_publisher.publish(map);
+      }
+      return label->text().contains(QStringLiteral("Map received"));
+    },
+    std::chrono::seconds(2)))
+    << label->text().toStdString();
+  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)))
+    << label->text().toStdString();
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() {
-    return label->text().contains(QStringLiteral("SUCCEEDED"));
-  }, std::chrono::seconds(2))) << label->text().toStdString();
+  ASSERT_TRUE(waitForGui([&]() { return label->text().contains(QStringLiteral("SUCCEEDED")); },
+                         std::chrono::seconds(2)))
+    << label->text().toStdString();
   EXPECT_EQ(1, table->rowCount());
   EXPECT_EQ(1u, server.goalCount());
   EXPECT_EQ(1u, server.successCount());
 }
 
-TEST(RaystarPanelInteraction, RejectsResultForDifferentMapId)
-{
+TEST(RaystarPanelInteraction, RejectsResultForDifferentMapId) {
   const auto action_name = nextTestName("plan_paths");
   const auto map_topic = nextTestName("map");
   TestActionServer server(action_name, ServerMode::mismatched_map);
@@ -491,98 +491,92 @@ TEST(RaystarPanelInteraction, RejectsResultForDifferentMapId)
   TestMapPublisher map_publisher(server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(
-    context, action_name, map_topic, std::chrono::seconds(2));
+  auto panel = makeInitializedPanel(context, action_name, map_topic, std::chrono::seconds(2));
   auto map = map_publisher.publishMap();
-  auto * label = statusLabel(*panel);
-  auto * button = planButton(*panel);
-  ASSERT_TRUE(waitForGui([&]() {
-    if (!label->text().contains(QStringLiteral("Map received"))) {
-      map_publisher.publish(map);
-    }
-    return label->text().contains(QStringLiteral("Map received"));
-  }, std::chrono::seconds(2)));
-  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); },
+  auto* label = statusLabel(*panel);
+  auto* button = planButton(*panel);
+  ASSERT_TRUE(waitForGui(
+    [&]() {
+      if (!label->text().contains(QStringLiteral("Map received"))) {
+        map_publisher.publish(map);
+      }
+      return label->text().contains(QStringLiteral("Map received"));
+    },
     std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)));
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() {
-    return label->text().contains(QStringLiteral("different cached map"));
-  }, std::chrono::seconds(2))) << label->text().toStdString();
+  ASSERT_TRUE(
+    waitForGui([&]() { return label->text().contains(QStringLiteral("different cached map")); },
+               std::chrono::seconds(2)))
+    << label->text().toStdString();
 }
 
-TEST(RaystarPanelInteraction, CancelsShortTimeoutGoal)
-{
+TEST(RaystarPanelInteraction, CancelsShortTimeoutGoal) {
   const auto action_name = nextTestName("plan_paths");
   const auto map_topic = nextTestName("map");
-  TestActionServer server(action_name, ServerMode::delayed,
-    std::chrono::seconds(2));
+  TestActionServer server(action_name, ServerMode::delayed, std::chrono::seconds(2));
   ASSERT_TRUE(server.waitForClient(std::chrono::seconds(2)));
   TestMapPublisher map_publisher(server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(
-    context, action_name, map_topic, std::chrono::milliseconds(80));
+  auto panel = makeInitializedPanel(context, action_name, map_topic, std::chrono::milliseconds(80));
   auto map = map_publisher.publishMap();
-  auto * label = statusLabel(*panel);
-  auto * button = planButton(*panel);
-  ASSERT_TRUE(waitForGui([&]() {
-    if (!label->text().contains(QStringLiteral("Map received"))) {
-      map_publisher.publish(map);
-    }
-    return label->text().contains(QStringLiteral("Map received"));
-  }, std::chrono::seconds(2)));
-  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); },
+  auto* label = statusLabel(*panel);
+  auto* button = planButton(*panel);
+  ASSERT_TRUE(waitForGui(
+    [&]() {
+      if (!label->text().contains(QStringLiteral("Map received"))) {
+        map_publisher.publish(map);
+      }
+      return label->text().contains(QStringLiteral("Map received"));
+    },
     std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)));
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() {
-    return label->text().contains(QStringLiteral("timed out and was canceled"));
-  }, std::chrono::seconds(2))) << label->text().toStdString();
-  ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; },
-    std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui(
+    [&]() { return label->text().contains(QStringLiteral("timed out and was canceled")); },
+    std::chrono::seconds(2)))
+    << label->text().toStdString();
+  ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; }, std::chrono::seconds(2)));
 }
 
-TEST(RaystarPanelInteraction, DestructionCancelsGoalAndLeavesNoQueuedUiCallback)
-{
+TEST(RaystarPanelInteraction, DestructionCancelsGoalAndLeavesNoQueuedUiCallback) {
   const auto action_name = nextTestName("plan_paths");
   const auto map_topic = nextTestName("map");
-  TestActionServer server(action_name, ServerMode::delayed,
-    std::chrono::seconds(2));
+  TestActionServer server(action_name, ServerMode::delayed, std::chrono::seconds(2));
   ASSERT_TRUE(server.waitForClient(std::chrono::seconds(2)));
   TestMapPublisher map_publisher(server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(
-    context, action_name, map_topic, std::chrono::seconds(5));
+  auto panel = makeInitializedPanel(context, action_name, map_topic, std::chrono::seconds(5));
   auto map = map_publisher.publishMap();
-  auto * label = statusLabel(*panel);
-  auto * button = planButton(*panel);
-  ASSERT_TRUE(waitForGui([&]() {
-    if (!label->text().contains(QStringLiteral("Map received"))) {
-      map_publisher.publish(map);
-    }
-    return label->text().contains(QStringLiteral("Map received"));
-  }, std::chrono::seconds(2)));
-  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); },
+  auto* label = statusLabel(*panel);
+  auto* button = planButton(*panel);
+  ASSERT_TRUE(waitForGui(
+    [&]() {
+      if (!label->text().contains(QStringLiteral("Map received"))) {
+        map_publisher.publish(map);
+      }
+      return label->text().contains(QStringLiteral("Map received"));
+    },
     std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)));
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() { return server.goalCount() > 0; },
-    std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.goalCount() > 0; }, std::chrono::seconds(2)));
   panel.reset();
 
   // The action acceptance/result callbacks may run after the QWidget has
   // gone away. The panel must retain only non-UI state long enough to cancel
   // the accepted goal, and must not dereference the destroyed object.
-  ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; },
-    std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; }, std::chrono::seconds(2)));
 }
 
 }  // namespace
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);
   QApplication application(argc, argv);

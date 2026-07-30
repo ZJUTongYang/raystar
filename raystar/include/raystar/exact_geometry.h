@@ -5,10 +5,8 @@
 
 #include <optional>
 
-namespace raystar
-{
-namespace exact_geometry
-{
+namespace raystar {
+namespace exact_geometry {
 
 using Kernel = CGAL::Exact_predicates_exact_constructions_kernel;
 using Point = Kernel::Point_2;
@@ -20,10 +18,10 @@ using FT = Kernel::FT;
 // exact while rejecting an invalid hit behind the source or beyond the
 // obstacle edge. Collinear overlap is ambiguous for a single-point endpoint
 // and is therefore reported as an ordinary failure.
-inline std::optional<Point> intersectSegmentWithRay(
-  const Point& segment_start, const Point& segment_end,
-  const Point& source, const Point& ray_anchor)
-{
+inline std::optional<Point> intersectSegmentWithRay(const Point& segment_start,
+                                                    const Point& segment_end,
+                                                    const Point& source,
+                                                    const Point& ray_anchor) {
   if (segment_start == segment_end || source == ray_anchor)
     return std::nullopt;
 
@@ -37,19 +35,15 @@ inline std::optional<Point> intersectSegmentWithRay(
   if (determinant == FT(0))
     return std::nullopt;
 
-  const Point intersection(
-    (b1 * c2 - b2 * c1) / determinant,
-    (c1 * a2 - c2 * a1) / determinant);
+  const Point intersection((b1 * c2 - b2 * c1) / determinant, (c1 * a2 - c2 * a1) / determinant);
   if (!Kernel::Segment_2(segment_start, segment_end).has_on(intersection) ||
-      !Kernel::Ray_2(source, ray_anchor).has_on(intersection))
-  {
+      !Kernel::Ray_2(source, ray_anchor).has_on(intersection)) {
     return std::nullopt;
   }
   return intersection;
 }
 
-enum class PortalRayPosition
-{
+enum class PortalRayPosition {
   before_lower,
   equal_lower,
   inside,
@@ -58,23 +52,21 @@ enum class PortalRayPosition
   invalid
 };
 
-inline bool isSameDirectedRay(const Point& source, const Point& first,
-  const Point& second)
-{
+inline bool isSameDirectedRay(const Point& source, const Point& first, const Point& second) {
   if (first == source || second == source)
     return false;
   return CGAL::orientation(source, first, second) == CGAL::COLLINEAR &&
-    CGAL::scalar_product(first - source, second - source) > FT(0);
+         CGAL::scalar_product(first - source, second - source) > FT(0);
 }
 
 // Compare directions by their counter-clockwise offset from reference in
 // [0, 2*pi). Distance from source is intentionally ignored: points on the
 // same directed ray compare equal so stable_sort can preserve visibility
 // discontinuities (far point followed by near point, or vice versa).
-inline CGAL::Comparison_result compareRaysCounterClockwiseFrom(
-  const Point& source, const Point& reference,
-  const Point& first, const Point& second)
-{
+inline CGAL::Comparison_result compareRaysCounterClockwiseFrom(const Point& source,
+                                                               const Point& reference,
+                                                               const Point& first,
+                                                               const Point& second) {
   if (first == second)
     return CGAL::EQUAL;
   if (first == source)
@@ -111,9 +103,9 @@ inline CGAL::Comparison_result compareRaysCounterClockwiseFrom(
 // Exact ordering equivalent to sorting std::atan2(y, x) in ascending order:
 // (-pi, 0) first, then [0, pi]. In particular the negative x-axis (atan2=pi)
 // remains at the end, matching the former implementation.
-inline CGAL::Comparison_result compareRaysLikeAtan2(
-  const Point& source, const Point& first, const Point& second)
-{
+inline CGAL::Comparison_result compareRaysLikeAtan2(const Point& source,
+                                                    const Point& first,
+                                                    const Point& second) {
   if (first == second)
     return CGAL::EQUAL;
   if (first == source)
@@ -121,9 +113,7 @@ inline CGAL::Comparison_result compareRaysLikeAtan2(
   if (second == source)
     return CGAL::LARGER;
 
-  const auto lower_half = [&](const Point& point) {
-    return (point - source).y() < FT(0);
-  };
+  const auto lower_half = [&](const Point& point) { return (point - source).y() < FT(0); };
   const bool first_lower = lower_half(first);
   const bool second_lower = lower_half(second);
   if (first_lower != second_lower)
@@ -144,10 +134,10 @@ inline CGAL::Comparison_result compareRaysLikeAtan2(
   return (first - source).x() > FT(0) ? CGAL::SMALLER : CGAL::LARGER;
 }
 
-inline bool isClosedCounterClockwiseSweepMember(
-  const Point& source, const Point& start, const Point& end,
-  const Point& candidate)
-{
+inline bool isClosedCounterClockwiseSweepMember(const Point& source,
+                                                const Point& start,
+                                                const Point& end,
+                                                const Point& candidate) {
   if (start == source || end == source || candidate == source)
     return false;
   return compareRaysCounterClockwiseFrom(source, start, candidate, end) != CGAL::LARGER;
@@ -157,10 +147,10 @@ inline bool isClosedCounterClockwiseSweepMember(
 // The algorithm's portal invariant is a counter-clockwise span in [0, pi].
 // A clockwise upper ray would have been represented as a span greater than pi
 // while theta was restricted to (lower-pi, lower+pi], so it is rejected.
-inline PortalRayPosition classifyPortalRay(
-  const Point& source, const Point& lower, const Point& upper,
-  const Point& candidate)
-{
+inline PortalRayPosition classifyPortalRay(const Point& source,
+                                           const Point& lower,
+                                           const Point& upper,
+                                           const Point& candidate) {
   if (lower == source || upper == source || candidate == source)
     return PortalRayPosition::invalid;
 
@@ -174,8 +164,7 @@ inline PortalRayPosition classifyPortalRay(
   if (isSameDirectedRay(source, lower, candidate))
     return PortalRayPosition::equal_lower;
 
-  const CGAL::Orientation candidate_turn =
-    CGAL::orientation(source, lower, candidate);
+  const CGAL::Orientation candidate_turn = CGAL::orientation(source, lower, candidate);
   if (candidate_turn == CGAL::RIGHT_TURN)
     return PortalRayPosition::before_lower;
 
@@ -187,23 +176,22 @@ inline PortalRayPosition classifyPortalRay(
   if (pi_span)
     return PortalRayPosition::inside;
 
-  return CGAL::orientation(source, candidate, upper) == CGAL::LEFT_TURN ?
-    PortalRayPosition::inside : PortalRayPosition::after_upper;
+  return CGAL::orientation(source, candidate, upper) == CGAL::LEFT_TURN
+           ? PortalRayPosition::inside
+           : PortalRayPosition::after_upper;
 }
 
-inline bool isPortalSpanAtMostPi(
-  const Point& source, const Point& lower, const Point& upper)
-{
+inline bool isPortalSpanAtMostPi(const Point& source, const Point& lower, const Point& upper) {
   if (lower == source || upper == source)
     return false;
   return CGAL::orientation(source, lower, upper) != CGAL::RIGHT_TURN;
 }
 
-inline bool isRemovableCollinearMiddle(
-  const Point& previous, const Point& current, const Point& next)
-{
+inline bool isRemovableCollinearMiddle(const Point& previous,
+                                       const Point& current,
+                                       const Point& next) {
   return CGAL::orientation(previous, current, next) == CGAL::COLLINEAR &&
-    CGAL::collinear_are_ordered_along_line(previous, current, next);
+         CGAL::collinear_are_ordered_along_line(previous, current, next);
 }
 
 }  // namespace exact_geometry

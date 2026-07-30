@@ -3,20 +3,14 @@
 
 #include <exception>
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
   int exit_code = 0;
-  try
-  {
+  try {
     auto node = std::make_shared<raystar::RaystarNode>();
     rclcpp::spin(node);
-  }
-  catch (const std::exception& exception)
-  {
-    RCLCPP_FATAL(
-      rclcpp::get_logger("raystar"), "Failed to initialize: %s",
-      exception.what());
+  } catch (const std::exception& exception) {
+    RCLCPP_FATAL(rclcpp::get_logger("raystar"), "Failed to initialize: %s", exception.what());
     exit_code = 1;
   }
   rclcpp::shutdown();

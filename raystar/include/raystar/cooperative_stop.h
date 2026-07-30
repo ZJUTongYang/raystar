@@ -3,38 +3,28 @@
 #include <functional>
 #include <utility>
 
-namespace raystar
-{
+namespace raystar {
 
 using StopPredicate = std::function<bool()>;
 
-enum class OperationStatus
-{
-  success,
-  failure,
-  stopped
-};
+enum class OperationStatus { success, failure, stopped };
 
 // A lightweight cooperative-stop token.  poll() evaluates the predicate until
 // it first requests a stop, then latches that state so all later polls remain
 // stopped without invoking the predicate again.
-class StopToken
-{
+class StopToken {
 public:
   StopToken() = default;
 
-  explicit StopToken(StopPredicate predicate)
-    : predicate_(std::move(predicate)) {}
+  explicit StopToken(StopPredicate predicate) : predicate_(std::move(predicate)) {}
 
-  [[nodiscard]] bool poll() const
-  {
+  [[nodiscard]] bool poll() const {
     if (!requested_ && predicate_ && predicate_())
       requested_ = true;
     return requested_;
   }
 
-  [[nodiscard]] bool requested() const noexcept
-  {
+  [[nodiscard]] bool requested() const noexcept {
     return requested_;
   }
 

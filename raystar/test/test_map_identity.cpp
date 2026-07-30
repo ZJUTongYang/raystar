@@ -5,11 +5,9 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace
-{
+namespace {
 
-nav_msgs::msg::OccupancyGrid makeMap()
-{
+nav_msgs::msg::OccupancyGrid makeMap() {
   nav_msgs::msg::OccupancyGrid map;
   map.header.frame_id = "map";
   map.header.stamp.sec = 12;
@@ -26,8 +24,7 @@ nav_msgs::msg::OccupancyGrid makeMap()
   return map;
 }
 
-TEST(MapIdentity, IsDeterministicAndUsesApplicationUuidBits)
-{
+TEST(MapIdentity, IsDeterministicAndUsesApplicationUuidBits) {
   const auto map = makeMap();
   const auto first = raystar_interfaces::computeMapId(map);
   const auto second = raystar_interfaces::computeMapId(map);
@@ -38,14 +35,13 @@ TEST(MapIdentity, IsDeterministicAndUsesApplicationUuidBits)
   EXPECT_EQ(first.uuid[8] & 0xc0U, 0x80U);
 }
 
-TEST(MapIdentity, EveryPlanningRelevantFieldChangesIdentity)
-{
+TEST(MapIdentity, EveryPlanningRelevantFieldChangesIdentity) {
   const auto baseline_map = makeMap();
   const auto baseline = raystar_interfaces::computeMapId(baseline_map);
 
   const auto expect_changed = [&baseline](const auto& candidate) {
-    EXPECT_FALSE(raystar_interfaces::mapIdsEqual(
-      baseline, raystar_interfaces::computeMapId(candidate)));
+    EXPECT_FALSE(
+      raystar_interfaces::mapIdsEqual(baseline, raystar_interfaces::computeMapId(candidate)));
   };
 
   auto candidate = baseline_map;
@@ -77,8 +73,7 @@ TEST(MapIdentity, EveryPlanningRelevantFieldChangesIdentity)
   expect_changed(candidate);
 }
 
-TEST(MapIdentity, ZeroIdentityIsReservedForMissingReferences)
-{
+TEST(MapIdentity, ZeroIdentityIsReservedForMissingReferences) {
   raystar_interfaces::MapId zero;
   EXPECT_TRUE(raystar_interfaces::isZeroMapId(zero));
 

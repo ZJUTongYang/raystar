@@ -27,5 +27,5 @@ PointerAlignment: Left
 ReflowComments: true
 SortIncludes: Never
 SpaceBeforeParens: ControlStatements
-Standard: Cpp17
+Standard: c++17
 UseTab: Never

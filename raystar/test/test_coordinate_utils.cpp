@@ -5,8 +5,7 @@
 
 using namespace raystar;
 
-TEST(CoordinateUtils, WorldToMapBasic)
-{
+TEST(CoordinateUtils, WorldToMapBasic) {
   GridMap map;
   map.width = 100;
   map.height = 100;
@@ -29,8 +28,7 @@ TEST(CoordinateUtils, WorldToMapBasic)
   EXPECT_EQ(my, 99u);
 }
 
-TEST(CoordinateUtils, WorldToMapOutOfRange)
-{
+TEST(CoordinateUtils, WorldToMapOutOfRange) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -46,8 +44,7 @@ TEST(CoordinateUtils, WorldToMapOutOfRange)
   EXPECT_FALSE(worldToMap(map, 0.0, 10.0, mx, my));
 }
 
-TEST(CoordinateUtils, WorldToMapRejectsInvalidMetricMetadataBeforeCasting)
-{
+TEST(CoordinateUtils, WorldToMapRejectsInvalidMetricMetadataBeforeCasting) {
   GridMap valid_map;
   valid_map.width = 10;
   valid_map.height = 10;
@@ -97,8 +94,7 @@ TEST(CoordinateUtils, WorldToMapRejectsInvalidMetricMetadataBeforeCasting)
   expect_rejected(invalid_map, 0.0, 0.0);
 }
 
-TEST(CoordinateUtils, WorldToMapRejectsNonFiniteAndUnrepresentableCoordinates)
-{
+TEST(CoordinateUtils, WorldToMapRejectsNonFiniteAndUnrepresentableCoordinates) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -136,8 +132,7 @@ TEST(CoordinateUtils, WorldToMapRejectsNonFiniteAndUnrepresentableCoordinates)
   EXPECT_EQ(my, 456u);
 }
 
-TEST(CoordinateUtils, WorldToMapKeepsValidFractionalResolutionSemantics)
-{
+TEST(CoordinateUtils, WorldToMapKeepsValidFractionalResolutionSemantics) {
   GridMap map;
   map.width = 4;
   map.height = 5;
@@ -156,8 +151,7 @@ TEST(CoordinateUtils, WorldToMapKeepsValidFractionalResolutionSemantics)
   EXPECT_FALSE(worldToMap(map, -1.0, 4.5, mx, my));
 }
 
-TEST(CoordinateUtils, MapToWorldAndBack)
-{
+TEST(CoordinateUtils, MapToWorldAndBack) {
   GridMap map;
   map.width = 100;
   map.height = 100;
@@ -178,8 +172,7 @@ TEST(CoordinateUtils, MapToWorldAndBack)
   }
 }
 
-TEST(CoordinateUtils, WorldToContinuousMapPreservesFractionAndFloorCell)
-{
+TEST(CoordinateUtils, WorldToContinuousMapPreservesFractionAndFloorCell) {
   GridMap map;
   map.width = 20;
   map.height = 20;
@@ -209,8 +202,7 @@ TEST(CoordinateUtils, WorldToContinuousMapPreservesFractionAndFloorCell)
   EXPECT_EQ(point.cell_y, original.cell_y);
 }
 
-TEST(CoordinateUtils, SnapsRepresentableWorldGridBoundariesBeforeFlooring)
-{
+TEST(CoordinateUtils, SnapsRepresentableWorldGridBoundariesBeforeFlooring) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -221,14 +213,11 @@ TEST(CoordinateUtils, SnapsRepresentableWorldGridBoundariesBeforeFlooring)
   map.origin_y = -0.2;
   map.data.assign(100, 0);
 
-  const double boundary_x = map.origin_x +
-    2.0 * static_cast<double>(map.resolution);
-  const double boundary_y = map.origin_y +
-    3.0 * static_cast<double>(map.resolution);
+  const double boundary_x = map.origin_x + 2.0 * static_cast<double>(map.resolution);
+  const double boundary_y = map.origin_y + 3.0 * static_cast<double>(map.resolution);
 
   ContinuousGridPoint point;
-  ASSERT_TRUE(worldToContinuousMap(
-    map, boundary_x, boundary_y, point));
+  ASSERT_TRUE(worldToContinuousMap(map, boundary_x, boundary_y, point));
   EXPECT_DOUBLE_EQ(point.x, 2.0);
   EXPECT_DOUBLE_EQ(point.y, 3.0);
   EXPECT_EQ(point.cell_x, 2u);
@@ -236,14 +225,12 @@ TEST(CoordinateUtils, SnapsRepresentableWorldGridBoundariesBeforeFlooring)
 
   unsigned int cell_x = 0;
   unsigned int cell_y = 0;
-  ASSERT_TRUE(worldToMap(
-    map, boundary_x, boundary_y, cell_x, cell_y));
+  ASSERT_TRUE(worldToMap(map, boundary_x, boundary_y, cell_x, cell_y));
   EXPECT_EQ(cell_x, 2u);
   EXPECT_EQ(cell_y, 3u);
 }
 
-TEST(CoordinateUtils, RejectsRepresentableWorldUpperBoundaryAfterSnapping)
-{
+TEST(CoordinateUtils, RejectsRepresentableWorldUpperBoundaryAfterSnapping) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -252,10 +239,10 @@ TEST(CoordinateUtils, RejectsRepresentableWorldUpperBoundaryAfterSnapping)
   map.origin_y = -0.2;
   map.data.assign(100, 0);
 
-  const double map_right = map.origin_x +
-    static_cast<double>(map.width) * static_cast<double>(map.resolution);
-  const double map_top = map.origin_y +
-    static_cast<double>(map.height) * static_cast<double>(map.resolution);
+  const double map_right =
+    map.origin_x + static_cast<double>(map.width) * static_cast<double>(map.resolution);
+  const double map_top =
+    map.origin_y + static_cast<double>(map.height) * static_cast<double>(map.resolution);
   ContinuousGridPoint point{7.0, 8.0, 7u, 8u};
   EXPECT_FALSE(worldToContinuousMap(map, map_right, 0.0, point));
   EXPECT_DOUBLE_EQ(point.x, 7.0);
@@ -265,8 +252,7 @@ TEST(CoordinateUtils, RejectsRepresentableWorldUpperBoundaryAfterSnapping)
   EXPECT_FALSE(worldToContinuousMap(map, 0.0, map_top, point));
 }
 
-TEST(CoordinateUtils, MapToWorldRejectsInvalidTransformAndReturnsNaN)
-{
+TEST(CoordinateUtils, MapToWorldRejectsInvalidTransformAndReturnsNaN) {
   GridMap valid_map;
   valid_map.width = 10;
   valid_map.height = 10;
@@ -308,8 +294,7 @@ TEST(CoordinateUtils, MapToWorldRejectsInvalidTransformAndReturnsNaN)
   expect_rejected(invalid_map);
 }
 
-TEST(CoordinateUtils, GridMapAccess)
-{
+TEST(CoordinateUtils, GridMapAccess) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -321,8 +306,7 @@ TEST(CoordinateUtils, GridMapAccess)
   EXPECT_EQ(map(9u, 9u), 0);
 }
 
-TEST(CoordinateUtils, GridMapOutOfBoundsReturnsOccupied)
-{
+TEST(CoordinateUtils, GridMapOutOfBoundsReturnsOccupied) {
   GridMap map;
   map.width = 10;
   map.height = 10;
@@ -332,8 +316,7 @@ TEST(CoordinateUtils, GridMapOutOfBoundsReturnsOccupied)
   EXPECT_EQ(map.at(0u, 10u), 1u);
 }
 
-TEST(CoordinateUtils, NormalizeAngle)
-{
+TEST(CoordinateUtils, NormalizeAngle) {
   EXPECT_NEAR(normalize_angle(0.0), 0.0, 1e-10);
   EXPECT_NEAR(normalize_angle(kPi), kPi, 1e-10);
   EXPECT_NEAR(normalize_angle(-kPi), kPi, 1e-10);
@@ -343,8 +326,7 @@ TEST(CoordinateUtils, NormalizeAngle)
   EXPECT_NEAR(normalize_angle(-kPi / 2.0), -kPi / 2.0, 1e-10);
 }
 
-TEST(CoordinateUtils, NormalizeAnglePositive)
-{
+TEST(CoordinateUtils, NormalizeAnglePositive) {
   EXPECT_NEAR(normalize_angle_positive(0.0), 0.0, 1e-10);
   EXPECT_NEAR(normalize_angle_positive(kPi), kPi, 1e-10);
   EXPECT_NEAR(normalize_angle_positive(-kPi), kPi, 1e-10);
@@ -352,20 +334,16 @@ TEST(CoordinateUtils, NormalizeAnglePositive)
   EXPECT_NEAR(normalize_angle_positive(kPi / 2.0), kPi / 2.0, 1e-10);
 }
 
-TEST(CoordinateUtils, AngleNormalizationHandlesNonFiniteAndExtremeFiniteInputs)
-{
+TEST(CoordinateUtils, AngleNormalizationHandlesNonFiniteAndExtremeFiniteInputs) {
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double infinity = std::numeric_limits<double>::infinity();
-  for (const double non_finite : {nan, infinity, -infinity})
-  {
+  for (const double non_finite : {nan, infinity, -infinity}) {
     EXPECT_TRUE(std::isnan(normalize_angle(non_finite)));
     EXPECT_TRUE(std::isnan(normalize_angle_positive(non_finite)));
   }
 
-  for (const double extreme : {
-      std::numeric_limits<double>::max(),
-      std::numeric_limits<double>::lowest()})
-  {
+  for (const double extreme :
+       {std::numeric_limits<double>::max(), std::numeric_limits<double>::lowest()}) {
     const double signed_angle = normalize_angle(extreme);
     EXPECT_TRUE(std::isfinite(signed_angle));
     EXPECT_GT(signed_angle, -kPi);
@@ -378,8 +356,7 @@ TEST(CoordinateUtils, AngleNormalizationHandlesNonFiniteAndExtremeFiniteInputs)
   }
 }
 
-TEST(CoordinateUtils, CounterClockwiseSweepHandlesAllSpanClasses)
-{
+TEST(CoordinateUtils, CounterClockwiseSweepHandlesAllSpanClasses) {
   // Span < PI.
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(0.0, 0.0, kPi / 2.0));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(kPi / 4.0, 0.0, kPi / 2.0));
@@ -389,22 +366,18 @@ TEST(CoordinateUtils, CounterClockwiseSweepHandlesAllSpanClasses)
   EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(kPi, 0.0, kPi / 2.0));
 
   // Span == PI.
-  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(
-    -kPi / 2.0, -kPi / 2.0, kPi / 2.0));
+  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(-kPi / 2.0, -kPi / 2.0, kPi / 2.0));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(0.0, -kPi / 2.0, kPi / 2.0));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(kPi / 2.0, -kPi / 2.0, kPi / 2.0));
-  EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(-3.0 * kPi / 4.0,
-    -kPi / 2.0, kPi / 2.0));
+  EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(-3.0 * kPi / 4.0, -kPi / 2.0, kPi / 2.0));
 
   // Span > PI: this is the H-01 regression that signed normalization clipped.
   const double wide_start = 0.25;
   const double wide_end = wide_start + 1.5 * kPi;
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(wide_start, wide_start, wide_end));
-  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(
-    wide_start + kPi + 0.1, wide_start, wide_end));
+  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(wide_start + kPi + 0.1, wide_start, wide_end));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(wide_end, wide_start, wide_end));
-  EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(
-    wide_start - 0.1, wide_start, wide_end));
+  EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(wide_start - 0.1, wide_start, wide_end));
 
   // Sweep crosses the -PI/PI branch cut.
   const double wrap_start = 3.0 * kPi / 4.0;
@@ -412,148 +385,116 @@ TEST(CoordinateUtils, CounterClockwiseSweepHandlesAllSpanClasses)
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(wrap_start, wrap_start, wrap_end));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(wrap_end, wrap_start, wrap_end));
   EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(kPi, wrap_start, wrap_end));
-  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(-7.0 * kPi / 8.0,
-    wrap_start, wrap_end));
+  EXPECT_TRUE(isAngleWithinCounterClockwiseSweep(-7.0 * kPi / 8.0, wrap_start, wrap_end));
   EXPECT_FALSE(isAngleWithinCounterClockwiseSweep(0.0, wrap_start, wrap_end));
 }
 
-TEST(SegmentsIntersect, ProperCrossing)
-{
+TEST(SegmentsIntersect, ProperCrossing) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {2, 2}, {0, 2}, {2, 0}));
 }
 
-TEST(SegmentsIntersect, ParallelNoCrossing)
-{
+TEST(SegmentsIntersect, ParallelNoCrossing) {
   EXPECT_FALSE(segmentsIntersect({0, 0}, {1, 0}, {0, 1}, {1, 1}));
 }
 
-TEST(SegmentsIntersect, SharedEndpointTouches)
-{
+TEST(SegmentsIntersect, SharedEndpointTouches) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {1, 0}, {1, 0}, {2, 0}));
 }
 
-TEST(SegmentsIntersect, CollinearOverlap)
-{
+TEST(SegmentsIntersect, CollinearOverlap) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {2, 0}, {1, 0}, {3, 0}));
 }
 
-TEST(SegmentsIntersect, CollinearNoOverlap)
-{
+TEST(SegmentsIntersect, CollinearNoOverlap) {
   EXPECT_FALSE(segmentsIntersect({0, 0}, {1, 0}, {2, 0}, {3, 0}));
 }
 
-TEST(SegmentsIntersect, Backtracking)
-{
+TEST(SegmentsIntersect, Backtracking) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {2, 0}, {2, 0}, {0, 0}));
 }
 
-TEST(SegmentsIntersect, EndpointOnInterior)
-{
+TEST(SegmentsIntersect, EndpointOnInterior) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {2, 0}, {1, 0}, {1, 2}));
 }
 
-TEST(SegmentsIntersect, FullIntDomainDoesNotOverflowOrientationPredicates)
-{
+TEST(SegmentsIntersect, FullIntDomainDoesNotOverflowOrientationPredicates) {
   constexpr int lowest = std::numeric_limits<int>::lowest();
   constexpr int highest = std::numeric_limits<int>::max();
 
-  EXPECT_EQ(orientation(
-    {lowest, lowest}, {highest, lowest}, {highest, highest}), 2);
-  EXPECT_EQ(orientation(
-    {lowest, lowest}, {lowest, highest}, {highest, highest}), 1);
-  EXPECT_EQ(orientation(
-    {lowest, lowest}, {0, 0}, {highest, highest}), 0);
+  EXPECT_EQ(orientation({lowest, lowest}, {highest, lowest}, {highest, highest}), 2);
+  EXPECT_EQ(orientation({lowest, lowest}, {lowest, highest}, {highest, highest}), 1);
+  EXPECT_EQ(orientation({lowest, lowest}, {0, 0}, {highest, highest}), 0);
   // Both determinant terms are non-zero and have opposite signs; their
   // mathematical difference is wider than a signed 64-bit integer.
-  EXPECT_EQ(orientation(
-    {lowest, 0}, {0, highest}, {highest, lowest}), 1);
-  EXPECT_EQ(orientation(
-    {lowest, 0}, {0, lowest}, {highest, highest}), 2);
+  EXPECT_EQ(orientation({lowest, 0}, {0, highest}, {highest, lowest}), 1);
+  EXPECT_EQ(orientation({lowest, 0}, {0, lowest}, {highest, highest}), 2);
 
-  EXPECT_TRUE(segmentsIntersect(
-    {lowest, lowest}, {highest, highest},
-    {lowest, highest}, {highest, lowest}));
+  EXPECT_TRUE(
+    segmentsIntersect({lowest, lowest}, {highest, highest}, {lowest, highest}, {highest, lowest}));
 }
 
-TEST(SegmentsIntersect, SharedVertexAtEnd)
-{
+TEST(SegmentsIntersect, SharedVertexAtEnd) {
   EXPECT_TRUE(segmentsIntersect({0, 0}, {1, 1}, {2, 0}, {1, 1}));
 }
 
-TEST(NewPathSelfCrosses, ShortPathNoCrossing)
-{
+TEST(NewPathSelfCrosses, ShortPathNoCrossing) {
   std::vector<std::pair<int, int>> path = {{0, 0}};
   EXPECT_FALSE(newPathSelfCrosses(path, {1, 1}));
 }
 
-TEST(NewPathSelfCrosses, NormalExtension)
-{
+TEST(NewPathSelfCrosses, NormalExtension) {
   std::vector<std::pair<int, int>> path = {{0, 0}, {2, 0}, {2, 2}};
   EXPECT_FALSE(newPathSelfCrosses(path, {0, 2}));
 }
 
-TEST(NewPathSelfCrosses, VertexRevisitStart)
-{
+TEST(NewPathSelfCrosses, VertexRevisitStart) {
   std::vector<std::pair<int, int>> path = {{0, 0}, {2, 0}, {2, 2}, {0, 2}};
   EXPECT_TRUE(newPathSelfCrosses(path, {0, 0}));
 }
 
-TEST(NewPathSelfCrosses, VertexRevisitMiddle)
-{
+TEST(NewPathSelfCrosses, VertexRevisitMiddle) {
   std::vector<std::pair<int, int>> path = {{0, 0}, {2, 0}, {2, 2}};
   EXPECT_TRUE(newPathSelfCrosses(path, {2, 0}));
 }
 
-TEST(NewPathSelfCrosses, GeometricCrossing)
-{
+TEST(NewPathSelfCrosses, GeometricCrossing) {
   std::vector<std::pair<int, int>> path = {{0, 0}, {2, 0}, {2, 2}, {0, 2}};
   EXPECT_TRUE(newPathSelfCrosses(path, {1, -1}));
 }
 
-TEST(NewPathSelfCrosses, ConsecutiveEndpointNotFlagged)
-{
+TEST(NewPathSelfCrosses, ConsecutiveEndpointNotFlagged) {
   std::vector<std::pair<int, int>> path = {{0, 0}, {1, 0}};
   EXPECT_FALSE(newPathSelfCrosses(path, {2, 0}));
 }
 
-TEST(NewPathSelfCrosses, CooperativeOverloadPreservesLegacyResults)
-{
+TEST(NewPathSelfCrosses, CooperativeOverloadPreservesLegacyResults) {
   const StopToken never_stop;
 
   bool self_crosses = true;
-  EXPECT_EQ(newPathSelfCrosses(
-      {{0, 0}, {2, 0}, {2, 2}}, {0, 2}, self_crosses, never_stop),
-    OperationStatus::success);
+  EXPECT_EQ(newPathSelfCrosses({{0, 0}, {2, 0}, {2, 2}}, {0, 2}, self_crosses, never_stop),
+            OperationStatus::success);
   EXPECT_FALSE(self_crosses);
 
   self_crosses = false;
-  EXPECT_EQ(newPathSelfCrosses(
-      {{0, 0}, {2, 0}, {2, 2}}, {2, 0}, self_crosses, never_stop),
-    OperationStatus::success);
+  EXPECT_EQ(newPathSelfCrosses({{0, 0}, {2, 0}, {2, 2}}, {2, 0}, self_crosses, never_stop),
+            OperationStatus::success);
   EXPECT_TRUE(self_crosses);
 }
 
-TEST(NewPathSelfCrosses, CooperativeStopDoesNotCommitPartialResult)
-{
+TEST(NewPathSelfCrosses, CooperativeStopDoesNotCommitPartialResult) {
   std::vector<std::pair<int, int>> path;
-  for (int x = 0; x < 256; ++x)
-    path.emplace_back(x, 0);
+  for (int x = 0; x < 256; ++x) path.emplace_back(x, 0);
 
   size_t poll_count = 0;
-  const StopToken stop_token([&poll_count]() {
-    return ++poll_count == 8;
-  });
+  const StopToken stop_token([&poll_count]() { return ++poll_count == 8; });
   bool self_crosses = true;
 
-  EXPECT_EQ(newPathSelfCrosses(
-      path, {512, 1}, self_crosses, stop_token),
-    OperationStatus::stopped);
+  EXPECT_EQ(newPathSelfCrosses(path, {512, 1}, self_crosses, stop_token), OperationStatus::stopped);
   EXPECT_TRUE(self_crosses);
   EXPECT_EQ(poll_count, 8u);
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

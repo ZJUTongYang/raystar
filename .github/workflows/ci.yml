@@ -165,9 +165,10 @@ jobs:
           set -eo pipefail
           mkdir -p coverage
           lcov --capture --directory build --output-file coverage/coverage.info \
-            --ignore-errors mismatch,unused
+            --ignore-errors gcov,source,graph
           lcov --remove coverage/coverage.info '/opt/ros/*' '/usr/*' \
-            --output-file coverage/coverage.info --ignore-errors mismatch,unused
+            --output-file coverage/coverage.info \
+            --ignore-errors gcov,source,graph
           genhtml coverage/coverage.info --output-directory coverage/html \
             --title "Raystar ROS 2 coverage"
       - uses: actions/upload-artifact@v4
@@ -238,7 +239,12 @@ jobs:
               raystar_rviz_plugins/*) db=build/raystar_rviz_plugins ;;
               *) continue ;;
             esac
-            clang-tidy "${file}" -p "${db}" --quiet
+            # GCC 11 defaults to gnu++17 and therefore omits an explicit
+            # -std flag from compile_commands.json.  clang-tidy-14 defaults
+            # to an older language mode, so make the project's C++17
+            # contract explicit for the analysis invocation.
+            clang-tidy "${file}" -p "${db}" --quiet \
+              --extra-arg=-std=c++17
           done
 
   relocated-install:

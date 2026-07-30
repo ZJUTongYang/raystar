@@ -13,11 +13,10 @@ namespace {
 constexpr char kPluginId[] = "raystar_rviz_plugins/RaystarPanel";
 constexpr char kPluginType[] = "raystar_rviz_plugins::RaystarPanel";
 
-bool isWithinPrefix(const std::filesystem::path& path,
-                    const std::filesystem::path& prefix) {
+bool isWithinPrefix(const std::filesystem::path& path, const std::filesystem::path& prefix) {
   const std::filesystem::path relative = path.lexically_relative(prefix);
-  return !relative.empty() && !relative.is_absolute() &&
-         relative.begin() != relative.end() && *relative.begin() != "..";
+  return !relative.empty() && !relative.is_absolute() && relative.begin() != relative.end() &&
+         *relative.begin() != "..";
 }
 
 }  // namespace
@@ -29,24 +28,20 @@ int main(int argc, char** argv) {
   }
 
   try {
-    const std::filesystem::path expected_prefix =
-        std::filesystem::canonical(argv[1]);
+    const std::filesystem::path expected_prefix = std::filesystem::canonical(argv[1]);
     QApplication application(argc, argv);
-    pluginlib::ClassLoader<rviz_common::Panel> loader("rviz_common",
-                                                       "rviz_common::Panel");
+    pluginlib::ClassLoader<rviz_common::Panel> loader("rviz_common", "rviz_common::Panel");
     const auto declared = loader.getDeclaredClasses();
     if (std::count(declared.begin(), declared.end(), kPluginId) != 1 ||
-        !loader.isClassAvailable(kPluginId) ||
-        loader.getClassType(kPluginId) != kPluginType) {
+        !loader.isClassAvailable(kPluginId) || loader.getClassType(kPluginId) != kPluginType) {
       std::cerr << "canonical Raystar Panel registration is unavailable\n";
       return 3;
     }
 
     const std::filesystem::path library_path =
-        std::filesystem::canonical(loader.getClassLibraryPath(kPluginId));
+      std::filesystem::canonical(loader.getClassLibraryPath(kPluginId));
     if (!isWithinPrefix(library_path, expected_prefix)) {
-      std::cerr << "plugin resolved outside relocated prefix: " << library_path
-                << '\n';
+      std::cerr << "plugin resolved outside relocated prefix: " << library_path << '\n';
       return 4;
     }
 
