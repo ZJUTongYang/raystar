@@ -131,6 +131,11 @@ install(DIRECTORY test/
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
+  # Humble and Jazzy install different optional flake8 plugins.  Pin the
+  # package policy so identical Python sources receive identical checks in
+  # every supported ROS distribution.
+  set(ament_cmake_flake8_CONFIG_FILE
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/ament_flake8.ini")
   # Let the package's declared lint test dependencies register their checks
   # with ament_package().  Keeping this in BUILD_TESTING avoids pulling lint
   # tools into a production-only configure.

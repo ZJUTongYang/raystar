@@ -2,11 +2,11 @@
 """Summarize raystar_profile CSV files with nearest-rank percentiles."""
 
 import argparse
+from collections import defaultdict
 import csv
 import math
 import re
 import sys
-from collections import defaultdict
 
 
 SCENARIO_ORDER = {
@@ -76,7 +76,6 @@ REQUIRED_FIELDS = set(CSV_FIELDS)
 
 def nearest_rank(values, percentile):
     """Return the nearest-rank percentile (rank = ceil(p * n))."""
-
     ordered = sorted(values)
     rank = max(1, math.ceil(percentile * len(ordered)))
     return ordered[rank - 1]

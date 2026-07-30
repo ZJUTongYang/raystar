@@ -24,13 +24,11 @@ from launch_ros.substitutions import FindPackageShare
 
 def _bool_parameter(name):
     """Return a typed launch substitution for a boolean ROS parameter."""
-
     return ParameterValue(LaunchConfiguration(name), value_type=bool)
 
 
 def _int_parameter(name):
     """Return a typed launch substitution for an integer ROS parameter."""
-
     return ParameterValue(LaunchConfiguration(name), value_type=int)
 
 
