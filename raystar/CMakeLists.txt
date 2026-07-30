@@ -123,6 +123,8 @@ install(DIRECTORY test/
   FILES_MATCHING
     PATTERN "*.yaml"
     PATTERN "*.pgm"
+    PATTERN "__pycache__" EXCLUDE
+    PATTERN "*.pyc" EXCLUDE
 )
 
 # Tests
@@ -247,6 +249,8 @@ if(BUILD_TESTING)
   set_tests_properties(test_rviz_config_contract PROPERTIES LABELS "lint;rviz")
 
   if(RAYSTAR_BUILD_PROFILING)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
     add_test(NAME test_profile_smoke
       COMMAND $<TARGET_FILE:raystar_profile>
         --scenario open_256
@@ -255,6 +259,16 @@ if(BUILD_TESTING)
         --iterations 1
     )
     set_tests_properties(test_profile_smoke PROPERTIES
+      LABELS "profiling"
+      TIMEOUT 30
+    )
+
+    add_test(NAME test_profile_summary
+      COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test/test_profile_summary.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/summarize_profile.py
+    )
+    set_tests_properties(test_profile_summary PROPERTIES
       LABELS "profiling"
       TIMEOUT 30
     )

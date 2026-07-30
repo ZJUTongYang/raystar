@@ -281,6 +281,9 @@ Run each tuple in a separate process so its process HWM is attributable to one
 case:
 
 ```bash
+(
+set -euo pipefail
+
 profile_dir=$(mktemp -d /tmp/raystar-profile.XXXXXX)
 profile_bin=$(ros2 pkg prefix raystar)/lib/raystar/raystar_profile
 
@@ -301,8 +304,11 @@ done
 
 ros2 run raystar raystar_profile_summary \
   --format markdown \
+  --expected-measured-samples 20 \
+  --require-standard-matrix \
   --process-isolated-memory \
   "$profile_dir"/*_K*.csv
+)
 ```
 
 Both tools return nonzero when validation, determinism, schema, or acceptance

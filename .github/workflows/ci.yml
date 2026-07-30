@@ -306,6 +306,7 @@ jobs:
             >build-relocated-install-smoke/profile.csv
           test "$(grep -c ',PASS$' build-relocated-install-smoke/profile.csv)" -eq 2
           "${raystar_prefix}/lib/raystar/raystar_profile_summary" --format csv \
+            --expected-measured-samples 1 \
             build-relocated-install-smoke/profile.csv \
             >build-relocated-install-smoke/profile-summary.csv
           grep -q ',PASS$' build-relocated-install-smoke/profile-summary.csv

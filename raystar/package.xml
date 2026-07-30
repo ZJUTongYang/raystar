@@ -25,6 +25,7 @@
   <!-- Optional demo bringup dependencies.  The core node does not require a
        map server or RViz to run, but the bundled launch file does. -->
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
@@ -42,6 +43,7 @@
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_flake8</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
