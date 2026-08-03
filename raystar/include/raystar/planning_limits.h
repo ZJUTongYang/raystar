@@ -20,8 +20,25 @@ struct PlanningLimits {
   // retaining or exporting a potentially large tree for normal plans.
   static constexpr size_t kDefaultMaxDebugNodes = 0u;
   static constexpr size_t kDefaultMaxResponseBytes = 64u * 1024u * 1024u;
+  static constexpr size_t kDefaultMaxCostBoundedPaths = 1000u;
+  static constexpr size_t kDefaultMaxMultiGoalCount = 128u;
+  static constexpr size_t kDefaultMaxTransitionConfigurations = 4096u;
+  static constexpr size_t kDefaultMaxTransitionPairs = 1000u;
 
   int max_k = std::numeric_limits<int>::max();
+  // Hard safety cap for exhaustive cost-bounded enumeration. Reaching this
+  // cap is a partial-search limit unless the frontier has already crossed the
+  // requested cost bound.
+  size_t max_cost_bounded_paths = kDefaultMaxCostBoundedPaths;
+  // Admission bound for one shared-tree multi-goal request. The per-goal
+  // path cap above still applies independently, while max_path_points bounds
+  // aggregate retained path geometry across the complete request.
+  size_t max_multi_goal_count = kDefaultMaxMultiGoalCount;
+  // Independent UPS batch admission limits. Configuration count is the
+  // flattened union of all layers; pair count is the explicit directed edge
+  // array. They are intentionally separate from GCP goal/path limits.
+  size_t max_transition_configurations = kDefaultMaxTransitionConfigurations;
+  size_t max_transition_pairs = kDefaultMaxTransitionPairs;
   // Counts fully constructed Nodes, including the root Node.
   size_t max_nodes = static_cast<size_t>(std::numeric_limits<int>::max());
   // Cooperative deadline. Zero requests an immediate timeout; max() disables

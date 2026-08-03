@@ -21,6 +21,7 @@ find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(raystar_interfaces REQUIRED)
 find_package(unique_identifier_msgs REQUIRED)
+find_package(Boost REQUIRED)
 find_package(CGAL REQUIRED)
 
 # CGAL 5.x's ConfigVersion file rejects a requested 5.x version when CGAL 6.x
@@ -52,7 +53,7 @@ target_include_directories(raystar_core PUBLIC
 target_compile_features(raystar_core PUBLIC cxx_std_17)
 # PUBLIC only propagates build-tree requirements to this package's node/tests;
 # raystar_core itself is not part of the installed package interface.
-target_link_libraries(raystar_core PUBLIC CGAL::CGAL)
+target_link_libraries(raystar_core PUBLIC CGAL::CGAL Boost::boost)
 # Avoid CGAL linkage issues
 if(CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE)
   set_property(TARGET raystar_core PROPERTY CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE ON)
@@ -146,8 +147,33 @@ if(BUILD_TESTING)
   )
   target_include_directories(test_coordinate_utils PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   )
   target_link_libraries(test_coordinate_utils raystar_core)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_coordinate_utils PRIVATE -frounding-math)
+  endif()
+
+  ament_add_gtest(test_conservative_path_length
+    test/test_conservative_path_length.cpp
+  )
+  target_include_directories(test_conservative_path_length PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+  target_link_libraries(test_conservative_path_length Boost::boost)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_conservative_path_length PRIVATE -frounding-math)
+  endif()
+
+  ament_add_gtest(test_published_path_order
+    test/test_published_path_order.cpp
+  )
+  target_include_directories(test_published_path_order PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+  ament_target_dependencies(test_published_path_order
+    raystar_interfaces
+  )
 
   ament_add_gtest(test_polymap
     test/test_polymap.cpp

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -17,7 +19,10 @@
 
 #include <raystar/cooperative_stop.h>
 #include <CGAL/Constrained_Delaunay_triangulation_2.h>
+#include <CGAL/Constrained_triangulation_face_base_2.h>
 #include <CGAL/Triangulation_face_base_with_info_2.h>
+#include <CGAL/Triangulation_data_structure_2.h>
+#include <CGAL/Triangulation_vertex_base_2.h>
 
 namespace raystar {
 
@@ -73,9 +78,17 @@ using VisibilityRegion = std::vector<BoundaryEndpoint>;
 
 namespace constrained_delaunay_triangulation {
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
-typedef CGAL::
-  Constrained_Delaunay_triangulation_2<K, CGAL::Default, CGAL::No_constraint_intersection_tag>
-    CDT;
+struct FaceInfo {
+  int stable_id = -1;
+  bool is_free = false;
+};
+typedef CGAL::Triangulation_vertex_base_2<K> VertexBase;
+typedef CGAL::Constrained_triangulation_face_base_2<K> ConstrainedFaceBase;
+typedef CGAL::Triangulation_face_base_with_info_2<FaceInfo, K, ConstrainedFaceBase> FaceBase;
+typedef CGAL::Triangulation_data_structure_2<VertexBase, FaceBase> DataStructure;
+typedef CGAL::Constrained_Delaunay_triangulation_2<
+  K, DataStructure, CGAL::No_constraint_intersection_tag>
+  CDT;
 typedef CDT::Point Point;
 
 struct BungiuEdge {
@@ -102,6 +115,74 @@ enum class PolymapCreateStatus { ready, no_path, stopped, failure };
 
 struct PolymapCreateResult;
 
+struct PolymapEndpoint {
+  int cell_x = 0;
+  int cell_y = 0;
+  Point2d position = {0.0, 0.0};
+};
+
+// A portal is the traversable common edge between two free CDT triangles.
+// left/right are oriented for motion from from_triangle to to_triangle. The
+// resultant shortened path crosses portals; it is not constrained to follow
+// either the portals or other triangulation edges.
+struct DirectedPortal {
+  uint32_t from_triangle = 0;
+  uint32_t to_triangle = 0;
+  Point2d left = {0.0, 0.0};
+  Point2d right = {0.0, 0.0};
+};
+
+// Triangle IDs may repeat: each entry is one occurrence in the lifted sleeve,
+// not a set of geometric faces. This distinction preserves winding corridors.
+struct TriangleCorridor {
+  std::vector<uint32_t> triangle_occurrences;
+  std::vector<DirectedPortal> portals;
+};
+
+// Validate one reduced lifted-sleeve witness.  The occurrence ordinal is the
+// vector position: repeated triangle IDs and repeated directed portals are
+// deliberately retained, because their multiplicity/order encodes winding.
+// A plain set (or a deduplicated face list) is not a homotopy witness.
+[[nodiscard]] bool validateReducedDirectedPortalWitness(
+  const TriangleCorridor& corridor, std::string* error = nullptr);
+
+// Sufficient, fail-closed homotopy certificate for two paths traced in the
+// same immutable triangle environment.  Both witnesses must be structurally
+// valid and have exactly the same ordered directed-portal occurrences,
+// including portal geometry.  This may reject an ambiguously traced but
+// homotopic boundary case; it must never accept a different lifted sleeve.
+[[nodiscard]] bool sameReducedDirectedPortalWitness(
+  const TriangleCorridor& reference,
+  const TriangleCorridor& candidate,
+  std::string* error = nullptr);
+
+enum class HomotopyShorteningStatus {
+  success,
+  invalid_reference,
+  no_corridor,
+  stopped,
+  failure
+};
+
+struct HomotopyShorteningResult {
+  HomotopyShorteningStatus status = HomotopyShorteningStatus::failure;
+  std::vector<Point2d> path;
+  // The reduced lifted sleeve traced from the caller's reference.
+  TriangleCorridor corridor;
+  // Independently retraced from `path` and populated only before the explicit
+  // reduced directed-portal witness comparison.
+  TriangleCorridor output_corridor;
+  double path_cost = 0.0;
+  bool collision_free = false;
+  bool homotopy_preserved = false;
+  bool locally_shortest = false;
+  std::string message;
+
+  [[nodiscard]] explicit operator bool() const noexcept {
+    return status == HomotopyShorteningStatus::success;
+  }
+};
+
 class Polymap {
 public:
   Polymap(const Polymap&) = delete;
@@ -125,6 +206,14 @@ public:
                                                   int goal_y,
                                                   const StopToken& stop_token,
                                                   const PlanningLimits& limits = PlanningLimits{});
+  [[nodiscard]] static PolymapCreateResult create(
+    const GridMap& grid_map,
+    int start_x,
+    int start_y,
+    const Point2d& start_position,
+    const std::vector<PolymapEndpoint>& goals,
+    const StopToken& stop_token,
+    const PlanningLimits& limits = PlanningLimits{});
   [[nodiscard]] static PolymapCreateResult create(const GridMap& grid_map,
                                                   int start_x,
                                                   int start_y,
@@ -161,6 +250,7 @@ public:
   [[nodiscard]] const std::vector<Obs>& obstacles() const noexcept {
     return obs_;
   }
+  [[nodiscard]] size_t freeTriangleCount() const noexcept;
 #ifdef RAYSTAR_TESTING
   // Legacy white-box diagnostics are deliberately unavailable in production;
   // Polymap::create() returns status/error without exposing a partially built
@@ -323,6 +413,20 @@ public:
   // unbounded CDT edge list and only then discover their output budget.
   std::vector<CDTEdge> getCDTEdges(size_t max_edges = std::numeric_limits<size_t>::max()) const;
 
+  // Trace a collision-free polyline through the reusable free-triangle mesh.
+  // The returned corridor is reduced by cancelling immediate portal reversals.
+  [[nodiscard]] OperationStatus traceFreeSpacePath(
+    const std::vector<Point2d>& path,
+    TriangleCorridor& corridor,
+    const StopToken& stop_token = StopToken{},
+    std::string* error = nullptr) const;
+
+  // Compute the Euclidean shortest polyline inside the lifted triangle sleeve
+  // selected by reference. Output segments may cross triangle interiors.
+  [[nodiscard]] HomotopyShorteningResult shortenPathWithinHomotopy(
+    const std::vector<Point2d>& reference,
+    const StopToken& stop_token = StopToken{}) const;
+
 #ifdef RAYSTAR_TESTING
 public:  // Legacy white-box tests; production builds keep internals private.
 #else
@@ -348,12 +452,23 @@ private:
           const Point2d& start_position,
           const Point2d& goal_position,
           const StopToken& stop_token = StopToken{});
+  Polymap(const GridMap& grid_map,
+          int start_x,
+          int start_y,
+          const Point2d& start_position,
+          const std::vector<PolymapEndpoint>& goals,
+          const StopToken& stop_token);
 
   [[nodiscard]] static PolymapCreateResult finishCreation(Polymap&& candidate);
 
   bool getPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   [[nodiscard]] OperationStatus getPolyObstacles(
     int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token);
+  [[nodiscard]] OperationStatus getPolyObstacles(
+    int start_x,
+    int start_y,
+    const std::vector<PolymapEndpoint>& goals,
+    const StopToken& stop_token);
 
   void simplifyPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   void simplifyPolyObstacles(const Point2d& start, const Point2d& goal);
@@ -398,6 +513,10 @@ private:
                                        const StopToken& stop_token) const;
   bool getPolyObstaclesImpl(
     int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token);
+  bool getPolyObstaclesImpl(int start_x,
+                            int start_y,
+                            const std::vector<PolymapEndpoint>& goals,
+                            const StopToken& stop_token);
   bool constructCGALRelatedImpl(CdtValidator validator,
                                 std::string& error,
                                 const StopToken& stop_token);
@@ -410,6 +529,8 @@ private:
   bool registerVerticesImpl(std::string& error, const StopToken& stop_token);
   bool simplifyPolyObstaclesImpl(const Point2d& start,
                                  const Point2d& goal,
+                                 const StopToken& stop_token);
+  bool simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
                                  const StopToken& stop_token);
   bool validateFreeSpaceInteriorImpl(const Point2d& point,
                                      const StopToken& stop_token,
@@ -460,6 +581,27 @@ private:
 
   bool isFacetInsideObstacle(int facet_idx) const;
 
+  struct TriangleMeshFace {
+    std::array<Point2d, 3> vertices;
+    std::array<int, 3> neighbors{{-1, -1, -1}};
+    std::array<bool, 3> constrained{{false, false, false}};
+    bool is_free = false;
+  };
+
+  struct TriangleMeshEdge {
+    Point2d a;
+    Point2d b;
+    std::array<int, 2> faces{{-1, -1}};
+    bool constrained = false;
+  };
+
+  [[nodiscard]] bool buildTriangleEnvironment(std::string& error);
+  [[nodiscard]] OperationStatus traceFreeSpacePathImpl(
+    const std::vector<Point2d>& path,
+    TriangleCorridor& corridor,
+    const StopToken& stop_token,
+    std::string* error) const;
+
   int xsize_ = 0;
   int ysize_ = 0;
   std::vector<uint8_t> data_;
@@ -477,6 +619,8 @@ private:
   std::unordered_map<long long, int> cdt_table_;
   int cdt_ver_num_ = 0;
   std::vector<std::vector<std::pair<int, int>>> facets_;
+  std::vector<TriangleMeshFace> triangle_faces_;
+  std::vector<TriangleMeshEdge> triangle_edges_;
 
   inline int locateAdjacentFacet(std::pair<int, int> prev, std::pair<int, int> next) const {
     auto it = cdt_table_.find(static_cast<long long>(prev.first + prev.second * xsize_) +

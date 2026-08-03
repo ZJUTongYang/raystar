@@ -34,6 +34,7 @@
 
   <!-- CGAL is a private, header-only build dependency here.  The exact
        kernel is linked into raystar_node and dynamically uses GMP/MPFR. -->
+  <build_depend>boost</build_depend>
   <build_depend version_gte="5.4">cgal</build_depend>
   <build_depend>libgmp</build_depend>
   <build_depend>mpfr</build_depend>

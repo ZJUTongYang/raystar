@@ -1,9 +1,169 @@
 #include <gtest/gtest.h>
 #include <raystar/coordinate_utils.h>
 
+#include "metric_bound_search.h"
+
+#include <cfenv>
+#include <cmath>
 #include <limits>
 
 using namespace raystar;
+
+namespace {
+
+void expectMinimalGridSearchSuperset(double metric_bound, float resolution) {
+  double grid_bound = std::numeric_limits<double>::quiet_NaN();
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(metric_bound, resolution, grid_bound));
+  if (detail::compareExactMetricProduct(
+        std::numeric_limits<double>::max(), resolution, metric_bound) >= 0) {
+    EXPECT_GE(detail::compareExactMetricProduct(grid_bound, resolution, metric_bound), 0);
+    if (grid_bound > 0.0) {
+      const double predecessor = std::nextafter(grid_bound, 0.0);
+      EXPECT_LT(detail::compareExactMetricProduct(predecessor, resolution, metric_bound), 0);
+    }
+  } else {
+    EXPECT_DOUBLE_EQ(grid_bound, std::numeric_limits<double>::max());
+  }
+}
+
+}  // namespace
+
+TEST(CoordinateUtils, PublishedCostBoundCalibrationHandlesBothDoubleRoundingDirections) {
+  const float resolution = 0.1f;
+
+  const double reusable_grid_cost = std::hypot(6.0, 5.0);
+  const double reusable_metric_bound =
+    gridCostToMetric(reusable_grid_cost, resolution);
+  double reusable_grid_bound = 0.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    reusable_metric_bound, resolution, reusable_grid_bound));
+  EXPECT_GE(reusable_grid_bound, reusable_grid_cost);
+  expectMinimalGridSearchSuperset(reusable_metric_bound, resolution);
+
+  const double excluded_grid_cost = std::hypot(4.0, 1.0);
+  const double excluded_metric_bound = std::nextafter(
+    gridCostToMetric(excluded_grid_cost, resolution), 0.0);
+  double excluded_grid_bound = 0.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    excluded_metric_bound, resolution, excluded_grid_bound));
+  EXPECT_LE(excluded_grid_bound, excluded_grid_cost);
+  expectMinimalGridSearchSuperset(excluded_metric_bound, resolution);
+
+  // The tight metric ceiling of this direct path is one ULP below the rounded
+  // fma of its tight grid ceiling. A publication-limited conversion rejects
+  // the path, while the exact quotient ceiling correctly keeps it searchable.
+  constexpr float fine_resolution = 0x1.99999ap-5f;
+  constexpr double metric_path_bound = 0x1.cd82b4b9764c5p-4;
+  constexpr double grid_path_ceiling = 0x1.2071b0abcd839p+1;
+  double search_bound = 0.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    metric_path_bound, fine_resolution, search_bound));
+  EXPECT_DOUBLE_EQ(search_bound, grid_path_ceiling);
+  EXPECT_GT(gridCostToMetric(grid_path_ceiling, fine_resolution), metric_path_bound);
+  expectMinimalGridSearchSuperset(metric_path_bound, fine_resolution);
+}
+
+TEST(CoordinateUtils, PublishedCostBoundCalibrationHandlesSubnormalAndOverflowEdges) {
+  const double minimum_metric = std::numeric_limits<double>::denorm_min();
+  const float minimum_resolution = std::numeric_limits<float>::denorm_min();
+  expectMinimalGridSearchSuperset(minimum_metric, minimum_resolution);
+
+  double zero_grid_bound = 1.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    minimum_metric, std::numeric_limits<float>::max(), zero_grid_bound));
+  EXPECT_DOUBLE_EQ(zero_grid_bound, std::numeric_limits<double>::denorm_min());
+  expectMinimalGridSearchSuperset(minimum_metric, std::numeric_limits<float>::max());
+
+  double saturated_grid_bound = 0.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    std::numeric_limits<double>::max(), minimum_resolution, saturated_grid_bound));
+  EXPECT_DOUBLE_EQ(saturated_grid_bound, std::numeric_limits<double>::max());
+  expectMinimalGridSearchSuperset(
+    std::numeric_limits<double>::max(), minimum_resolution);
+
+  const float two = 2.0f;
+  double overflow_limited_grid_bound = 0.0;
+  ASSERT_TRUE(gridCostSearchUpperBoundForMetricBound(
+    std::numeric_limits<double>::max(), two, overflow_limited_grid_bound));
+  EXPECT_EQ(std::ilogb(overflow_limited_grid_bound), 1022);
+  expectMinimalGridSearchSuperset(std::numeric_limits<double>::max(), two);
+}
+
+TEST(CoordinateUtils, PublishedCostBoundCalibrationRejectsInvalidInputs) {
+  double grid_bound = 123.0;
+  EXPECT_FALSE(gridCostSearchUpperBoundForMetricBound(
+    std::numeric_limits<double>::quiet_NaN(), 1.0f, grid_bound));
+  EXPECT_TRUE(std::isnan(grid_bound));
+  EXPECT_FALSE(gridCostSearchUpperBoundForMetricBound(
+    std::numeric_limits<double>::infinity(), 1.0f, grid_bound));
+  EXPECT_FALSE(gridCostSearchUpperBoundForMetricBound(-1.0, 1.0f, grid_bound));
+  EXPECT_FALSE(gridCostSearchUpperBoundForMetricBound(1.0, 0.0f, grid_bound));
+  EXPECT_FALSE(gridCostSearchUpperBoundForMetricBound(
+    1.0, std::numeric_limits<float>::infinity(), grid_bound));
+}
+
+TEST(CoordinateUtils, MetricSearchPaddingCoversMaxNodesFrontierChildInEveryRoundingMode) {
+  const int original_rounding = std::fegetround();
+  ASSERT_NE(original_rounding, -1);
+  struct RoundingGuard {
+    int mode;
+    ~RoundingGuard() { (void)std::fesetround(mode); }
+  } rounding_guard{original_rounding};
+  (void)rounding_guard;
+
+  GridMap map;
+  map.width = 2;
+  map.height = 2;
+  map.resolution = 1.0f;
+  // The world interval crosses zero, so endpoint FMA errors can have opposite
+  // signs and the full two-endpoint contraction proof is required.
+  volatile double runtime_origin = -1.0;
+  map.origin_x = runtime_origin;
+  map.origin_y = runtime_origin;
+
+  constexpr double kSquareRootTwoUpper = 0x1.6a09e667f3bcdp+0;
+  const long double operation_spacing = std::ldexp(1.0L, -52);
+  // max_nodes=1 still permits a queued child optimistic certificate with two
+  // segments: start->child and child->goal.
+  const long double required_two_segment_contraction =
+    4.0L * static_cast<long double>(kSquareRootTwoUpper) * operation_spacing;
+
+  for (const int rounding_mode : {FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO, FE_TONEAREST}) {
+    SCOPED_TRACE(rounding_mode);
+    ASSERT_EQ(std::fesetround(rounding_mode), 0);
+    volatile double runtime_bound = 1.0;
+    double padded_bound = 0.0;
+    ASSERT_TRUE(paddedMetricBoundForGridSearch(map, runtime_bound, 1u, padded_bound));
+    EXPECT_TRUE(std::isfinite(padded_bound));
+    EXPECT_GE(static_cast<long double>(padded_bound) - 1.0L,
+              required_two_segment_contraction);
+  }
+}
+
+TEST(CoordinateUtils, MetricSearchPaddingSaturatesAtMaximumInEveryRoundingMode) {
+  const int original_rounding = std::fegetround();
+  ASSERT_NE(original_rounding, -1);
+  struct RoundingGuard {
+    int mode;
+    ~RoundingGuard() { (void)std::fesetround(mode); }
+  } rounding_guard{original_rounding};
+  (void)rounding_guard;
+
+  GridMap map;
+  map.width = 2;
+  map.height = 2;
+  map.resolution = 1.0f;
+  map.origin_x = -1.0;
+  map.origin_y = -1.0;
+  volatile double runtime_maximum = std::numeric_limits<double>::max();
+  for (const int rounding_mode : {FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO, FE_TONEAREST}) {
+    SCOPED_TRACE(rounding_mode);
+    ASSERT_EQ(std::fesetround(rounding_mode), 0);
+    double padded_bound = 0.0;
+    ASSERT_TRUE(paddedMetricBoundForGridSearch(map, runtime_maximum, 1u, padded_bound));
+    EXPECT_DOUBLE_EQ(padded_bound, std::numeric_limits<double>::max());
+  }
+}
 
 TEST(CoordinateUtils, WorldToMapBasic) {
   GridMap map;

@@ -106,6 +106,15 @@ Polymap makeReadyPolymap(Args&&... args) {
   return std::move(*result.value);
 }
 
+double testPathLength(const std::vector<Point2d>& path) {
+  double result = 0.0;
+  for (size_t index = 1; index < path.size(); ++index) {
+    result += std::hypot(path[index].first - path[index - 1].first,
+                         path[index].second - path[index - 1].second);
+  }
+  return result;
+}
+
 bool rejectCDT(const PolymapTestPeer::CDT&) {
   return false;
 }
@@ -473,6 +482,84 @@ static GridMap makeMapWithObstacle() {
   return map;
 }
 
+static GridMap makeMapWithTwoObstacles() {
+  GridMap map;
+  map.width = 40;
+  map.height = 30;
+  map.resolution = 1.0f;
+  map.data.assign(static_cast<size_t>(map.width) * map.height, 0);
+
+  for (unsigned int y = 10; y < 20; ++y) {
+    for (unsigned int x = 10; x < 15; ++x)
+      map.data[y * map.width + x] = 1;
+    for (unsigned int x = 24; x < 29; ++x)
+      map.data[y * map.width + x] = 1;
+  }
+  for (unsigned int x = 0; x < map.width; ++x) {
+    map.data[x] = 1;
+    map.data[(map.height - 1) * map.width + x] = 1;
+  }
+  for (unsigned int y = 0; y < map.height; ++y) {
+    map.data[y * map.width] = 1;
+    map.data[y * map.width + map.width - 1] = 1;
+  }
+  return map;
+}
+
+void expectCertifiedMatchingPortalWitness(const HomotopyShorteningResult& result) {
+  ASSERT_TRUE(result) << result.message;
+  std::string error;
+  EXPECT_TRUE(validateReducedDirectedPortalWitness(result.corridor, &error)) << error;
+  error.clear();
+  EXPECT_TRUE(validateReducedDirectedPortalWitness(result.output_corridor, &error)) << error;
+  error.clear();
+  EXPECT_TRUE(sameReducedDirectedPortalWitness(
+    result.corridor, result.output_corridor, &error))
+    << error;
+  EXPECT_EQ(result.corridor.triangle_occurrences,
+            result.output_corridor.triangle_occurrences);
+  EXPECT_EQ(result.corridor.portals.size(), result.output_corridor.portals.size());
+}
+
+// Self-contained crop of the obstacle component containing the paper map's
+// (101,95)->(85,75) canonical turning edge.  Keeping the original grid
+// coordinates is intentional: the regression is about binary floating-point
+// interpolation of a non-binary slope at these magnitudes.  The row spans are
+// extracted from paper_recovered_from_pdf_9obstacle_cspace_r4.pgm; no runtime
+// dependency on the supplementary benchmark package is required.
+static GridMap makePaperSlopeBoundaryRegressionMap() {
+  GridMap map;
+  map.width = 150;
+  map.height = 110;
+  map.resolution = 1.0f;
+  map.data.assign(static_cast<size_t>(map.width) * map.height, 0);
+  for (unsigned int x = 0; x < map.width; ++x) {
+    map.data[x] = 1;
+    map.data[(map.height - 1) * map.width + x] = 1;
+  }
+  for (unsigned int y = 0; y < map.height; ++y) {
+    map.data[y * map.width] = 1;
+    map.data[y * map.width + map.width - 1] = 1;
+  }
+
+  const std::vector<std::pair<int, int>> occupied_spans{
+    {106, 107}, {104, 109}, {103, 110}, {102, 111}, {101, 112}, {101, 112},
+    {100, 113}, {100, 114}, {100, 132}, {100, 134}, {100, 135}, {100, 136},
+    {100, 136}, {100, 137}, {100, 137}, {100, 137}, {100, 136}, {100, 136},
+    {97, 135}, {93, 134}, {90, 134}, {88, 133}, {87, 132}, {86, 132}, {85, 131},
+    {85, 130}, {84, 129}, {84, 129}, {85, 130}, {85, 131}, {86, 131}, {87, 132},
+    {88, 133}, {90, 134}, {93, 134}, {96, 135}, {100, 136}, {100, 136},
+    {100, 137}, {100, 137}, {100, 136}, {100, 136}, {100, 135}, {100, 134},
+    {100, 133}, {100, 131}, {100, 114}, {100, 113}, {101, 112}, {101, 112},
+    {102, 111}, {103, 110}, {104, 109}, {106, 107}};
+  for (size_t row = 0; row < occupied_spans.size(); ++row) {
+    const unsigned int y = static_cast<unsigned int>(45 + row);
+    for (int x = occupied_spans[row].first; x <= occupied_spans[row].second; ++x)
+      map.data[y * map.width + static_cast<unsigned int>(x)] = 1;
+  }
+  return map;
+}
+
 TEST(Polymap, ConstructionDetectsObstacles) {
   auto map = makeMapWithObstacle();
   Polymap poly(map, 5, 5, 25, 25);
@@ -482,6 +569,480 @@ TEST(Polymap, ConstructionDetectsObstacles) {
   EXPECT_TRUE(PolymapTestPeer::constructionError(poly).empty());
   EXPECT_GE(poly.obstacles().size(), 1u);
   EXPECT_FALSE(poly.getCDTEdges().empty());
+}
+
+TEST(Polymap, MultiGoalConstructionProtectsAllReachableEndpoints) {
+  const auto map = makeMapWithObstacle();
+  const std::vector<PolymapEndpoint> goals = {
+    {25, 5, {25.25, 5.25}}, {25, 25, {25.75, 25.75}}, {5, 25, {5.5, 25.5}}};
+
+  auto result =
+    Polymap::create(map, 5, 5, Point2d{5.25, 5.25}, goals, StopToken{});
+
+  ASSERT_EQ(result.status, PolymapCreateStatus::ready) << result.error;
+  ASSERT_TRUE(result.value.has_value());
+  EXPECT_TRUE(result.value->hasSolution());
+  EXPECT_TRUE(result.value->isCDTReady());
+  std::string error;
+  EXPECT_TRUE(result.value->validateFreeSpaceInterior(Point2d{5.25, 5.25}, &error)) << error;
+  for (const auto& goal : goals) {
+    error.clear();
+    EXPECT_TRUE(result.value->validateFreeSpaceInterior(goal.position, &error)) << error;
+  }
+}
+
+TEST(Polymap, HomotopyFunnelCrossesTriangleInteriorsInsteadOfFollowingMeshEdges) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  auto polymap = makeReadyPolymap(map, 2, 2, 9, 5, start, goal);
+
+  const std::vector<Point2d> reference{start, {2.5, 5.5}, goal};
+  const auto result = polymap.shortenPathWithinHomotopy(reference);
+
+  ASSERT_TRUE(result) << result.message;
+  ASSERT_EQ(result.path.size(), 2u);
+  EXPECT_EQ(result.path.front(), start);
+  EXPECT_EQ(result.path.back(), goal);
+  EXPECT_NEAR(result.path_cost, std::hypot(7.0, 3.0), 1.0e-12);
+  for (const auto& edge : polymap.getCDTEdges()) {
+    const Point2d edge_start{static_cast<double>(edge.a.first), static_cast<double>(edge.a.second)};
+    const Point2d edge_goal{static_cast<double>(edge.b.first), static_cast<double>(edge.b.second)};
+    EXPECT_FALSE((edge_start == start && edge_goal == goal) ||
+                 (edge_start == goal && edge_goal == start))
+      << "The straight output must not be a triangulation-edge graph path";
+  }
+  EXPECT_TRUE(result.collision_free);
+  EXPECT_TRUE(result.homotopy_preserved);
+  EXPECT_TRUE(result.locally_shortest);
+  EXPECT_GT(polymap.freeTriangleCount(), 0u);
+}
+
+TEST(Polymap, CanonicalPaperSlopeSurvivesStrictTraceWithoutDenseInterpolationDrift) {
+  const auto map = makePaperSlopeBoundaryRegressionMap();
+  auto polymap = makeReadyPolymap(
+    map, 20, 20, 20, 105, Point2d{20.5, 20.5}, Point2d{20.5, 105.5});
+  const Point2d canonical_start{101.0, 95.0};
+  const Point2d canonical_goal{85.0, 75.0};
+  const std::vector<Point2d> topology_path{canonical_start, canonical_goal};
+
+  const auto obstacle_with_canonical_edge =
+    std::find_if(polymap.obstacles().begin(), polymap.obstacles().end(), [](const auto& obstacle) {
+      const auto& vertices = obstacle.ordered_vertices_;
+      for (size_t index = 0; index < vertices.size(); ++index) {
+        if (vertices[index] == std::make_pair(101, 95) &&
+            vertices[(index + 1) % vertices.size()] == std::make_pair(85, 75)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  ASSERT_NE(obstacle_with_canonical_edge, polymap.obstacles().end())
+    << "The fixture must retain the paper map's exact canonical turning edge";
+
+  const auto canonical = polymap.shortenPathWithinHomotopy(topology_path);
+  ASSERT_TRUE(canonical) << canonical.message;
+  EXPECT_TRUE(canonical.collision_free);
+  EXPECT_TRUE(canonical.homotopy_preserved);
+  EXPECT_TRUE(canonical.locally_shortest);
+
+  // Replicate the dense ROS serialization contract: ceil(metric length)
+  // equal parameter intervals, followed by the exact endpoint.  The first
+  // fractional sample is not exactly collinear in binary64 and falls on the
+  // occupied side of this boundary edge under strict CDT tracing.
+  const size_t sample_count = static_cast<size_t>(std::ceil(std::hypot(
+    canonical_goal.first - canonical_start.first,
+    canonical_goal.second - canonical_start.second)));
+  std::vector<Point2d> dense_path;
+  dense_path.reserve(sample_count + 1);
+  for (size_t sample = 0; sample < sample_count; ++sample) {
+    const double fraction =
+      static_cast<double>(sample) / static_cast<double>(sample_count);
+    dense_path.emplace_back(
+      canonical_start.first + (canonical_goal.first - canonical_start.first) * fraction,
+      canonical_start.second + (canonical_goal.second - canonical_start.second) * fraction);
+  }
+  dense_path.push_back(canonical_goal);
+  ASSERT_EQ(sample_count, 26u);
+  ASSERT_GE(dense_path.size(), 2u);
+  EXPECT_DOUBLE_EQ(dense_path[1].first, 100.38461538461539);
+  EXPECT_DOUBLE_EQ(dense_path[1].second, 94.230769230769226);
+  const double signed_cross =
+    (canonical_goal.first - canonical_start.first) *
+      (dense_path[1].second - canonical_start.second) -
+    (canonical_goal.second - canonical_start.second) *
+      (dense_path[1].first - canonical_start.first);
+  EXPECT_NE(signed_cross, 0.0);
+
+  const auto dense = polymap.shortenPathWithinHomotopy(dense_path);
+  EXPECT_EQ(dense.status, HomotopyShorteningStatus::no_corridor);
+  EXPECT_NE(dense.message.find("Reference segment 0->1"), std::string::npos);
+}
+
+TEST(Polymap, HomotopyFunnelTightensAReferenceBelowAnObstacle) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{25.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 25, 15, start, goal);
+  const std::vector<Point2d> reference{
+    start, {5.5, 5.5}, {10.0, 10.0}, {20.0, 10.0}, goal};
+
+  const auto result = polymap.shortenPathWithinHomotopy(reference);
+
+  ASSERT_TRUE(result) << result.message;
+  ASSERT_GE(result.path.size(), 3u);
+  EXPECT_EQ(result.path.front(), start);
+  EXPECT_EQ(result.path.back(), goal);
+  EXPECT_LT(result.path_cost, testPathLength(reference));
+  EXPECT_NE(std::find(result.path.begin(), result.path.end(), Point2d{10.0, 10.0}),
+            result.path.end());
+  EXPECT_NE(std::find(result.path.begin(), result.path.end(), Point2d{20.0, 10.0}),
+            result.path.end());
+}
+
+TEST(Polymap, HomotopyFunnelIsCostSymmetricWhenReferenceIsReversed) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{25.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 25, 15, start, goal);
+  std::vector<Point2d> reference{
+    start, {5.5, 5.5}, {10.0, 10.0}, {20.0, 10.0}, goal};
+
+  const auto forward = polymap.shortenPathWithinHomotopy(reference);
+  std::reverse(reference.begin(), reference.end());
+  const auto reverse = polymap.shortenPathWithinHomotopy(reference);
+
+  ASSERT_TRUE(forward) << forward.message;
+  ASSERT_TRUE(reverse) << reverse.message;
+  EXPECT_NEAR(forward.path_cost, reverse.path_cost, 1.0e-12);
+  auto reversed_output = reverse.path;
+  std::reverse(reversed_output.begin(), reversed_output.end());
+  EXPECT_EQ(forward.path, reversed_output);
+
+  auto reversed_faces = reverse.corridor.triangle_occurrences;
+  std::reverse(reversed_faces.begin(), reversed_faces.end());
+  EXPECT_EQ(forward.corridor.triangle_occurrences, reversed_faces);
+  ASSERT_EQ(forward.corridor.portals.size(), reverse.corridor.portals.size());
+  for (size_t index = 0; index < forward.corridor.portals.size(); ++index) {
+    const auto& first = forward.corridor.portals[index];
+    const auto& second =
+      reverse.corridor.portals[reverse.corridor.portals.size() - 1 - index];
+    EXPECT_EQ(first.from_triangle, second.to_triangle);
+    EXPECT_EQ(first.to_triangle, second.from_triangle);
+    EXPECT_EQ(first.left, second.right);
+    EXPECT_EQ(first.right, second.left);
+  }
+}
+
+TEST(Polymap, HomotopyFunnelAcceptsAnIdenticalConfigurationAsZeroTransition) {
+  const auto map = makeMapWithObstacle();
+  const Point2d endpoint{5.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 25, 15, endpoint, Point2d{25.5, 15.5});
+
+  const auto result = polymap.shortenPathWithinHomotopy({endpoint, endpoint});
+
+  expectCertifiedMatchingPortalWitness(result);
+  ASSERT_EQ(result.path, std::vector<Point2d>{endpoint});
+  EXPECT_DOUBLE_EQ(result.path_cost, 0.0);
+  ASSERT_EQ(result.corridor.triangle_occurrences.size(), 1u);
+  EXPECT_EQ(result.output_corridor.triangle_occurrences,
+            result.corridor.triangle_occurrences);
+  EXPECT_TRUE(result.corridor.portals.empty());
+  EXPECT_TRUE(result.collision_free);
+  EXPECT_TRUE(result.homotopy_preserved);
+  EXPECT_TRUE(result.locally_shortest);
+}
+
+TEST(Polymap, HomotopyWitnessPreservesSingleObstacleWindingWithSameSideEndpoints) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{6.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 6, 15, start, goal);
+  const std::vector<Point2d> clockwise_reference{
+    start, {10.0, 10.0}, {20.0, 10.0}, {20.0, 20.0}, {10.0, 20.0}, goal};
+
+  const auto result = polymap.shortenPathWithinHomotopy(clockwise_reference);
+
+  expectCertifiedMatchingPortalWitness(result);
+  ASSERT_GT(result.corridor.portals.size(), 1u);
+  EXPECT_EQ(result.corridor.triangle_occurrences.front(),
+            result.corridor.triangle_occurrences.back());
+  EXPECT_GE(std::count(result.corridor.triangle_occurrences.begin(),
+                       result.corridor.triangle_occurrences.end(),
+                       result.corridor.triangle_occurrences.front()),
+            2);
+  EXPECT_GT(result.path_cost, std::hypot(goal.first - start.first, goal.second - start.second));
+  EXPECT_TRUE(result.collision_free);
+  EXPECT_TRUE(result.homotopy_preserved);
+  EXPECT_TRUE(result.locally_shortest);
+
+  const auto idempotent = polymap.shortenPathWithinHomotopy(result.path);
+  expectCertifiedMatchingPortalWitness(idempotent);
+  EXPECT_EQ(idempotent.path, result.path);
+  EXPECT_EQ(idempotent.corridor.triangle_occurrences,
+            result.corridor.triangle_occurrences);
+}
+
+TEST(Polymap, HomotopyWitnessRetainsRepeatedPortalCycleOccurrences) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{6.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 6, 15, start, goal);
+  const std::vector<Point2d> one_loop{
+    start, {10.0, 10.0}, {20.0, 10.0}, {20.0, 20.0}, {10.0, 20.0}, goal};
+  const std::vector<Point2d> two_loops{
+    start,
+    {10.0, 10.0},
+    {20.0, 10.0},
+    {20.0, 20.0},
+    {10.0, 20.0},
+    start,
+    {10.0, 10.0},
+    {20.0, 10.0},
+    {20.0, 20.0},
+    {10.0, 20.0},
+    goal};
+
+  const auto once = polymap.shortenPathWithinHomotopy(one_loop);
+  const auto twice = polymap.shortenPathWithinHomotopy(two_loops);
+
+  expectCertifiedMatchingPortalWitness(once);
+  expectCertifiedMatchingPortalWitness(twice);
+  ASSERT_FALSE(once.corridor.portals.empty());
+  EXPECT_EQ(twice.corridor.portals.size(), 2u * once.corridor.portals.size());
+  EXPECT_EQ(twice.corridor.triangle_occurrences.front(),
+            twice.corridor.triangle_occurrences.back());
+  EXPECT_GE(std::count(twice.corridor.triangle_occurrences.begin(),
+                       twice.corridor.triangle_occurrences.end(),
+                       twice.corridor.triangle_occurrences.front()),
+            3);
+  std::string error;
+  EXPECT_FALSE(sameReducedDirectedPortalWitness(
+    once.corridor, twice.corridor, &error));
+  EXPECT_NE(error.find("counts differ"), std::string::npos) << error;
+  EXPECT_GT(twice.path_cost, once.path_cost);
+}
+
+TEST(Polymap, HomotopyWitnessPreservesANontrivialTwoObstacleLoop) {
+  const auto map = makeMapWithTwoObstacles();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{6.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 6, 15, start, goal);
+  const std::vector<Point2d> reference{
+    start,
+    {10.0, 10.0},
+    {15.0, 10.0},
+    {24.0, 10.0},
+    {29.0, 10.0},
+    {29.0, 20.0},
+    {24.0, 20.0},
+    {15.0, 20.0},
+    {10.0, 20.0},
+    goal};
+
+  const auto result = polymap.shortenPathWithinHomotopy(reference);
+
+  expectCertifiedMatchingPortalWitness(result);
+  ASSERT_GT(result.corridor.portals.size(), 2u);
+  EXPECT_EQ(result.corridor.triangle_occurrences.front(),
+            result.corridor.triangle_occurrences.back());
+  EXPECT_LT(result.path.size(), reference.size());
+  EXPECT_LE(result.path_cost, testPathLength(reference));
+  EXPECT_GT(result.path_cost, std::hypot(goal.first - start.first, goal.second - start.second));
+}
+
+TEST(Polymap, ReducedDirectedPortalWitnessRejectsEveryStructuralOrGeometricTamper) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{6.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 6, 15, start, goal);
+  const auto clockwise = polymap.shortenPathWithinHomotopy(
+    {start, {10.0, 10.0}, {20.0, 10.0}, {20.0, 20.0}, {10.0, 20.0}, goal});
+  const auto counterclockwise = polymap.shortenPathWithinHomotopy(
+    {start, {10.0, 20.0}, {20.0, 20.0}, {20.0, 10.0}, {10.0, 10.0}, goal});
+  expectCertifiedMatchingPortalWitness(clockwise);
+  expectCertifiedMatchingPortalWitness(counterclockwise);
+  ASSERT_FALSE(clockwise.corridor.portals.empty());
+
+  std::string error;
+  EXPECT_FALSE(sameReducedDirectedPortalWitness(
+    clockwise.corridor, counterclockwise.corridor, &error));
+  EXPECT_NE(error.find("differs at ordinal"), std::string::npos) << error;
+
+  auto bad_cardinality = clockwise.output_corridor;
+  bad_cardinality.triangle_occurrences.pop_back();
+  error.clear();
+  EXPECT_FALSE(validateReducedDirectedPortalWitness(bad_cardinality, &error));
+  EXPECT_NE(error.find("cardinalities"), std::string::npos) << error;
+  error.clear();
+  EXPECT_FALSE(sameReducedDirectedPortalWitness(
+    clockwise.corridor, bad_cardinality, &error));
+  EXPECT_NE(error.find("Candidate"), std::string::npos) << error;
+
+  auto bad_direction = clockwise.output_corridor;
+  std::swap(bad_direction.portals.front().from_triangle,
+            bad_direction.portals.front().to_triangle);
+  error.clear();
+  EXPECT_FALSE(validateReducedDirectedPortalWitness(bad_direction, &error));
+  EXPECT_NE(error.find("does not bind"), std::string::npos) << error;
+
+  auto bad_geometry = clockwise.output_corridor;
+  bad_geometry.portals.front().left.first = std::nextafter(
+    bad_geometry.portals.front().left.first,
+    std::numeric_limits<double>::infinity());
+  error.clear();
+  ASSERT_TRUE(validateReducedDirectedPortalWitness(bad_geometry, &error)) << error;
+  EXPECT_FALSE(sameReducedDirectedPortalWitness(
+    clockwise.corridor, bad_geometry, &error));
+  EXPECT_NE(error.find("geometry differs"), std::string::npos) << error;
+
+  const auto first = clockwise.corridor.portals.front();
+  DirectedPortal inverse;
+  inverse.from_triangle = first.to_triangle;
+  inverse.to_triangle = first.from_triangle;
+  inverse.left = first.right;
+  inverse.right = first.left;
+  TriangleCorridor unreduced;
+  unreduced.triangle_occurrences = {
+    first.from_triangle, first.to_triangle, first.from_triangle};
+  unreduced.portals = {first, inverse};
+  error.clear();
+  EXPECT_FALSE(validateReducedDirectedPortalWitness(unreduced, &error));
+  EXPECT_NE(error.find("unreduced immediate portal reversal"), std::string::npos)
+    << error;
+}
+
+TEST(Polymap, HomotopyFunnelIsIdempotent) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{25.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 25, 15, start, goal);
+  const std::vector<Point2d> reference{
+    start, {5.5, 5.5}, {10.0, 10.0}, {20.0, 10.0}, goal};
+
+  const auto first = polymap.shortenPathWithinHomotopy(reference);
+  ASSERT_TRUE(first) << first.message;
+  const auto second = polymap.shortenPathWithinHomotopy(first.path);
+
+  ASSERT_TRUE(second) << second.message;
+  EXPECT_EQ(second.path, first.path);
+  EXPECT_NEAR(second.path_cost, first.path_cost, 1.0e-12);
+}
+
+TEST(Polymap, HomotopyFunnelCancelsAnImmediatePortalBacktrack) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  auto polymap = makeReadyPolymap(map, 2, 2, 9, 5, start, goal);
+
+  const auto direct = polymap.shortenPathWithinHomotopy({start, goal});
+  const auto with_backtrack =
+    polymap.shortenPathWithinHomotopy({start, {2.5, 5.5}, start, goal});
+
+  ASSERT_TRUE(direct) << direct.message;
+  ASSERT_TRUE(with_backtrack) << with_backtrack.message;
+  EXPECT_EQ(with_backtrack.path, direct.path);
+  EXPECT_EQ(with_backtrack.corridor.triangle_occurrences,
+            direct.corridor.triangle_occurrences);
+}
+
+TEST(Polymap, HomotopyFunnelHandlesAReferenceCollinearWithAnInternalPortal) {
+  const auto map = makeMapWithObstacle();
+  auto polymap = makeReadyPolymap(
+    map, 5, 15, 25, 15, Point2d{5.5, 15.5}, Point2d{25.5, 15.5});
+  const auto edge = std::find_if(
+    polymap.triangle_edges_.begin(),
+    polymap.triangle_edges_.end(),
+    [&polymap](const auto& candidate) {
+      return !candidate.constrained && candidate.faces[0] >= 0 && candidate.faces[1] >= 0 &&
+             polymap.triangle_faces_[static_cast<size_t>(candidate.faces[0])].is_free &&
+             polymap.triangle_faces_[static_cast<size_t>(candidate.faces[1])].is_free;
+    });
+  ASSERT_NE(edge, polymap.triangle_edges_.end());
+  const auto interpolate = [&edge](double parameter) {
+    return Point2d{edge->a.first + parameter * (edge->b.first - edge->a.first),
+                   edge->a.second + parameter * (edge->b.second - edge->a.second)};
+  };
+  const Point2d start = interpolate(0.25);
+  const Point2d middle = interpolate(0.5);
+  const Point2d goal = interpolate(0.75);
+
+  const auto result = polymap.shortenPathWithinHomotopy({start, middle, goal});
+
+  ASSERT_TRUE(result) << result.message;
+  ASSERT_EQ(result.path, (std::vector<Point2d>{start, goal}));
+  EXPECT_NEAR(result.path_cost,
+              std::hypot(goal.first - start.first, goal.second - start.second),
+              1.0e-12);
+}
+
+TEST(Polymap, HomotopyFunnelCancellationIsImmediateAndStructured) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  auto polymap = makeReadyPolymap(map, 2, 2, 9, 5, start, goal);
+  const StopToken stop([]() { return true; });
+
+  const auto result = polymap.shortenPathWithinHomotopy({start, goal}, stop);
+
+  EXPECT_EQ(result.status, HomotopyShorteningStatus::stopped);
+  EXPECT_TRUE(result.path.empty());
+  EXPECT_FALSE(result.collision_free);
+  EXPECT_FALSE(result.homotopy_preserved);
+  EXPECT_FALSE(result.locally_shortest);
+}
+
+TEST(Polymap, PathTracingReportsStopRequestedInsideSegmentFaceScan) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  auto polymap = makeReadyPolymap(map, 2, 2, 9, 5, start, goal);
+  size_t poll_count = 0;
+  // Poll 1 is the public trace wrapper, poll 2 is the segment loop, and poll
+  // 3 is the first triangle-edge iteration inside segment_faces().
+  const StopToken stop([&poll_count]() { return ++poll_count == 3; });
+  TriangleCorridor corridor;
+  corridor.triangle_occurrences.push_back(123u);
+  std::string error = "stale diagnostic";
+
+  const auto status =
+    polymap.traceFreeSpacePath({start, goal}, corridor, stop, &error);
+
+  EXPECT_EQ(status, OperationStatus::stopped);
+  EXPECT_EQ(poll_count, 3u);
+  EXPECT_TRUE(corridor.triangle_occurrences.empty());
+  EXPECT_TRUE(corridor.portals.empty());
+  EXPECT_TRUE(error.empty());
+}
+
+TEST(Polymap, HomotopyFunnelRejectsAReferenceThroughAnObstacle) {
+  const auto map = makeMapWithObstacle();
+  const Point2d start{5.5, 15.5};
+  const Point2d goal{25.5, 15.5};
+  auto polymap = makeReadyPolymap(map, 5, 15, 25, 15, start, goal);
+
+  const auto result = polymap.shortenPathWithinHomotopy({start, goal});
+
+  EXPECT_FALSE(result);
+  EXPECT_EQ(result.status, HomotopyShorteningStatus::no_corridor);
+  EXPECT_FALSE(result.collision_free);
+  EXPECT_FALSE(result.homotopy_preserved);
+  EXPECT_FALSE(result.locally_shortest);
+}
+
+TEST(Polymap, MultiGoalConstructionRejectsAReachabilityMismatchAtomically) {
+  auto map = makeBorderedFreeMap(12, 8);
+  for (unsigned int y = 1; y + 1 < map.height; ++y)
+    map.data[y * map.width + 6] = 1;
+  const std::vector<PolymapEndpoint> goals = {
+    {4, 4, {4.5, 4.5}}, {9, 4, {9.5, 4.5}}};
+
+  auto result =
+    Polymap::create(map, 2, 4, Point2d{2.5, 4.5}, goals, StopToken{});
+
+  EXPECT_EQ(result.status, PolymapCreateStatus::no_path);
+  EXPECT_FALSE(result.value.has_value());
+  EXPECT_NE(result.error.find("every goal"), std::string::npos);
 }
 
 TEST(Polymap, RejectsMalformedGridBeforeCopyingOrSizingRegistries) {
