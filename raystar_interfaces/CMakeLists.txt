@@ -10,9 +10,15 @@ find_package(unique_identifier_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/BuildRaystarTransitionGraph.action"
+  "action/PlanRaystarGoalSet.action"
   "action/PlanRaystarPaths.action"
+  "msg/ConfigurationTransitionPair.msg"
   "msg/DebugNode.msg"
+  "msg/GoalPathResult.msg"
+  "msg/HomotopyTransitionResult.msg"
   "msg/MapStatus.msg"
+  "msg/MultiGoalPlanningResultInfo.msg"
   "msg/PathResult.msg"
   "msg/PlanningResultInfo.msg"
   "srv/GetRaystarPaths.srv"
@@ -27,7 +33,9 @@ install(DIRECTORY include/
 # conventional <raystar_interfaces/map_identity.hpp> spelling.  The directory
 # install above preserves the original <map_identity.hpp> path for source and
 # binary compatibility with this development branch.
-install(FILES include/raystar_interfaces/map_identity.hpp
+install(FILES
+  include/raystar_interfaces/environment_identity.hpp
+  include/raystar_interfaces/map_identity.hpp
   DESTINATION include/${PROJECT_NAME}/${PROJECT_NAME}
 )
 ament_export_include_directories(include)

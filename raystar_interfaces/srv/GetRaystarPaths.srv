@@ -13,7 +13,11 @@
 nav_msgs/OccupancyGrid    map                  # Values must be -1 or 0..100; values >= server occupied_threshold are occupied
 geometry_msgs/PoseStamped start                # Start position in map.header.frame_id
 geometry_msgs/PoseStamped goal                 # Goal position in map.header.frame_id
-int32                     k                    # Max paths to return; must not exceed the server max_k parameter
+uint8 SEARCH_MODE_TOP_K=0
+uint8 SEARCH_MODE_ALL_WITHIN_LENGTH=1
+uint8                     search_mode          # TOP_K keeps the legacy behavior; bounded mode enumerates every path within max_path_length
+int32                     k                    # TOP_K: positive requested count; bounded mode: must be zero
+float64                   max_path_length      # Metres; TOP_K: must be zero; bounded mode: finite and positive
 # When false, consecutive segments may share their construction waypoint, but
 # a new segment may not revisit an earlier waypoint or intersect a
 # non-consecutive segment by crossing, touching, or collinear overlap.
