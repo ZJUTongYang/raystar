@@ -5,12 +5,15 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <string>
 #include <utility>
 
 #include <QApplication>
+#include <QComboBox>
 #include <QCoreApplication>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -150,7 +153,12 @@ public:
     server_ = rclcpp_action::create_server<PlanningAction>(
       node_,
       action_name_,
-      [this](const rclcpp_action::GoalUUID&, std::shared_ptr<const PlanningAction::Goal>) {
+      [this](const rclcpp_action::GoalUUID&,
+             std::shared_ptr<const PlanningAction::Goal> goal) {
+        {
+          std::lock_guard<std::mutex> lock(goal_mutex_);
+          last_goal_ = *goal;
+        }
         goal_count_.fetch_add(1);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
@@ -235,6 +243,10 @@ public:
   std::size_t successCount() const {
     return success_count_.load();
   }
+  std::optional<PlanningAction::Goal> lastGoal() const {
+    std::lock_guard<std::mutex> lock(goal_mutex_);
+    return last_goal_;
+  }
 
   bool waitForClient(std::chrono::milliseconds timeout) {
     auto client = rclcpp_action::create_client<PlanningAction>(client_node_, action_name_);
@@ -269,6 +281,8 @@ private:
   std::condition_variable worker_cv_;
   std::vector<std::thread> workers_;
   bool stopping_{false};
+  mutable std::mutex goal_mutex_;
+  std::optional<PlanningAction::Goal> last_goal_;
   std::atomic<std::size_t> goal_count_{0};
   std::atomic<std::size_t> cancel_count_{0};
   std::atomic<std::size_t> success_count_{0};
@@ -347,6 +361,14 @@ QTableWidget* resultsTable(raystar_rviz_plugins::RaystarPanel& panel) {
   return panel.findChild<QTableWidget*>("results_table");
 }
 
+QComboBox* searchModeCombo(raystar_rviz_plugins::RaystarPanel& panel) {
+  return panel.findChild<QComboBox*>("search_mode_combo");
+}
+
+QDoubleSpinBox* maxPathLengthSpinbox(raystar_rviz_plugins::RaystarPanel& panel) {
+  return panel.findChild<QDoubleSpinBox*>("max_path_length_spinbox");
+}
+
 constexpr char kPluginId[] = "raystar_rviz_plugins/RaystarPanel";
 constexpr char kLegacyPluginId[] = "raystar_rviz_plugins::RaystarPanel";
 constexpr char kPluginType[] = "raystar_rviz_plugins::RaystarPanel";
@@ -383,7 +405,9 @@ TEST(RaystarPanelPlugin, PersistsConnectionAndPlanningOptions) {
   input.mapSetValue("start_y", QString("2.5"));
   input.mapSetValue("goal_x", QString("3.75"));
   input.mapSetValue("goal_y", QString("4.5"));
+  input.mapSetValue("search_mode", 1);
   input.mapSetValue("k", 7);
+  input.mapSetValue("max_path_length", QString("42.125"));
   input.mapSetValue("allow_self_crossing", true);
   input.mapSetValue("allow_unknown", true);
   input.mapSetValue("request_debug", true);
@@ -409,6 +433,10 @@ TEST(RaystarPanelPlugin, PersistsConnectionAndPlanningOptions) {
   EXPECT_EQ(QString("4.5"), text);
   ASSERT_TRUE(output.mapGetInt("k", &integer));
   EXPECT_EQ(7, integer);
+  ASSERT_TRUE(output.mapGetInt("search_mode", &integer));
+  EXPECT_EQ(1, integer);
+  ASSERT_TRUE(output.mapGetString("max_path_length", &text));
+  EXPECT_DOUBLE_EQ(42.125, text.toDouble());
   ASSERT_TRUE(output.mapGetBool("allow_self_crossing", &boolean));
   EXPECT_TRUE(boolean);
   ASSERT_TRUE(output.mapGetBool("allow_unknown", &boolean));
@@ -432,9 +460,15 @@ TEST(RaystarPanelPlugin, OlderConfigsKeepSafeDefaultsForNewFields) {
   panel->save(output);
 
   QString action_name;
+  QString max_path_length;
+  int search_mode = -1;
   bool boolean = true;
   ASSERT_TRUE(output.mapGetString("action_name", &action_name));
   EXPECT_EQ(QString("/raystar/plan_paths"), action_name);
+  ASSERT_TRUE(output.mapGetInt("search_mode", &search_mode));
+  EXPECT_EQ(0, search_mode);
+  ASSERT_TRUE(output.mapGetString("max_path_length", &max_path_length));
+  EXPECT_GT(max_path_length.toDouble(), 0.0);
   ASSERT_TRUE(output.mapGetBool("allow_self_crossing", &boolean));
   EXPECT_FALSE(boolean);
   ASSERT_TRUE(output.mapGetBool("allow_unknown", &boolean));
@@ -510,6 +544,50 @@ TEST(RaystarPanelInteraction, RejectsResultForDifferentMapId) {
     waitForGui([&]() { return label->text().contains(QStringLiteral("different cached map")); },
                std::chrono::seconds(2)))
     << label->text().toStdString();
+}
+
+TEST(RaystarPanelInteraction, SendsCostBoundedEnumerationGoal) {
+  const auto action_name = nextTestName("plan_paths");
+  const auto map_topic = nextTestName("map");
+  TestActionServer server(action_name, ServerMode::success);
+  ASSERT_TRUE(server.waitForClient(std::chrono::seconds(2)));
+  TestMapPublisher map_publisher(server.clientNode(), map_topic);
+  auto abstraction = std::make_shared<TestRosNodeAbstraction>(server.clientNode());
+  TestDisplayContext context(abstraction);
+  auto panel = makeInitializedPanel(context, action_name, map_topic, std::chrono::seconds(2));
+
+  auto* mode = searchModeCombo(*panel);
+  auto* bound = maxPathLengthSpinbox(*panel);
+  auto* label = statusLabel(*panel);
+  auto* button = planButton(*panel);
+  ASSERT_NE(nullptr, mode);
+  ASSERT_NE(nullptr, bound);
+  ASSERT_NE(nullptr, label);
+  ASSERT_NE(nullptr, button);
+  mode->setCurrentIndex(1);
+  bound->setValue(37.25);
+  EXPECT_FALSE(panel->findChild<QSpinBox*>("k_spinbox")->isEnabled());
+  EXPECT_TRUE(bound->isEnabled());
+
+  auto map = map_publisher.publishMap();
+  ASSERT_TRUE(waitForGui(
+    [&]() {
+      if (!label->text().contains(QStringLiteral("Map received"))) {
+        map_publisher.publish(map);
+      }
+      return label->text().contains(QStringLiteral("Map received"));
+    },
+    std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)));
+
+  button->click();
+  ASSERT_TRUE(waitForGui([&]() { return server.lastGoal().has_value(); },
+                         std::chrono::seconds(2)));
+  const auto goal = server.lastGoal();
+  ASSERT_TRUE(goal.has_value());
+  EXPECT_EQ(goal->search_mode, PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH);
+  EXPECT_EQ(goal->k, 0);
+  EXPECT_DOUBLE_EQ(goal->max_path_length, 37.25);
 }
 
 TEST(RaystarPanelInteraction, CancelsShortTimeoutGoal) {

@@ -265,6 +265,21 @@ if(BUILD_TESTING)
     unique_identifier_msgs
   )
 
+  ament_add_gtest(test_transition_environment_cache
+    test/test_transition_environment_cache.cpp
+  )
+  target_include_directories(test_transition_environment_cache PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_transition_environment_cache raystar_core)
+
+  ament_add_gtest(test_transition_progress_reporter
+    test/test_transition_progress_reporter.cpp
+  )
+  target_include_directories(test_transition_progress_reporter PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+
   add_test(NAME test_no_production_debug_io
     COMMAND ${CMAKE_COMMAND}
       -DRAYSTAR_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
@@ -308,6 +323,10 @@ if(BUILD_TESTING)
   ament_add_gtest(test_integration
     test/test_integration.cpp
   )
+  target_include_directories(test_integration PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+  target_link_libraries(test_integration Boost::boost)
   target_compile_definitions(test_integration PRIVATE
     RAYSTAR_NODE_PATH="$<TARGET_FILE:raystar_node>"
   )

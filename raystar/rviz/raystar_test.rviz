@@ -28,7 +28,9 @@ Panels:
     goal_x: 6.7
     goal_y: 7.7
     k: 3
+    max_path_length: 10
     map_topic: /map
+    search_mode: 0
     start_x: 2.3
     start_y: 3.3
 Visualization Manager:

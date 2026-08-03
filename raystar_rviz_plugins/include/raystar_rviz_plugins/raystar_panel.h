@@ -10,6 +10,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QComboBox>
 #include <QCheckBox>
 #include <QLabel>
 #include <QTableWidget>
@@ -44,6 +46,7 @@ private Q_SLOTS:
   void processCallbacks();
   void onMapTopicChanged(const QString& topic);
   void onActionNameChanged(const QString& action_name);
+  void onSearchModeChanged(int index);
 
 private:
   using PlanningAction = raystar_interfaces::action::PlanRaystarPaths;
@@ -94,6 +97,8 @@ private:
   QLineEdit* goal_x_edit_;
   QLineEdit* goal_y_edit_;
   QSpinBox* k_spinbox_;
+  QComboBox* search_mode_combo_;
+  QDoubleSpinBox* max_path_length_spinbox_;
   QCheckBox* allow_self_crossing_cb_;
   QCheckBox* allow_unknown_cb_;
   QCheckBox* request_debug_cb_;

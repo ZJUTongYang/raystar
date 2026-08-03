@@ -36,6 +36,8 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     map_topic = LaunchConfiguration("map_topic")
     action_name = LaunchConfiguration("action_name")
+    goal_set_action_name = LaunchConfiguration("goal_set_action_name")
+    transition_action_name = LaunchConfiguration("transition_action_name")
     use_sim_time = _bool_parameter("use_sim_time")
 
     default_map = PathJoinSubstitution(
@@ -70,6 +72,21 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            "goal_set_action_name",
+            default_value="~/plan_goal_set",
+            description=(
+                "Action endpoint remapped from Raystar's private ~/plan_goal_set name."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "transition_action_name",
+            default_value="~/build_transition_graph",
+            description=(
+                "Action endpoint remapped from Raystar's private "
+                "~/build_transition_graph name."
+            ),
+        ),
+        DeclareLaunchArgument(
             "rviz_config",
             default_value=default_rviz,
             description="RViz2 configuration file.",
@@ -96,8 +113,32 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("occupied_threshold", default_value="99"),
         DeclareLaunchArgument("max_k", default_value="100"),
+        DeclareLaunchArgument(
+            "max_cost_bounded_paths",
+            default_value="1000",
+            description="Per-goal path cap for exhaustive bounded enumeration.",
+        ),
+        DeclareLaunchArgument(
+            "max_multi_goal_count",
+            default_value="128",
+            description="Goal-array admission limit for one shared-tree request.",
+        ),
+        DeclareLaunchArgument(
+            "max_transition_configurations",
+            default_value="4096",
+            description="Tether-configuration admission limit for one UPS batch.",
+        ),
+        DeclareLaunchArgument(
+            "max_transition_pairs",
+            default_value="1000",
+            description="Directed-pair admission limit for one UPS batch.",
+        ),
         DeclareLaunchArgument("max_nodes", default_value="10000"),
-        DeclareLaunchArgument("planning_timeout_ms", default_value="5000"),
+        DeclareLaunchArgument(
+            "planning_timeout_ms",
+            default_value="5000",
+            description="Cooperative deadline for each planning or UPS request.",
+        ),
         DeclareLaunchArgument("max_map_cells", default_value="8388608"),
         DeclareLaunchArgument("max_map_bytes", default_value="536870912"),
         DeclareLaunchArgument("max_path_points", default_value="100000"),
@@ -156,6 +197,14 @@ def generate_launch_description():
                 ),
                 "occupied_threshold": _int_parameter("occupied_threshold"),
                 "max_k": _int_parameter("max_k"),
+                "max_cost_bounded_paths": _int_parameter(
+                    "max_cost_bounded_paths"
+                ),
+                "max_multi_goal_count": _int_parameter("max_multi_goal_count"),
+                "max_transition_configurations": _int_parameter(
+                    "max_transition_configurations"
+                ),
+                "max_transition_pairs": _int_parameter("max_transition_pairs"),
                 "max_nodes": _int_parameter("max_nodes"),
                 "planning_timeout_ms": _int_parameter("planning_timeout_ms"),
                 "max_map_cells": _int_parameter("max_map_cells"),
@@ -168,7 +217,11 @@ def generate_launch_description():
                 ),
             }
         ],
-        remappings=[("~/plan_paths", action_name)],
+        remappings=[
+            ("~/plan_paths", action_name),
+            ("~/plan_goal_set", goal_set_action_name),
+            ("~/build_transition_graph", transition_action_name),
+        ],
     )
 
     rviz = Node(

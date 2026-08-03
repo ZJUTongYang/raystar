@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>raystar_rviz_plugins</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>RViz2 Panel plugin for Ray* path planner</description>
   <maintainer email="tong.yang@zju.edu.cn">Tong Yang</maintainer>
   <license>MIT</license>
@@ -12,7 +12,7 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
   <depend version_gte="11.2.0">rviz_common</depend>
-  <depend>raystar_interfaces</depend>
+  <depend version_gte="0.2.0">raystar_interfaces</depend>
   <depend>unique_identifier_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>

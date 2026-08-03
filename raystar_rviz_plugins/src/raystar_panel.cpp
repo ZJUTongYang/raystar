@@ -107,6 +107,9 @@ QString planningLimitsText(std::uint16_t limits) {
   if ((limits & PlanningResultInfo::LIMIT_CANCELLED) != 0u) {
     names.push_back(QStringLiteral("canceled"));
   }
+  if ((limits & PlanningResultInfo::LIMIT_MAX_PATHS) != 0u) {
+    names.push_back(QStringLiteral("max paths"));
+  }
   return names.isEmpty() ? QStringLiteral("unknown") : names.join(", ");
 }
 
@@ -121,6 +124,8 @@ RaystarPanel::RaystarPanel(QWidget* parent, std::chrono::milliseconds request_ti
   , goal_x_edit_(new QLineEdit("1.0"))
   , goal_y_edit_(new QLineEdit("1.0"))
   , k_spinbox_(new QSpinBox())
+  , search_mode_combo_(new QComboBox())
+  , max_path_length_spinbox_(new QDoubleSpinBox())
   , allow_self_crossing_cb_(new QCheckBox("Allow Self Crossing"))
   , allow_unknown_cb_(new QCheckBox("Allow Unknown"))
   , request_debug_cb_(new QCheckBox("Request Debug"))
@@ -137,11 +142,19 @@ RaystarPanel::RaystarPanel(QWidget* parent, std::chrono::milliseconds request_ti
                                                                          : kDefaultRequestTimeout) {
   k_spinbox_->setRange(1, 100);
   k_spinbox_->setValue(5);
+  search_mode_combo_->addItem("Top K");
+  search_mode_combo_->addItem("All within length");
+  max_path_length_spinbox_->setRange(1.0e-9, 1.0e9);
+  max_path_length_spinbox_->setDecimals(9);
+  max_path_length_spinbox_->setValue(10.0);
+  max_path_length_spinbox_->setEnabled(false);
   start_x_edit_->setObjectName("start_x_edit");
   start_y_edit_->setObjectName("start_y_edit");
   goal_x_edit_->setObjectName("goal_x_edit");
   goal_y_edit_->setObjectName("goal_y_edit");
   k_spinbox_->setObjectName("k_spinbox");
+  search_mode_combo_->setObjectName("search_mode_combo");
+  max_path_length_spinbox_->setObjectName("max_path_length_spinbox");
   allow_self_crossing_cb_->setObjectName("allow_self_crossing_checkbox");
   allow_unknown_cb_->setObjectName("allow_unknown_checkbox");
   request_debug_cb_->setObjectName("request_debug_checkbox");
@@ -226,8 +239,12 @@ void RaystarPanel::setupUi() {
   main_layout->addWidget(goal_group);
 
   auto* param_layout = new QHBoxLayout;
+  param_layout->addWidget(new QLabel("Mode:"));
+  param_layout->addWidget(search_mode_combo_);
   param_layout->addWidget(new QLabel("K:"));
   param_layout->addWidget(k_spinbox_);
+  param_layout->addWidget(new QLabel("Max length (m):"));
+  param_layout->addWidget(max_path_length_spinbox_);
   param_layout->addStretch();
   param_layout->addWidget(allow_self_crossing_cb_);
   param_layout->addWidget(allow_unknown_cb_);
@@ -248,8 +265,18 @@ void RaystarPanel::setupUi() {
   connect(map_topic_edit_, &QLineEdit::textChanged, this, &RaystarPanel::onMapTopicChanged);
   connect(map_topic_edit_, &QLineEdit::editingFinished, this, &RaystarPanel::subscribeToMap);
   connect(action_name_edit_, &QLineEdit::textChanged, this, &RaystarPanel::onActionNameChanged);
+  connect(search_mode_combo_,
+          qOverload<int>(&QComboBox::currentIndexChanged),
+          this,
+          &RaystarPanel::onSearchModeChanged);
   connect(
     action_name_edit_, &QLineEdit::editingFinished, this, &RaystarPanel::configureActionClient);
+}
+
+void RaystarPanel::onSearchModeChanged(int index) {
+  const bool bounded = index == 1;
+  k_spinbox_->setEnabled(!bounded);
+  max_path_length_spinbox_->setEnabled(bounded);
 }
 
 void RaystarPanel::onInitialize() {
@@ -547,7 +574,11 @@ void RaystarPanel::onPlanClicked() {
     goal.goal.pose.position.x = goal_x;
     goal.goal.pose.position.y = goal_y;
     goal.goal.pose.orientation.w = 1.0;
-    goal.k = k_spinbox_->value();
+    const bool bounded_mode = search_mode_combo_->currentIndex() == 1;
+    goal.search_mode = bounded_mode ? PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH
+                                    : PlanningAction::Goal::SEARCH_MODE_TOP_K;
+    goal.k = bounded_mode ? 0 : k_spinbox_->value();
+    goal.max_path_length = bounded_mode ? max_path_length_spinbox_->value() : 0.0;
     goal.allow_self_crossing = allow_self_crossing_cb_->isChecked();
     goal.allow_unknown = allow_unknown_cb_->isChecked();
     goal.include_debug = request_debug_cb_->isChecked();
@@ -851,19 +882,32 @@ void RaystarPanel::displayResponse(const CallbackState::PendingResponse& result)
                                         : (result.result_code == rclcpp_action::ResultCode::ABORTED
                                              ? QStringLiteral("ABORTED")
                                              : QStringLiteral("UNKNOWN")));
-  QString status = QString(
-                     "%1 / %2: returned %3 of %4 requested "
-                     "(%5 found by Core)")
-                     .arg(transport_state)
-                     .arg(planningStatusText(info.status))
-                     .arg(static_cast<qulonglong>(info.returned_path_count))
-                     .arg(static_cast<qulonglong>(info.requested_path_count))
-                     .arg(static_cast<qulonglong>(info.found_path_count));
+  const bool bounded_mode =
+    info.search_mode == PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH;
+  QString status;
+  if (bounded_mode) {
+    status = QString("%1 / %2: returned %3 path(s) within %4 m (%5 found by Core)")
+               .arg(transport_state)
+               .arg(planningStatusText(info.status))
+               .arg(static_cast<qulonglong>(info.returned_path_count))
+               .arg(info.requested_max_path_length, 0, 'g', 10)
+               .arg(static_cast<qulonglong>(info.found_path_count));
+  } else {
+    status = QString(
+               "%1 / %2: returned %3 of %4 requested "
+               "(%5 found by Core)")
+               .arg(transport_state)
+               .arg(planningStatusText(info.status))
+               .arg(static_cast<qulonglong>(info.returned_path_count))
+               .arg(static_cast<qulonglong>(info.requested_path_count))
+               .arg(static_cast<qulonglong>(info.found_path_count));
+  }
   status += QString(
               "\nSearch complete: %1; path output complete: %2; "
-              "limits: %3")
+              "bound exhausted: %3; limits: %4")
               .arg(info.search_complete ? QStringLiteral("yes") : QStringLiteral("no"))
               .arg(info.output_complete ? QStringLiteral("yes") : QStringLiteral("no"))
+              .arg(info.cost_bound_exhausted ? QStringLiteral("yes") : QStringLiteral("no"))
               .arg(planningLimitsText(info.limits_reached));
   if (!response.message.empty()) {
     status += QStringLiteral("\n") + boundedQString(response.message);
@@ -907,6 +951,9 @@ void RaystarPanel::save(rviz_common::Config config) const {
   config.mapSetValue("goal_x", goal_x_edit_->text());
   config.mapSetValue("goal_y", goal_y_edit_->text());
   config.mapSetValue("k", k_spinbox_->value());
+  config.mapSetValue("search_mode", search_mode_combo_->currentIndex());
+  config.mapSetValue(
+    "max_path_length", QString::number(max_path_length_spinbox_->value(), 'g', 17));
   config.mapSetValue("allow_self_crossing", allow_self_crossing_cb_->isChecked());
   config.mapSetValue("allow_unknown", allow_unknown_cb_->isChecked());
   config.mapSetValue("request_debug", request_debug_cb_->isChecked());
@@ -936,6 +983,15 @@ void RaystarPanel::load(const rviz_common::Config& config) {
   int k_val;
   if (config.mapGetInt("k", &k_val))
     k_spinbox_->setValue(k_val);
+  int search_mode = 0;
+  if (config.mapGetInt("search_mode", &search_mode))
+    search_mode_combo_->setCurrentIndex(search_mode == 1 ? 1 : 0);
+  if (config.mapGetString("max_path_length", &val)) {
+    bool length_ok = false;
+    const double length = val.toDouble(&length_ok);
+    if (length_ok && std::isfinite(length) && length > 0.0)
+      max_path_length_spinbox_->setValue(length);
+  }
   bool bool_val = false;
   if (config.mapGetBool("allow_self_crossing", &bool_val)) {
     allow_self_crossing_cb_->setChecked(bool_val);
@@ -952,6 +1008,7 @@ void RaystarPanel::load(const rviz_common::Config& config) {
   if (topic_changed && ros_initialized_) {
     subscribeToMap();
   }
+  onSearchModeChanged(search_mode_combo_->currentIndex());
   updatePlanButtonState();
 }
 

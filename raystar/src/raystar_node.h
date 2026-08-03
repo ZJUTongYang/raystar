@@ -6,7 +6,10 @@
 #include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <raystar_interfaces/action/build_raystar_transition_graph.hpp>
+#include <raystar_interfaces/action/plan_raystar_goal_set.hpp>
 #include <raystar_interfaces/action/plan_raystar_paths.hpp>
+#include <raystar_interfaces/environment_identity.hpp>
 #include <raystar_interfaces/map_identity.hpp>
 #include <raystar_interfaces/msg/map_status.hpp>
 #include <raystar_interfaces/srv/get_raystar_paths.hpp>
@@ -19,8 +22,12 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <variant>
 
 #include <raystar/raystar_core.h>
+#include <raystar/transition_environment_cache.h>
+
+#include "transition_progress_reporter.h"
 
 namespace raystar {
 
@@ -32,6 +39,10 @@ public:
 private:
   using PlanAction = raystar_interfaces::action::PlanRaystarPaths;
   using PlanGoalHandle = rclcpp_action::ServerGoalHandle<PlanAction>;
+  using GoalSetAction = raystar_interfaces::action::PlanRaystarGoalSet;
+  using GoalSetGoalHandle = rclcpp_action::ServerGoalHandle<GoalSetAction>;
+  using TransitionAction = raystar_interfaces::action::BuildRaystarTransitionGraph;
+  using TransitionGoalHandle = rclcpp_action::ServerGoalHandle<TransitionAction>;
   using MarkerArray = visualization_msgs::msg::MarkerArray;
 
   // Keep one immutable per-request configuration snapshot.  The same
@@ -50,6 +61,8 @@ private:
 
   rclcpp::Service<raystar_interfaces::srv::GetRaystarPaths>::SharedPtr service_;
   rclcpp_action::Server<PlanAction>::SharedPtr action_server_;
+  rclcpp_action::Server<GoalSetAction>::SharedPtr goal_set_action_server_;
+  rclcpp_action::Server<TransitionAction>::SharedPtr transition_action_server_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_subscription_;
   rclcpp::Publisher<raystar_interfaces::msg::MapStatus>::SharedPtr map_status_publisher_;
 
@@ -76,6 +89,7 @@ private:
   };
   mutable std::mutex map_cache_mutex_;
   CachedMap cached_map_;
+  CompletedTransitionEnvironmentCache transition_environment_cache_;
 
   // Action callbacks remain non-blocking.  The one admitted Action goal runs
   // on this node-owned worker, leaving the executor free to process cancel.
@@ -84,10 +98,20 @@ private:
     std::shared_ptr<std::atomic<bool>> cancel_requested;
   };
 
+  struct GoalSetActionJob {
+    std::shared_ptr<GoalSetGoalHandle> goal_handle;
+    std::shared_ptr<std::atomic<bool>> cancel_requested;
+  };
+  struct TransitionActionJob {
+    std::shared_ptr<TransitionGoalHandle> goal_handle;
+    std::shared_ptr<std::atomic<bool>> cancel_requested;
+  };
+  using PendingActionJob = std::variant<ActionJob, GoalSetActionJob, TransitionActionJob>;
+
   std::thread action_worker_;
   std::mutex action_worker_mutex_;
   std::condition_variable action_worker_cv_;
-  std::optional<ActionJob> pending_action_job_;
+  std::optional<PendingActionJob> pending_action_job_;
   bool stop_action_worker_{false};
   std::mutex action_state_mutex_;
   rclcpp_action::GoalUUID active_goal_id_{};
@@ -112,6 +136,25 @@ private:
   void handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goal_handle);
   void executeAction(const std::shared_ptr<PlanGoalHandle> goal_handle,
                      const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
+  rclcpp_action::GoalResponse handleGoalSetActionGoal(
+    const rclcpp_action::GoalUUID& uuid,
+    std::shared_ptr<const GoalSetAction::Goal> goal);
+  rclcpp_action::CancelResponse handleGoalSetActionCancel(
+    const std::shared_ptr<GoalSetGoalHandle> goal_handle);
+  void handleGoalSetActionAccepted(const std::shared_ptr<GoalSetGoalHandle> goal_handle);
+  void executeGoalSetAction(
+    const std::shared_ptr<GoalSetGoalHandle> goal_handle,
+    const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
+  rclcpp_action::GoalResponse handleTransitionActionGoal(
+    const rclcpp_action::GoalUUID& uuid,
+    std::shared_ptr<const TransitionAction::Goal> goal);
+  rclcpp_action::CancelResponse handleTransitionActionCancel(
+    const std::shared_ptr<TransitionGoalHandle> goal_handle);
+  void handleTransitionActionAccepted(
+    const std::shared_ptr<TransitionGoalHandle> goal_handle);
+  void executeTransitionAction(
+    const std::shared_ptr<TransitionGoalHandle> goal_handle,
+    const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
   void actionWorkerLoop() noexcept;
 
   template <typename RequestT, typename ResponseT>
@@ -121,10 +164,39 @@ private:
                        const raystar_interfaces::MapId& map_id,
                        const StopPredicate& stop_requested) noexcept;
 
+  void executeGoalSetPlanning(const GoalSetAction::Goal& request,
+                              GoalSetAction::Result& response,
+                              const nav_msgs::msg::OccupancyGrid& grid,
+                              const raystar_interfaces::MapId& map_id,
+                              const StopPredicate& stop_requested) noexcept;
+
+  void executeTransitionPlanning(const TransitionAction::Goal& request,
+                                 TransitionAction::Result& response,
+                                 const nav_msgs::msg::OccupancyGrid& grid,
+                                 const raystar_interfaces::MapId& map_id,
+                                 const StopPredicate& stop_requested,
+                                 const TransitionProgressCallback& progress_callback) noexcept;
+
   void handleMap(nav_msgs::msg::OccupancyGrid::ConstSharedPtr map);
   bool resolveCachedMap(const raystar_interfaces::MapId& requested_id,
                         nav_msgs::msg::OccupancyGrid::ConstSharedPtr& map,
                         std::string& error) const;
+
+  std::shared_ptr<const Polymap> findCachedTransitionEnvironment(
+    const nav_msgs::msg::OccupancyGrid& grid,
+    const raystar_interfaces::MapId& map_id,
+    bool allow_unknown,
+    const RequestConfiguration& configuration,
+    const PolymapEndpoint& base,
+    const std::vector<PolymapEndpoint>& goals);
+  void cacheCompletedTransitionEnvironment(
+    const nav_msgs::msg::OccupancyGrid& grid,
+    const raystar_interfaces::MapId& map_id,
+    bool allow_unknown,
+    const RequestConfiguration& configuration,
+    const PolymapEndpoint& base,
+    const std::vector<PolymapEndpoint>& goals,
+    std::shared_ptr<const Polymap> environment);
 
   bool occupancyGridToBinaryMap(const nav_msgs::msg::OccupancyGrid& grid,
                                 bool allow_unknown,
@@ -159,6 +231,11 @@ private:
                     size_t max_path_points,
                     nav_msgs::msg::Path& message,
                     std::string& error) const;
+  bool buildTopologyPathMsg(const PathSolution& solution,
+                            const GridMap& grid_map,
+                            const std::string& frame_id,
+                            nav_msgs::msg::Path& message,
+                            std::string& error) const;
 
   // planner_cache_mutex_ must be held by the caller.
   void clearVisualizationsLocked() noexcept;
