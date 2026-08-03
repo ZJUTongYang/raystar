@@ -1,11 +1,12 @@
-# Ray*: k-Shortest Non-homotopic Path Planning for ROS 2
+# Ray*: Non-homotopic Path Planning for ROS 2
 
 [![Raystar ROS 2 CI](https://github.com/ZJUTongYang/raystar/actions/workflows/ci.yml/badge.svg?branch=ros2)](https://github.com/ZJUTongYang/raystar/actions/workflows/ci.yml?query=branch%3Aros2)
 
-Ray* computes up to `K` topologically distinct, locally shortest paths on a 2D
-occupancy grid. This `ros2` branch provides a standalone ROS 2 planner node, a
-cancellable cached-map Action, a compatibility Service, structured completion
-diagnostics, bounded visualizations, and an RViz2 Panel.
+Ray* computes either the first `K` or every cost-bounded topologically
+distinct, locally shortest path on a 2D occupancy grid. This `ros2` branch
+provides a standalone ROS 2 planner node, cancellable cached-map Actions for
+single-goal, multi-goal, and UPS transition planning, a compatibility Service,
+structured completion diagnostics, bounded visualizations, and an RViz2 Panel.
 
 The planning API itself does not depend on Navigation2. The bundled demo uses
 Nav2's map server and lifecycle manager only to publish and activate its test
@@ -15,7 +16,14 @@ map.
 
 - Continuous start and goal coordinates, with integer obstacle turning
   vertices retained by the geometric planner.
-- Multiple non-homotopic paths ordered by nondecreasing metric cost.
+- Top-K and exhaustive-within-length non-homotopic paths, ordered by
+  nondecreasing metric cost.
+- Native multi-goal bounded enumeration with independent inclusive limits and
+  one shared Raystar topology tree.
+- Homotopy-preserving Untethered Path Shortening (UPS) over the reusable CDT:
+  reference tether pairs are traced as lifted portal sleeves and shortened by
+  a funnel whose output crosses triangle interiors rather than following mesh
+  edges.
 - Cached `nav_msgs/OccupancyGrid` Action workflow, so each goal carries a map
   identity instead of another complete map.
 - Cooperative Action cancellation and explicit planning, map, path, debug,
@@ -30,7 +38,7 @@ map.
 | Package | Purpose |
 |---|---|
 | `raystar` | Planner Core, ROS 2 node, launch file, bundled map, RViz configuration, profiling runner, and tests |
-| `raystar_interfaces` | Cached-map Action, compatibility Service, map identity, path/debug records, and structured result messages |
+| `raystar_interfaces` | Cached-map single/multi-goal/UPS Actions, compatibility Service, map identity, path/debug records, and structured result messages |
 | `raystar_rviz_plugins` | RViz2 Panel for creating and cancelling cached-map Action requests |
 
 ## Supported platforms
@@ -82,8 +90,8 @@ ros2 launch raystar raystar_demo.launch.py
 
 The supplied RViz configuration already loads the map and MarkerArray
 displays and contains one `raystar_rviz_plugins/RaystarPanel`. After the panel
-has received the map identity, set the start, goal, and `K`, then press
-**Plan**.
+has received the map identity, set the start and goal, choose **Top K** or
+**All within length**, enter its value, then press **Plan**.
 
 Use another map with:
 
@@ -101,8 +109,9 @@ ros2 launch raystar raystar_demo.launch.py \
   map_topic:=/map
 ```
 
-The launch file also supports namespaces, a custom Action name, resource-limit
-overrides, and optional exposure of the full-map compatibility Service. See
+The launch file also supports namespaces, custom endpoints for all three
+Actions, resource-limit overrides, and optional exposure of the full-map
+compatibility Service. See
 [raystar/LAUNCH.md](raystar/LAUNCH.md) for the complete launch guide.
 
 ## ROS interfaces
@@ -112,6 +121,8 @@ These are the names resolved from the default node name `raystar`:
 | Interface | Default name | Purpose |
 |---|---|---|
 | Action | `/raystar/plan_paths` | `raystar_interfaces/action/PlanRaystarPaths`; cancellable planning against the cached map identity |
+| Action | `/raystar/plan_goal_set` | `raystar_interfaces/action/PlanRaystarGoalSet`; one-tree cost-bounded enumeration for several goals |
+| Action | `/raystar/build_transition_graph` | `raystar_interfaces/action/BuildRaystarTransitionGraph`; certified UPS for explicit directed tether-configuration pairs |
 | Service | `/raystar/get_raystar_paths` | `raystar_interfaces/srv/GetRaystarPaths`; compatibility request carrying a complete map |
 | Topic | `/raystar/map_status` | `raystar_interfaces/msg/MapStatus`; transient-local identity and metadata for the cached map |
 | Topic | `/raystar/non_homotopic_paths` | Complete path visualization snapshot |
@@ -123,9 +134,25 @@ The normal client sequence is:
 
 1. Wait for `/raystar/map_status`.
 2. Copy its `map_id` into a `PlanRaystarPaths` goal.
-3. Send start, goal, `K`, and the request policy flags.
+3. Send start, goal, one valid search objective (`K` or maximum path length),
+   and the request policy flags.
 4. Inspect both the Action terminal state and `result_info`.
 5. Treat `message` as human-readable diagnostics only.
+
+For UPS, submit base-to-robot `nav_msgs/Path` configurations sharing one exact
+base and an explicit list of directed index pairs. Each returned transition
+runs from the source robot endpoint to the destination endpoint and carries
+independent `collision_free`, `homotopy_preserved`, and `locally_shortest`
+flags. `triangle_occurrences` is a lifted-sleeve sequence, so repeated IDs are
+intentional for winding paths. The Action reuses one CDT for the whole batch.
+When configurations come from Raystar results, pass each
+`PathResult.topology_path`; the dense `PathResult.path` is only for execution
+and display and must not be reused as the UPS homotopy reference. UPS batches
+have independent `max_transition_configurations` and `max_transition_pairs`
+limits rather than reusing multi-goal or path-enumeration caps.
+The completed Polymap cache is capacity one and reuses geometry only when map
+generation, occupancy policy, tether base, and canonical endpoints match;
+updates or key mismatches rebuild it.
 
 The bundled launch disables the full-map compatibility Service by default.
 Directly starting `raystar_node` retains its compatibility default unless
@@ -141,8 +168,11 @@ Important input rules are:
 - `map.data` values must be `-1` or in `[0, 100]`. `-1` is the only unknown
   encoding and is traversable only when `allow_unknown=true`.
 - Known values at or above `occupied_threshold` are occupied; its default is
-  `99`. Lower known values have no path penalty because Raystar is a binary
-  geometric planner, not a cost-aware planner.
+  `99`. The threshold may be overridden at startup but is read-only while the
+  node runs, so cached-map GCP and UPS requests cannot assign different binary
+  occupancy semantics to the same map identity. Lower known values have no
+  path penalty because Raystar is a binary geometric planner, not a cost-aware
+  planner.
 - The map must have finite values, positive resolution, origin `z=0`, and an
   identity origin rotation. Translated x/y origins are supported, but rotated
   grids are rejected.
@@ -155,19 +185,42 @@ Returning fewer than `K` paths is not inherently an error. For example,
 `STATUS_FEWER_PATHS` with `search_complete=true` means the search frontier was
 fully exhausted and fewer admissible topological paths exist.
 `STATUS_PARTIAL_SEARCH` instead means a timeout or node limit interrupted the
-search, while `STATUS_PARTIAL_OUTPUT` means output budgets omitted one or more
-Core paths. Clients should use the structured status, completeness flags,
-limits, and requested/found/returned counts rather than parsing text.
+search, while `STATUS_PARTIAL_OUTPUT` means one or more authoritative
+metric-eligible paths could not be published. Clients should use the
+structured status, completeness flags, limits, and requested/found/returned
+counts rather than parsing text.
+
+For exhaustive bounded enumeration, set
+`search_mode=SEARCH_MODE_ALL_WITHIN_LENGTH`, `k=0`, and a finite positive
+`max_path_length` in metres. The bound is inclusive.
+`cost_bound_exhausted=true` proves the padded Core frontier cannot contain
+another candidate for the original bound. The ROS adapter then certifies each
+candidate from its serialized-world topology geometry; padded-superset
+candidates outside the original metric bound are silently excluded and are
+not output omissions. Only `cost_bound_exhausted && output_complete` proves
+that the ROS result delivered the complete original bounded set. A bounded
+search may therefore be complete with
+zero returned paths (`STATUS_NO_PATH`, `request_satisfied=true`, while
+`success=false` continues to mean no path payload was returned).
+
+For `PlanRaystarGoalSet`, top-level `success` instead describes aggregate
+completion and equals `result_info.request_satisfied`; a certified all-empty
+goal set therefore uses Action terminal state `SUCCEEDED`. Each
+`GoalPathResult.success` continues to mean that its own `path_results` is
+non-empty.
 
 Planning capacity is one and requests are not queued. Timeout and cancellation
 are cooperative: one CGAL/STL primitive already in progress must return before
-the stop request can be observed. The complete parameter, QoS, visualization,
-and result contract is in [raystar/README.md](raystar/README.md).
+the stop request can be observed. UPS distinguishes a cooperative deadline as
+`BuildRaystarTransitionGraph.Result.STATUS_TIMEOUT` from an accepted client
+cancellation as `STATUS_CANCELLED`. The complete parameter, QoS,
+visualization, and result contract is in
+[raystar/README.md](raystar/README.md).
 
 ## Multi-scenario acceptance and profiling
 
-An optional deterministic runner exercises the production `RaystarCore`
-through six fixed scenarios and `K=1,3,10,50`. The runner is disabled in normal
+The optional deterministic runner now supports top-K, single-goal
+all-within-length, and shared-tree multi-goal modes. It is disabled in normal
 builds and enabled with `-DRAYSTAR_BUILD_PROFILING=ON`.
 
 Every invocation verifies:
@@ -185,7 +238,16 @@ Every invocation verifies:
 - outcome, limit, found count, path digest, and expanded nodes are deterministic
   across the first invocation, warm-ups, and measured repeats.
 
-### Scenario contract
+### Historical pre-0.2.0 top-K baseline (2026-07-30)
+
+The scenario contract, environment, results, and reproduction procedure below
+are retained as a historical top-K baseline from source `0b61cf5e24f0`, before
+the `0.2.0` bounded, multi-goal, UPS, exact public-length, and final public-cost
+ordering changes. Every recorded row used top-K mode with `K=1,3,10,50`.
+These tables are not current `0.2.0` performance or release-acceptance evidence
+and must not be used to claim validation of the newer modes.
+
+#### Scenario contract
 
 | Scenario | Grid | Purpose | Expected paths |
 |---|---:|---|---:|
@@ -201,7 +263,7 @@ existing Core regression fixture. It does not apply the vertical image
 conversion performed by `nav2_map_server`, so it should not be interpreted as
 an Action round-trip against the map server.
 
-### Recorded environment and protocol
+#### Recorded environment and protocol
 
 | Field | Recorded value |
 |---|---|
@@ -224,7 +286,7 @@ invocations passed, including the 72 unreported warm-ups. The runner emitted
 independent geometry oracles, no resource limit was reached, and every repeat
 matched the first invocation's path digest and expanded-node count.
 
-### Recorded results
+#### Recorded results
 
 `Found / expected` uses the scenario contract, not the requested `K`. Thus an
 open map returning one path for `K=50` is a successful, complete exhaustion.
@@ -264,7 +326,13 @@ nodes. These coarse phases identify where time is spent, but they do not by
 themselves justify a particular geometry-index or cache rewrite; that requires
 sub-phase counters and before/after semantic regression evidence.
 
-### Reproduce the record
+#### Reproduce the record
+
+Reproducing these numeric rows requires the recorded `0b61cf5e24f0` source,
+its dependencies, and the recorded environment. Running the commands against
+the current `0.2.0` tree exercises a different runner schema and planner and
+must produce a new, separately labelled artifact instead of being compared as
+the same record.
 
 Build the optional tools from the workspace root:
 
@@ -319,7 +387,7 @@ ctest --test-dir build/raystar \
   -R test_profile_smoke --output-on-failure
 ```
 
-### Measurement semantics and limitations
+#### Measurement semantics and limitations
 
 - `map_time_ms` measures `Polymap::create()`, primarily polygon/CDT geometry
   construction. It is not ROS map-reception time.
