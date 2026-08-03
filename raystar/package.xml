@@ -19,6 +19,10 @@
   <depend version_gte="0.2.0">raystar_interfaces</depend>
   <depend>unique_identifier_msgs</depend>
 
+  <!-- The optional installed profiling runner locates its bundled map through
+       the package index instead of embedding a source-tree path. -->
+  <depend>ament_index_cpp</depend>
+
   <!-- The installed RViz configuration instantiates this panel at runtime. -->
   <exec_depend>raystar_rviz_plugins</exec_depend>
 

@@ -12,6 +12,7 @@ endif()
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rcl_interfaces REQUIRED)
@@ -69,11 +70,9 @@ if(RAYSTAR_BUILD_PROFILING)
     ${CMAKE_CURRENT_SOURCE_DIR}/test
   )
   target_compile_features(raystar_profile PRIVATE cxx_std_17)
-  target_compile_definitions(raystar_profile PRIVATE
-    RAYSTAR_PROFILE_TESTMAP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/test/testmap.pgm"
-  )
   target_link_libraries(raystar_profile raystar_core)
   ament_target_dependencies(raystar_profile
+    ament_index_cpp
     geometry_msgs
     nav_msgs
   )
@@ -297,6 +296,19 @@ if(BUILD_TESTING)
   if(RAYSTAR_BUILD_PROFILING)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+    add_test(NAME test_profile_relocation_contract
+      COMMAND ${CMAKE_COMMAND}
+        -DRAYSTAR_PROFILE_BINARY=$<TARGET_FILE:raystar_profile>
+        -DRAYSTAR_PROFILE_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/tools/raystar_profile.cpp
+        -DRAYSTAR_CMAKE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+        -DRAYSTAR_SOURCE_TESTMAP=${CMAKE_CURRENT_SOURCE_DIR}/test/testmap.pgm
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_profile_relocation.cmake
+    )
+    set_tests_properties(test_profile_relocation_contract PROPERTIES
+      LABELS "profiling;packaging"
+      TIMEOUT 30
+    )
+
     add_test(NAME test_profile_smoke
       COMMAND $<TARGET_FILE:raystar_profile>
         --scenario open_256
@@ -307,6 +319,123 @@ if(BUILD_TESTING)
     set_tests_properties(test_profile_smoke PROPERTIES
       LABELS "profiling"
       TIMEOUT 30
+    )
+
+    add_test(NAME test_profile_all_within_length_smoke
+      COMMAND $<TARGET_FILE:raystar_profile>
+        --scenario open_256
+        --mode all-within-length
+        --max-path-length 10
+        --warmups 0
+        --iterations 1
+    )
+    set_tests_properties(test_profile_all_within_length_smoke PROPERTIES
+      LABELS "profiling"
+      TIMEOUT 30
+    )
+
+    add_test(NAME test_profile_multi_goal_smoke
+      COMMAND $<TARGET_FILE:raystar_profile>
+        --scenario open_256
+        --mode multi-goal
+        --max-path-length 10
+        --goal-count 3
+        --warmups 0
+        --iterations 1
+    )
+    set_tests_properties(test_profile_multi_goal_smoke PROPERTIES
+      LABELS "profiling"
+      TIMEOUT 30
+    )
+
+    add_test(NAME test_profile_bundled_map_lookup
+      COMMAND $<TARGET_FILE:raystar_profile>
+        --scenario bundled_testmap_50
+        --k-values 1
+        --warmups 0
+        --iterations 1
+    )
+    set_tests_properties(test_profile_bundled_map_lookup PROPERTIES
+      LABELS "profiling;packaging"
+      TIMEOUT 30
+    )
+
+    add_test(NAME test_profile_explicit_map_override
+      COMMAND ${CMAKE_COMMAND} -E env AMENT_PREFIX_PATH=
+        $<TARGET_FILE:raystar_profile>
+        --scenario bundled_testmap_50
+        --testmap ${CMAKE_CURRENT_SOURCE_DIR}/test/testmap.pgm
+        --k-values 1
+        --warmups 0
+        --iterations 1
+    )
+    set_tests_properties(test_profile_explicit_map_override PROPERTIES
+      LABELS "profiling;packaging"
+      TIMEOUT 30
+    )
+
+    function(add_profile_failure_test test_name)
+      add_test(NAME ${test_name}
+        COMMAND $<TARGET_FILE:raystar_profile> ${ARGN}
+      )
+      set_tests_properties(${test_name} PROPERTIES
+        LABELS "profiling"
+        TIMEOUT 30
+        WILL_FAIL TRUE
+      )
+    endfunction()
+
+    add_profile_failure_test(test_profile_reject_missing_bound
+      --scenario open_256
+      --mode all-within-length
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_reject_nan_bound
+      --scenario open_256
+      --mode all-within-length
+      --max-path-length nan
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_reject_bounded_k_values
+      --scenario open_256
+      --mode all-within-length
+      --max-path-length 10
+      --k-values 1
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_reject_invalid_goal_count
+      --scenario open_256
+      --mode multi-goal
+      --max-path-length 10
+      --goal-count 1
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_reject_path_point_limit
+      --scenario open_256
+      --max-path-points 1
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_reject_multi_goal_admission
+      --scenario open_256
+      --mode multi-goal
+      --max-path-length 10
+      --goal-count 3
+      --max-multi-goal-count 2
+      --warmups 0
+      --iterations 1
+    )
+    add_profile_failure_test(test_profile_immediate_timeout
+      --scenario open_256
+      --mode all-within-length
+      --max-path-length 400
+      --timeout-ms 0
+      --warmups 0
+      --iterations 1
     )
 
     add_test(NAME test_profile_summary
