@@ -3,14 +3,16 @@
 The launch file is deliberately useful both as a one-command demo and as a
 small bringup template.  It starts a lifecycle-managed Nav2 map server, the
 Raystar node, and (optionally) RViz.  All large planner/resource settings are
-forwarded as node parameters, while ``map_topic`` and ``action_name`` are
-normal ROS remappings so a namespaced deployment can choose its own endpoints.
+forwarded as node parameters, while ``map_topic``, ``action_name``, and
+``goal_set_action_name`` are normal ROS remappings so a namespaced deployment
+can choose its own endpoints.
 
 For a headless server, use ``start_rviz:=false``.  For a deployment that
 already owns a map server, use ``start_map_server:=false`` and point
 ``map_topic`` at that server's OccupancyGrid topic.  The default RViz config
-uses ``/raystar/plan_paths``; when a namespace or custom action endpoint is
-selected, update the panel's persisted Action field accordingly.
+uses ``/raystar/plan_paths`` and ``/raystar/plan_goal_set``; when a namespace
+or custom action endpoint is selected, update the Panel's corresponding
+persisted Action fields.
 """
 
 from launch import LaunchDescription

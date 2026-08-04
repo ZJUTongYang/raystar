@@ -68,7 +68,10 @@ source install/setup.bash
 
 ### Quick Start with the bundled test map
 
-The package includes a test map (`test/testmap.pgm` + `test/testmap.yaml`) and an RViz2 config (`rviz/raystar_test.rviz`). The full launch flow requires **3 terminals**.
+The package includes a test map (`test/testmap.pgm` + `test/testmap.yaml`) and
+an RViz2 config (`rviz/raystar_test.rviz`). The recommended demonstration is
+the one-command launch below; the three-terminal sequence is retained as a
+manual bringup and debugging alternative.
 
 **Prerequisites**: install `nav2_map_server` (one-time):
 
@@ -89,8 +92,8 @@ The launch file accepts `map_yaml`, `namespace`, `map_topic`, `action_name`,
 `start_map_server`, `start_rviz`, all planner/resource-limit parameters, and
 `enable_legacy_map_service`. It defaults to the safer cached-map Action
 workflow (`enable_legacy_map_service:=false`). If a namespace or custom Action
-name is selected, update the RViz panel's **Planner Action / Name** field to
-that endpoint.
+name is selected, update the RViz Panel's separate single-goal and multi-goal
+Action fields to the corresponding endpoints.
 
 Each terminal must have the ROS2 + workspace environment sourced (add to `~/.bashrc` for convenience):
 
@@ -137,6 +140,7 @@ The RViz2 config pre-loads:
 - **MarkerArray** on `/raystar/non_homotopic_paths` (per-path namespace toggle)
 - **MarkerArray** on `/raystar/poly_obstacles`
 - one **RaystarPanel** (`raystar_rviz_plugins/RaystarPanel`) for interactive planning
+- the standard **Publish Point** tool on `/clicked_point` for start/goal capture
 
 ### Using a custom map
 
@@ -445,10 +449,14 @@ transport even when every goal has zero paths. Per-goal `GoalPathResult.success`
 means only that `path_results` is non-empty; inspect its `result_info` to
 distinguish a certified empty result from partial or failed planning.
 
-The multi-goal Action has no RViz goal editor in this release; clients send it
-directly at `~/plan_goal_set`. It shares cancellation, cached-map identity, the
-worker thread, and the capacity-one admission slot with `~/plan_paths`, the UPS
-Action, and the legacy Service.
+The RViz Panel exposes this Action as **Multi-goal: All within lengths**. Its
+ordered goal table stores one `(x, y, budget)` row per target and sends one
+`PlanRaystarGoalSet` request, so the server expands one shared tree rather than
+issuing independent single-goal requests. The per-goal result table keeps
+certified empty results visible and reports completeness from
+`cost_bound_exhausted && output_complete`. The Action shares cancellation,
+cached-map identity, the worker thread, and the capacity-one admission slot
+with `~/plan_paths`, the UPS Action, and the legacy Service.
 
 ### UPS transition Action
 
@@ -614,13 +622,35 @@ The stable plugin lookup ID is `raystar_rviz_plugins/RaystarPanel`. RViz files
 saved by an earlier development version with the implicit C++ type ID
 `raystar_rviz_plugins::RaystarPanel` must replace that entry with the stable ID.
 
-The panel's **Planner Action / Name** field defaults to
-`/raystar/plan_paths`. It accepts relative or absolute ROS names, so a saved
-RViz configuration can target namespaced deployments such as
-`/robot1/raystar/plan_paths`. Editing the endpoint cancels any request sent to
-the old server before rebuilding the client. The Action name, map topic,
-start/goal, search mode, K, maximum path length, `allow_self_crossing`, and
-`allow_unknown` values are persisted with the RViz configuration.
+The Panel has separate single-goal and multi-goal Action fields, defaulting to
+`/raystar/plan_paths` and `/raystar/plan_goal_set`. They accept relative or
+absolute ROS names, so a saved RViz configuration can target namespaced
+deployments. Editing either endpoint cancels any in-flight request before its
+client is rebuilt. The endpoints, map and clicked-point topics, start/single
+goal, search mode, K, maximum length, ordered multi-goal rows with independent
+budgets, and request policy flags are persisted with the RViz configuration.
+
+The three Panel modes are **Single: Top K**, **Single: All within length**, and
+**Multi-goal: All within lengths**. The last mode always uses bounded exhaustive
+enumeration and disables K. In multi-goal mode, changing **Set all budgets**
+immediately replaces every existing row's budget. Individual `Budget (m)` cells
+remain editable afterward, so goals can still use different limits. The
+displayed per-goal `Complete` column means
+`cost_bound_exhausted && output_complete`; a row may therefore be complete
+with status `No path` and zero path payloads. The path table is grouped by goal
+and shows the expected flattened `path_N` Marker namespace for visual
+cross-reference. Partial results explicitly show that markers were not
+published. Even for a complete result, Marker output remains
+visualization-only and is not a completeness certificate.
+
+For point-and-click input, keep the Panel's clicked-point topic aligned with
+RViz's standard **Publish Point** tool (the bundled configuration uses
+`/clicked_point`). **Capture start** and the single-goal **Capture goal** are
+one-shot. In multi-goal mode, **Capture goals** remains active and appends one
+row per click using the current bulk-budget value; toggle it off when finished
+and edit individual budgets directly in the table. Clicked points
+must already use the cached map frame because the Panel does not perform TF
+transforms.
 
 A map/topic change, receipt of a newer map, the 60-second panel timeout, Action
 endpoint change, or panel destruction invalidates the displayed request and

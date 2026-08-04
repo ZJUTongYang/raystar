@@ -22,15 +22,24 @@ Panels:
   - Class: raystar_rviz_plugins/RaystarPanel
     Name: RaystarPanel
     action_name: /raystar/plan_paths
+    goal_set_action_name: /raystar/plan_goal_set
     allow_self_crossing: false
     allow_unknown: false
+    clicked_point_topic: /clicked_point
     request_debug: false
     goal_x: 6.7
     goal_y: 7.7
     k: 3
-    max_path_length: 10
+    max_path_length: 7
     map_topic: /map
-    search_mode: 0
+    multi_goals:
+      - max_path_length: 7
+        x: 6.7
+        y: 7.7
+      - max_path_length: 6
+        x: 6.7
+        y: 3.3
+    search_mode: 2
     start_x: 2.3
     start_y: 3.3
 Visualization Manager:
@@ -208,6 +217,9 @@ Visualization Manager:
   Name: root
   Tools:
     - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: false
+      Topic: /clicked_point
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
@@ -242,5 +254,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1798
-  X: 5257
+  X: 40
   Y: 170

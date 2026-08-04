@@ -8,6 +8,7 @@ compile_commands.json
 .cache/
 .clangd/
 .ccls-cache/
+.omc/
 
 # Editors and operating-system files
 .vscode/

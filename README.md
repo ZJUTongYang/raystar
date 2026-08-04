@@ -39,7 +39,7 @@ map.
 |---|---|
 | `raystar` | Planner Core, ROS 2 node, launch file, bundled map, RViz configuration, profiling runner, and tests |
 | `raystar_interfaces` | Cached-map single/multi-goal/UPS Actions, compatibility Service, map identity, path/debug records, and structured result messages |
-| `raystar_rviz_plugins` | RViz2 Panel for creating and cancelling cached-map Action requests |
+| `raystar_rviz_plugins` | RViz2 Panel for point-and-click single-goal and shared-tree multi-goal Action requests |
 
 ## Supported platforms
 
@@ -89,9 +89,15 @@ ros2 launch raystar raystar_demo.launch.py
 ```
 
 The supplied RViz configuration already loads the map and MarkerArray
-displays and contains one `raystar_rviz_plugins/RaystarPanel`. After the panel
-has received the map identity, set the start and goal, choose **Top K** or
-**All within length**, enter its value, then press **Plan**.
+displays and contains one `raystar_rviz_plugins/RaystarPanel`. Its default
+demonstration is a two-goal shared-tree request with independent 7 m and 6 m
+budgets, so after the Panel receives the map, press **Plan**. Select
+**Single: All within length** for one goal, or edit the multi-goal table to give
+every target an independent inclusive length budget. In multi-goal mode,
+changing **Set all budgets** first updates every existing row; rows can then be
+edited individually. To choose positions visually, select RViz's
+**Publish Point** tool and use the Panel's **Capture start**, **Capture goal**,
+or continuous **Capture goals** buttons.
 
 Use another map with:
 

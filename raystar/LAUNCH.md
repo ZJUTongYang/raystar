@@ -20,7 +20,7 @@ terminal before launching (one-time per terminal):
 source install/setup.bash
 ```
 
-## Launch (3 terminals, in order)
+## Launch
 
 ### One-command demo
 
@@ -41,10 +41,13 @@ the planner/resource parameters (`max_k`, `max_cost_bounded_paths`,
 `max_transition_pairs`, `max_nodes`, `planning_timeout_ms`, `max_debug_nodes`,
 and so on). The default launch intentionally disables the legacy full-map
 Service; set `enable_legacy_map_service:=true` only for old clients. When using
-a namespace or custom single-goal Action endpoint, set the RViz panel's
-persisted **Planner Action / Name** field to the same endpoint.
+a namespace or custom endpoint, set the RViz Panel's persisted single-goal
+and multi-goal Action fields to the corresponding `action_name` and
+`goal_set_action_name` values.
 
-### Terminal 1: Map Server
+### Manual three-terminal alternative
+
+#### Terminal 1: Map Server
 
 ```bash
 ros2 run nav2_map_server map_server --ros-args \
@@ -65,13 +68,13 @@ Verify:
 ros2 topic echo /map --once --field info.width   # should print 50
 ```
 
-### Terminal 2: Ray* Node
+#### Terminal 2: Ray* Node
 
 ```bash
 ros2 run raystar raystar_node
 ```
 
-### Terminal 3: RViz2
+#### Terminal 3: RViz2
 
 ```bash
 rviz2 -d $(ros2 pkg prefix raystar)/share/raystar/rviz/raystar_test.rviz
@@ -179,10 +182,20 @@ than queued.  Cancellation also remains cooperative: one already-running CGAL
 primitive must return before the goal can reach `STATUS_CANCELED`.
 
 The bundled RViz configuration contains exactly one
-`raystar_rviz_plugins/RaystarPanel`. Its **Planner Action / Name** field is
-configurable and persisted; set it to a relative or absolute namespaced Action
-such as `/robot1/raystar/plan_paths` for multi-robot deployments. Changing the
-field cancels any in-flight goal sent through the previous Action client.
+`raystar_rviz_plugins/RaystarPanel`. It persists separate single-goal and
+multi-goal endpoints; set them to names such as
+`/robot1/raystar/plan_paths` and `/robot1/raystar/plan_goal_set` for
+multi-robot deployments. Changing either field cancels the in-flight goal.
+The bundled Panel opens with two valid goals and independent 7 m and 6 m
+budgets in **Multi-goal: All within lengths**, so the default shared-tree
+demonstration only requires pressing **Plan** after the map arrives. Its
+standard RViz **Publish Point** tool and Panel capture buttons can replace the
+default start/goals interactively on
+`/clicked_point`.
+
+In multi-goal mode, changing **Set all budgets** updates every existing target
+row and invalidates the old result before the next **Plan**. Edit individual
+`Budget (m)` cells afterward when goals need different limits.
 
 The structured-result and topology-path revision changes the affected ROS
 interface type hashes. Rebuild and deploy the node, RViz plugin, and every
