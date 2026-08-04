@@ -204,9 +204,13 @@ jobs:
           git diff --check
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
           if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            base="$(git rev-list --max-parents=0 HEAD)"
+            if git cat-file -e 'HEAD^1^{commit}' 2>/dev/null; then
+              base="$(git rev-parse HEAD^1)"
+            else
+              base="$(git rev-list --max-parents=0 HEAD)"
+            fi
           fi
-          mapfile -t files < <(git diff --name-only "${base}" HEAD -- \
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMRT "${base}" HEAD -- \
             '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx')
           if ((${#files[@]})); then
             clang-format --dry-run --Werror --style=file "${files[@]}"
@@ -228,9 +232,13 @@ jobs:
           source "/opt/ros/${ROS_DISTRO}/setup.bash"
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
           if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            base="$(git rev-list --max-parents=0 HEAD)"
+            if git cat-file -e 'HEAD^1^{commit}' 2>/dev/null; then
+              base="$(git rev-parse HEAD^1)"
+            else
+              base="$(git rev-list --max-parents=0 HEAD)"
+            fi
           fi
-          mapfile -t files < <(git diff --name-only "${base}" HEAD -- \
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMRT "${base}" HEAD -- \
             'raystar/src/*.cpp' 'raystar/include/**/*.h' 'raystar/include/**/*.hpp' \
             'raystar_rviz_plugins/src/*.cpp' 'raystar_rviz_plugins/include/**/*.h' \
             'raystar_rviz_plugins/include/**/*.hpp')
@@ -304,7 +312,7 @@ jobs:
             --scenario bundled_testmap_50 --k-values 1 \
             --warmups 0 --iterations 1 \
             >build-relocated-install-smoke/profile.csv
-          test "$(grep -c ',PASS$' build-relocated-install-smoke/profile.csv)" -eq 2
+          # The summary validates the raw schema, acceptance, and measured-sample count.
           "${raystar_prefix}/lib/raystar/raystar_profile_summary" --format csv \
             --expected-measured-samples 1 \
             build-relocated-install-smoke/profile.csv \

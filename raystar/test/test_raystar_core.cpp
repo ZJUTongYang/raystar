@@ -288,8 +288,8 @@ TEST(RaystarCore, EnumeratesEveryPathWithinInclusiveCostBound) {
 
   const double between =
     (baseline.path_solutions[0].path_cost_ + baseline.path_solutions[1].path_cost_) / 2.0;
-  const auto first_only = core.plan(
-    map, 5, 14, 25, 15, SearchObjective::allWithinCost(between), false);
+  const auto first_only =
+    core.plan(map, 5, 14, 25, 15, SearchObjective::allWithinCost(between), false);
   ASSERT_TRUE(first_only.success) << first_only.message;
   ASSERT_EQ(first_only.path_solutions.size(), 1u);
   EXPECT_DOUBLE_EQ(first_only.path_solutions.front().path_cost_,
@@ -298,8 +298,8 @@ TEST(RaystarCore, EnumeratesEveryPathWithinInclusiveCostBound) {
   EXPECT_EQ(first_only.limit_reached, PlanningLimitReached::none);
 
   const double inclusive_bound = baseline.path_solutions.back().path_cost_;
-  const auto both = core.plan(
-    map, 5, 14, 25, 15, SearchObjective::allWithinCost(inclusive_bound), false);
+  const auto both =
+    core.plan(map, 5, 14, 25, 15, SearchObjective::allWithinCost(inclusive_bound), false);
   ASSERT_TRUE(both.success) << both.message;
   ASSERT_EQ(both.path_solutions.size(), baseline.path_solutions.size());
   for (size_t i = 0; i < both.path_solutions.size(); ++i) {
@@ -350,19 +350,17 @@ TEST(RaystarCore, RadicalSumBoundaryIsCompleteForSingleAndSharedTreeSearch) {
   constexpr double inclusive_bound = 0x1.79fa384f9da53p+4;
   RaystarCore core;
 
-  const auto single = core.plan(
-    map, start, goal, SearchObjective::allWithinCost(inclusive_bound), false);
+  const auto single =
+    core.plan(map, start, goal, SearchObjective::allWithinCost(inclusive_bound), false);
   ASSERT_TRUE(single.success) << single.message;
   ASSERT_EQ(single.path_solutions.size(), 1u);
   EXPECT_DOUBLE_EQ(single.path_solutions.front().path_cost_, inclusive_bound);
   ASSERT_EQ(single.path_solutions.front().turning_points_.size(), 1u);
-  EXPECT_EQ(single.path_solutions.front().turning_points_.front(),
-            std::make_pair(20, 30));
+  EXPECT_EQ(single.path_solutions.front().turning_points_.front(), std::make_pair(20, 30));
   EXPECT_TRUE(single.completion == PlanningCompletion::cost_bound_exhausted ||
               single.completion == PlanningCompletion::frontier_exhausted);
 
-  const auto multi = core.planToGoalsWithinCosts(
-    map, start, {{goal, inclusive_bound}}, false);
+  const auto multi = core.planToGoalsWithinCosts(map, start, {{goal, inclusive_bound}}, false);
   ASSERT_EQ(multi.goal_results.size(), 1u);
   const auto& goal_result = multi.goal_results.front();
   ASSERT_TRUE(goal_result.success) << goal_result.message;
@@ -372,8 +370,8 @@ TEST(RaystarCore, RadicalSumBoundaryIsCompleteForSingleAndSharedTreeSearch) {
             single.path_solutions.front().projectedPath());
 
   const double excluded_bound = std::nextafter(inclusive_bound, 0.0);
-  const auto excluded = core.plan(
-    map, start, goal, SearchObjective::allWithinCost(excluded_bound), false);
+  const auto excluded =
+    core.plan(map, start, goal, SearchObjective::allWithinCost(excluded_bound), false);
   EXPECT_FALSE(excluded.success);
   EXPECT_TRUE(excluded.path_solutions.empty());
   EXPECT_EQ(excluded.completion, PlanningCompletion::cost_bound_exhausted);
@@ -385,8 +383,8 @@ TEST(RaystarCore, UnresolvedInclusiveComparisonFailsWithoutCompletenessClaim) {
   const PlanEndpoint goal(6, 5, 6.25, 5.25 + std::ldexp(1.0, -40));
   RaystarCore restricted_core(64);
 
-  const auto result = restricted_core.plan(
-    map, start, goal, SearchObjective::allWithinCost(1.0), false);
+  const auto result =
+    restricted_core.plan(map, start, goal, SearchObjective::allWithinCost(1.0), false);
   EXPECT_FALSE(result.success);
   EXPECT_EQ(result.outcome, PlanningOutcome::failed);
   EXPECT_EQ(result.completion, PlanningCompletion::none);
@@ -401,8 +399,8 @@ TEST(RaystarCore, CostBoundedPathCapIsAnIncompleteSearchLimit) {
   PlanningLimits limits;
   limits.max_cost_bounded_paths = 1;
 
-  const auto limited = core.plan(
-    map, 5, 15, 25, 15, SearchObjective::allWithinCost(1000.0), false, limits);
+  const auto limited =
+    core.plan(map, 5, 15, 25, 15, SearchObjective::allWithinCost(1000.0), false, limits);
   EXPECT_TRUE(limited.success) << limited.message;
   EXPECT_EQ(limited.outcome, PlanningOutcome::limit_reached);
   EXPECT_EQ(limited.limit_reached, PlanningLimitReached::max_paths);
@@ -425,8 +423,8 @@ TEST(RaystarCore, RejectedSearchSupersetPathsDoNotConsumeBoundedPathBudgets) {
   const auto admission = [&](const BoundedPathView& path, const StopToken&) {
     ++admission_calls;
     return path.start == rejected_solution.start_ &&
-                   path.turning_points == rejected_solution.turning_points_ &&
-                   path.goal == rejected_solution.goal_
+               path.turning_points == rejected_solution.turning_points_ &&
+               path.goal == rejected_solution.goal_
              ? BoundedPathAdmission::reject
              : BoundedPathAdmission::accept;
   };
@@ -435,16 +433,15 @@ TEST(RaystarCore, RejectedSearchSupersetPathsDoNotConsumeBoundedPathBudgets) {
   // The retained path fits exactly. The rejected shell must not be charged
   // before the later eligible path is considered.
   limits.max_path_points = expected_geometry.size();
-  const auto filtered = core.plan(
-    map,
-    5,
-    14,
-    25,
-    15,
-    SearchObjective::allWithinCost(
-      baseline.path_solutions.back().path_cost_, admission),
-    false,
-    limits);
+  const auto filtered =
+    core.plan(map,
+              5,
+              14,
+              25,
+              15,
+              SearchObjective::allWithinCost(baseline.path_solutions.back().path_cost_, admission),
+              false,
+              limits);
 
   ASSERT_TRUE(filtered.success) << filtered.message;
   EXPECT_EQ(filtered.outcome, PlanningOutcome::complete);
@@ -459,18 +456,17 @@ TEST(RaystarCore, RejectedSearchSupersetPathsDoNotConsumeBoundedPathBudgets) {
 TEST(RaystarCore, BoundedPathAdmissionFailureFailsClosed) {
   const auto map = makeOpenMap();
   RaystarCore core;
-  const auto result = core.plan(
-    map,
-    2,
-    2,
-    17,
-    17,
-    SearchObjective::allWithinCost(
-      100.0,
-      [](const BoundedPathView&, const StopToken&) {
-        return BoundedPathAdmission::failure_or_stop;
-      }),
-    false);
+  const auto result =
+    core.plan(map,
+              2,
+              2,
+              17,
+              17,
+              SearchObjective::allWithinCost(100.0,
+                                             [](const BoundedPathView&, const StopToken&) {
+                                               return BoundedPathAdmission::failure_or_stop;
+                                             }),
+              false);
 
   EXPECT_FALSE(result.success);
   EXPECT_EQ(result.outcome, PlanningOutcome::failed);
@@ -493,14 +489,8 @@ TEST(RaystarCore, BoundedPathAdmissionStopOutranksResourceLimits) {
     EXPECT_TRUE(stop_token.poll());
     return BoundedPathAdmission::accept;
   };
-  const auto result = core.plan(map,
-                                2,
-                                2,
-                                17,
-                                17,
-                                SearchObjective::allWithinCost(100.0, admission),
-                                false,
-                                limits);
+  const auto result =
+    core.plan(map, 2, 2, 17, 17, SearchObjective::allWithinCost(100.0, admission), false, limits);
 
   EXPECT_FALSE(result.success);
   EXPECT_EQ(result.outcome, PlanningOutcome::limit_reached);
@@ -516,10 +506,8 @@ TEST(RaystarCore, MultiGoalSingleEntryMatchesSingleGoalBoundedSearch) {
   constexpr double bound = 40.0;
   RaystarCore core;
 
-  const auto single =
-    core.plan(map, start, goal, SearchObjective::allWithinCost(bound), false);
-  const auto multi =
-    core.planToGoalsWithinCosts(map, start, {{goal, bound}}, false);
+  const auto single = core.plan(map, start, goal, SearchObjective::allWithinCost(bound), false);
+  const auto multi = core.planToGoalsWithinCosts(map, start, {{goal, bound}}, false);
 
   ASSERT_EQ(multi.goal_results.size(), 1u);
   const auto& unwrapped = multi.goal_results.front();
@@ -545,10 +533,7 @@ TEST(RaystarCore, MultiGoalUsesOneTreeWithIndependentInclusiveBounds) {
   RaystarCore core;
 
   const auto result = core.planToGoalsWithinCosts(
-    map,
-    start,
-    {{near_goal, near_cost}, {far_goal, std::nextafter(far_cost, 0.0)}},
-    false);
+    map, start, {{near_goal, near_cost}, {far_goal, std::nextafter(far_cost, 0.0)}}, false);
 
   ASSERT_EQ(result.goal_results.size(), 2u);
   EXPECT_EQ(result.outcome, PlanningOutcome::complete);
@@ -572,10 +557,7 @@ TEST(RaystarCore, MultiGoalPreservesOrderAndDuplicateGoalResults) {
   RaystarCore core;
 
   const auto result = core.planToGoalsWithinCosts(
-    map,
-    start,
-    {{upper_goal, 40.0}, {lower_goal, 40.0}, {upper_goal, 40.0}},
-    false);
+    map, start, {{upper_goal, 40.0}, {lower_goal, 40.0}, {upper_goal, 40.0}}, false);
 
   ASSERT_EQ(result.goal_results.size(), 3u);
   EXPECT_EQ(result.goal_results[0].endpoint.position_, upper_goal.position_);
@@ -599,8 +581,8 @@ TEST(RaystarCore, MultiGoalPathSetsMatchIndependentSearchesAndGoalPermutation) {
   constexpr double bound = 45.0;
   RaystarCore core;
 
-  const auto shared = core.planToGoalsWithinCosts(
-    map, start, {{upper_goal, bound}, {lower_goal, bound}}, false);
+  const auto shared =
+    core.planToGoalsWithinCosts(map, start, {{upper_goal, bound}, {lower_goal, bound}}, false);
   ASSERT_EQ(shared.goal_results.size(), 2u);
   const auto upper_independent =
     core.plan(map, start, upper_goal, SearchObjective::allWithinCost(bound), false);
@@ -618,19 +600,16 @@ TEST(RaystarCore, MultiGoalPathSetsMatchIndependentSearchesAndGoalPermutation) {
   expect_same_paths(shared.goal_results[0].path_solutions, upper_independent.path_solutions);
   expect_same_paths(shared.goal_results[1].path_solutions, lower_independent.path_solutions);
 
-  const auto permuted = core.planToGoalsWithinCosts(
-    map, start, {{lower_goal, bound}, {upper_goal, bound}}, false);
+  const auto permuted =
+    core.planToGoalsWithinCosts(map, start, {{lower_goal, bound}, {upper_goal, bound}}, false);
   ASSERT_EQ(permuted.goal_results.size(), 2u);
-  expect_same_paths(shared.goal_results[0].path_solutions,
-                    permuted.goal_results[1].path_solutions);
-  expect_same_paths(shared.goal_results[1].path_solutions,
-                    permuted.goal_results[0].path_solutions);
+  expect_same_paths(shared.goal_results[0].path_solutions, permuted.goal_results[1].path_solutions);
+  expect_same_paths(shared.goal_results[1].path_solutions, permuted.goal_results[0].path_solutions);
 }
 
 TEST(RaystarCore, MultiGoalSeparatesReachableAndUnreachableGoals) {
   auto map = makeOpenMap();
-  for (unsigned int y = 0; y < map.height; ++y)
-    map.data[y * map.width + 10] = 1;
+  for (unsigned int y = 0; y < map.height; ++y) map.data[y * map.width + 10] = 1;
   const PlanEndpoint start(2, 10, 2.5, 10.5);
   const PlanEndpoint reachable_goal(8, 10, 8.5, 10.5);
   const PlanEndpoint unreachable_goal(17, 10, 17.5, 10.5);
@@ -659,8 +638,7 @@ TEST(RaystarCore, MultiGoalRejectsInvalidGoalCountAndBound) {
   EXPECT_EQ(empty.outcome, PlanningOutcome::invalid_request);
   EXPECT_TRUE(core.getNodes().empty());
 
-  const auto invalid_bound =
-    core.planToGoalsWithinCosts(map, start, {{goal, -1.0}}, false);
+  const auto invalid_bound = core.planToGoalsWithinCosts(map, start, {{goal, -1.0}}, false);
   EXPECT_EQ(invalid_bound.outcome, PlanningOutcome::invalid_request);
   ASSERT_EQ(invalid_bound.goal_results.size(), 1u);
   EXPECT_EQ(invalid_bound.goal_results.front().outcome, PlanningOutcome::invalid_request);
@@ -679,8 +657,8 @@ TEST(RaystarCore, MultiGoalZeroBoundReturnsOnlyTheIdentityPath) {
   const PlanEndpoint other_goal(3, 2, 3.5, 2.5);
   RaystarCore core;
 
-  const auto result = core.planToGoalsWithinCosts(
-    map, start, {{start, 0.0}, {other_goal, 0.0}}, false);
+  const auto result =
+    core.planToGoalsWithinCosts(map, start, {{start, 0.0}, {other_goal, 0.0}}, false);
 
   ASSERT_EQ(result.goal_results.size(), 2u);
   EXPECT_EQ(result.outcome, PlanningOutcome::complete);
@@ -709,11 +687,7 @@ TEST(RaystarCore, MultiGoalPathCapIsPerGoalAndDoesNotStopOtherGoals) {
   RaystarCore core;
 
   const auto result = core.planToGoalsWithinCosts(
-    map,
-    start,
-    {{obstacle_goal, 1000.0}, {same_side_goal, 2.0}},
-    false,
-    limits);
+    map, start, {{obstacle_goal, 1000.0}, {same_side_goal, 2.0}}, false, limits);
 
   ASSERT_EQ(result.goal_results.size(), 2u);
   EXPECT_EQ(result.outcome, PlanningOutcome::limit_reached);
@@ -744,9 +718,9 @@ TEST(RaystarCore, MultiGoalGlobalPathPointLimitMarksEveryUnfinishedGoal) {
     EXPECT_EQ(goal_result.outcome, PlanningOutcome::limit_reached);
     EXPECT_EQ(goal_result.limit_reached, PlanningLimitReached::max_path_points);
   }
-  EXPECT_EQ(result.goal_results[0].path_solutions.size() +
-              result.goal_results[1].path_solutions.size(),
-            1u);
+  EXPECT_EQ(
+    result.goal_results[0].path_solutions.size() + result.goal_results[1].path_solutions.size(),
+    1u);
 }
 
 TEST(RaystarCore, MultiGoalImmediateCancellationIsStructuredAndRecoverable) {
@@ -768,8 +742,7 @@ TEST(RaystarCore, MultiGoalImmediateCancellationIsStructuredAndRecoverable) {
   }
   EXPECT_TRUE(core.getNodes().empty());
 
-  const auto recovered =
-    core.planToGoalsWithinCosts(map, start, {{goal, 30.0}}, false);
+  const auto recovered = core.planToGoalsWithinCosts(map, start, {{goal, 30.0}}, false);
   EXPECT_EQ(recovered.outcome, PlanningOutcome::complete);
   ASSERT_EQ(recovered.goal_results.size(), 1u);
   EXPECT_TRUE(recovered.goal_results.front().success);
@@ -793,16 +766,15 @@ TEST(RaystarCore, RejectsInvalidSearchObjectivesAndBoundedPathLimit) {
     EXPECT_TRUE(core.getNodes().empty());
   }
 
-  const auto zero_bound =
-    core.plan(map, 2, 2, 2, 2, SearchObjective::allWithinCost(0.0), false);
+  const auto zero_bound = core.plan(map, 2, 2, 2, 2, SearchObjective::allWithinCost(0.0), false);
   ASSERT_TRUE(zero_bound.success);
   ASSERT_EQ(zero_bound.path_solutions.size(), 1u);
   EXPECT_DOUBLE_EQ(zero_bound.path_solutions.front().path_cost_, 0.0);
 
   PlanningLimits limits;
   limits.max_cost_bounded_paths = 0;
-  const auto invalid_limit = core.plan(
-    map, 2, 2, 17, 17, SearchObjective::allWithinCost(100.0), false, limits);
+  const auto invalid_limit =
+    core.plan(map, 2, 2, 17, 17, SearchObjective::allWithinCost(100.0), false, limits);
   EXPECT_FALSE(invalid_limit.success);
   EXPECT_NE(invalid_limit.message.find("max_cost_bounded_paths"), std::string::npos);
 }
@@ -997,19 +969,12 @@ TEST(RaystarCore, UpsRemovesCommonTetherPrefixAndCrossesTriangleInteriors) {
   const auto plan = core.plan(makeSimpleMap(), base, Point2d{25.5, 15.5}, 1, false);
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_NE(plan.polymap, nullptr);
-  const PathSolution first(base,
-                           std::vector<std::pair<int, int>>{{10, 10}, {20, 10}},
-                           Point2d{25.5, 15.5},
-                           0.0,
-                           {});
-  const PathSolution second(base,
-                            std::vector<std::pair<int, int>>{{10, 10}, {20, 10}},
-                            Point2d{24.5, 13.5},
-                            0.0,
-                            {});
+  const PathSolution first(
+    base, std::vector<std::pair<int, int>>{{10, 10}, {20, 10}}, Point2d{25.5, 15.5}, 0.0, {});
+  const PathSolution second(
+    base, std::vector<std::pair<int, int>>{{10, 10}, {20, 10}}, Point2d{24.5, 13.5}, 0.0, {});
 
-  const auto transition =
-    RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
+  const auto transition = RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
 
   ASSERT_TRUE(transition) << transition.message;
   ASSERT_EQ(transition.path.size(), 2u);
@@ -1020,11 +985,7 @@ TEST(RaystarCore, UpsRemovesCommonTetherPrefixAndCrossesTriangleInteriors) {
 
 TEST(RaystarCore, UpsPreservesAConfigurationChangingLoopAtOneRobotPose) {
   RaystarCore core;
-  const auto plan = core.plan(makeSimpleMap(),
-                              Point2d{5.5, 15.5},
-                              Point2d{25.5, 15.5},
-                              2,
-                              false);
+  const auto plan = core.plan(makeSimpleMap(), Point2d{5.5, 15.5}, Point2d{25.5, 15.5}, 2, false);
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_EQ(plan.path_solutions.size(), 2u);
   ASSERT_NE(plan.polymap, nullptr);
@@ -1049,9 +1010,8 @@ TEST(RaystarCore, UpsPreservesAConfigurationChangingLoopAtOneRobotPose) {
   for (size_t first = 0; first < transition.corridor.triangle_occurrences.size(); ++first) {
     for (size_t second = first + 1; second < transition.corridor.triangle_occurrences.size();
          ++second) {
-      repeats_a_triangle = repeats_a_triangle ||
-                           transition.corridor.triangle_occurrences[first] ==
-                             transition.corridor.triangle_occurrences[second];
+      repeats_a_triangle = repeats_a_triangle || transition.corridor.triangle_occurrences[first] ==
+                                                   transition.corridor.triangle_occurrences[second];
     }
   }
   EXPECT_TRUE(repeats_a_triangle)
@@ -1060,18 +1020,14 @@ TEST(RaystarCore, UpsPreservesAConfigurationChangingLoopAtOneRobotPose) {
 
 TEST(RaystarCore, UpsBatchEvaluatesDirectedPairsAndIdentityTransitions) {
   RaystarCore core;
-  const auto plan = core.plan(makeSimpleMap(),
-                              Point2d{5.5, 15.5},
-                              Point2d{25.5, 15.5},
-                              2,
-                              false);
+  const auto plan = core.plan(makeSimpleMap(), Point2d{5.5, 15.5}, Point2d{25.5, 15.5}, 2, false);
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_EQ(plan.path_solutions.size(), 2u);
   ASSERT_NE(plan.polymap, nullptr);
   const std::vector<ConfigurationTransitionPair> pairs{{0, 0}, {0, 1}, {1, 0}};
 
-  const auto batch = RaystarCore::shortenConfigurationTransitions(
-    *plan.polymap, plan.path_solutions, pairs);
+  const auto batch =
+    RaystarCore::shortenConfigurationTransitions(*plan.polymap, plan.path_solutions, pairs);
 
   ASSERT_TRUE(batch) << batch.message;
   ASSERT_EQ(batch.transitions.size(), pairs.size());
@@ -1080,18 +1036,13 @@ TEST(RaystarCore, UpsBatchEvaluatesDirectedPairsAndIdentityTransitions) {
   EXPECT_DOUBLE_EQ(batch.transitions[0].shortening.path_cost, 0.0);
   ASSERT_TRUE(batch.transitions[1].shortening) << batch.transitions[1].shortening.message;
   ASSERT_TRUE(batch.transitions[2].shortening) << batch.transitions[2].shortening.message;
-  EXPECT_NEAR(batch.transitions[1].shortening.path_cost,
-              batch.transitions[2].shortening.path_cost,
-              1.0e-12);
+  EXPECT_NEAR(
+    batch.transitions[1].shortening.path_cost, batch.transitions[2].shortening.path_cost, 1.0e-12);
 }
 
 TEST(RaystarCore, UpsBatchRejectsPairIndicesAtomicallyAndSupportsCancellation) {
   RaystarCore core;
-  const auto plan = core.plan(makeOpenMap(),
-                              Point2d{2.5, 2.5},
-                              Point2d{17.5, 17.5},
-                              1,
-                              false);
+  const auto plan = core.plan(makeOpenMap(), Point2d{2.5, 2.5}, Point2d{17.5, 17.5}, 1, false);
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_NE(plan.polymap, nullptr);
 
@@ -1109,18 +1060,13 @@ TEST(RaystarCore, UpsBatchRejectsPairIndicesAtomicallyAndSupportsCancellation) {
 
 TEST(RaystarCore, UpsRejectsConfigurationsWithDifferentTetherBases) {
   RaystarCore core;
-  const auto plan = core.plan(makeOpenMap(),
-                              Point2d{2.5, 2.5},
-                              Point2d{17.5, 17.5},
-                              1,
-                              false);
+  const auto plan = core.plan(makeOpenMap(), Point2d{2.5, 2.5}, Point2d{17.5, 17.5}, 1, false);
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_NE(plan.polymap, nullptr);
   const PathSolution first(Point2d{2.5, 2.5}, {}, Point2d{4.5, 4.5}, 0.0, {});
   const PathSolution second(Point2d{3.5, 2.5}, {}, Point2d{5.5, 4.5}, 0.0, {});
 
-  const auto transition =
-    RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
+  const auto transition = RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
 
   EXPECT_EQ(transition.status, HomotopyShorteningStatus::invalid_reference);
   EXPECT_NE(transition.message.find("base"), std::string::npos);

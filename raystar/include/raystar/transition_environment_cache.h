@@ -53,8 +53,7 @@ struct TransitionEnvironmentPolicy {
   size_t max_map_bytes = 0;
 
   [[nodiscard]] bool operator==(const TransitionEnvironmentPolicy& other) const noexcept {
-    return allow_unknown == other.allow_unknown &&
-           occupied_threshold == other.occupied_threshold &&
+    return allow_unknown == other.allow_unknown && occupied_threshold == other.occupied_threshold &&
            max_map_cells == other.max_map_cells && max_map_bytes == other.max_map_bytes;
   }
 };
@@ -65,10 +64,10 @@ public:
                            TransitionEnvironmentPolicy policy,
                            TransitionEnvironmentEndpoint base,
                            std::vector<TransitionEnvironmentEndpoint> goals)
-    : map_generation_(map_generation),
-      policy_(policy),
-      base_(std::move(base)),
-      goals_(std::move(goals)) {
+    : map_generation_(map_generation)
+    , policy_(policy)
+    , base_(std::move(base))
+    , goals_(std::move(goals)) {
     // Goal order and duplicate goal entries do not affect either reachability
     // or the protected-point membership checks used by simplification.
     std::sort(goals_.begin(), goals_.end());
@@ -94,8 +93,7 @@ private:
 // request StopToken is retained.
 class CompletedTransitionEnvironmentCache {
 public:
-  [[nodiscard]] std::shared_ptr<const Polymap> find(
-    const TransitionEnvironmentKey& key) const {
+  [[nodiscard]] std::shared_ptr<const Polymap> find(const TransitionEnvironmentKey& key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!entry_ || !(entry_->key == key))
       return {};

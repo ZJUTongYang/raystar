@@ -91,10 +91,8 @@ inline NonnegativeExactDyadic nonnegativeExactDyadic(double value) {
 inline int compareNonnegativeDyadics(const NonnegativeExactDyadic& lhs,
                                      const NonnegativeExactDyadic& rhs) {
   const int exponent = std::min(lhs.exponent, rhs.exponent);
-  const boost::multiprecision::cpp_int lhs_aligned =
-    lhs.significand << (lhs.exponent - exponent);
-  const boost::multiprecision::cpp_int rhs_aligned =
-    rhs.significand << (rhs.exponent - exponent);
+  const boost::multiprecision::cpp_int lhs_aligned = lhs.significand << (lhs.exponent - exponent);
+  const boost::multiprecision::cpp_int rhs_aligned = rhs.significand << (rhs.exponent - exponent);
   if (lhs_aligned < rhs_aligned)
     return -1;
   if (lhs_aligned > rhs_aligned)
@@ -102,23 +100,20 @@ inline int compareNonnegativeDyadics(const NonnegativeExactDyadic& lhs,
   return 0;
 }
 
-inline int compareExactMetricProduct(double grid_cost,
-                                     float resolution,
-                                     double metric_bound) {
+inline int compareExactMetricProduct(double grid_cost, float resolution, double metric_bound) {
   const auto grid = nonnegativeExactDyadic(grid_cost);
   const auto scale = nonnegativeExactDyadic(static_cast<double>(resolution));
-  const NonnegativeExactDyadic product{
-    grid.significand * scale.significand, grid.exponent + scale.exponent};
+  const NonnegativeExactDyadic product{grid.significand * scale.significand,
+                                       grid.exponent + scale.exponent};
   return compareNonnegativeDyadics(product, nonnegativeExactDyadic(metric_bound));
 }
 
 inline uint64_t nonnegativeDoubleBits(double value) {
   static_assert(sizeof(double) == sizeof(uint64_t), "binary64 storage is required");
-  static_assert(std::numeric_limits<double>::is_iec559,
-                "IEEE-754 binary64 ordering is required");
-  static_assert(std::numeric_limits<double>::radix == 2 &&
-                  std::numeric_limits<double>::digits == 53,
-                "IEEE-754 binary64 precision is required");
+  static_assert(std::numeric_limits<double>::is_iec559, "IEEE-754 binary64 ordering is required");
+  static_assert(
+    std::numeric_limits<double>::radix == 2 && std::numeric_limits<double>::digits == 53,
+    "IEEE-754 binary64 precision is required");
   uint64_t bits = 0;
   std::memcpy(&bits, &value, sizeof(bits));
   return bits;
@@ -317,10 +312,8 @@ inline bool continuousMapToWorld(const GridMap& map, double gx, double gy, doubl
     return false;
   }
 
-  const double converted_x =
-    std::fma(gx, static_cast<double>(map.resolution), map.origin_x);
-  const double converted_y =
-    std::fma(gy, static_cast<double>(map.resolution), map.origin_y);
+  const double converted_x = std::fma(gx, static_cast<double>(map.resolution), map.origin_x);
+  const double converted_y = std::fma(gy, static_cast<double>(map.resolution), map.origin_y);
   if (!std::isfinite(converted_x) || !std::isfinite(converted_y))
     return false;
   wx = converted_x;

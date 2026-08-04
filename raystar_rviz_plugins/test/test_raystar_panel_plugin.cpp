@@ -148,13 +148,7 @@ private:
   std::shared_ptr<TestRosNodeAbstraction> abstraction_;
 };
 
-enum class ServerMode {
-  success,
-  mismatched_map,
-  delayed,
-  inner_bound_mismatch,
-  partial_output
-};
+enum class ServerMode { success, mismatched_map, delayed, inner_bound_mismatch, partial_output };
 
 class TestActionServer {
 public:
@@ -169,8 +163,7 @@ public:
     server_ = rclcpp_action::create_server<PlanningAction>(
       node_,
       action_name_,
-      [this](const rclcpp_action::GoalUUID&,
-             std::shared_ptr<const PlanningAction::Goal> goal) {
+      [this](const rclcpp_action::GoalUUID&, std::shared_ptr<const PlanningAction::Goal> goal) {
         {
           std::lock_guard<std::mutex> lock(goal_mutex_);
           last_goal_ = *goal;
@@ -343,8 +336,7 @@ public:
     server_ = rclcpp_action::create_server<GoalSetAction>(
       node_,
       action_name_,
-      [this](const rclcpp_action::GoalUUID&,
-             std::shared_ptr<const GoalSetAction::Goal> goal) {
+      [this](const rclcpp_action::GoalUUID&, std::shared_ptr<const GoalSetAction::Goal> goal) {
         {
           std::lock_guard<std::mutex> lock(goal_mutex_);
           last_goal_ = *goal;
@@ -449,8 +441,7 @@ public:
 private:
   static std::string uniqueName(const char* suffix) {
     static std::atomic<unsigned int> sequence{0};
-    return std::string("raystar_panel_") + suffix + "_" +
-           std::to_string(sequence.fetch_add(1));
+    return std::string("raystar_panel_") + suffix + "_" + std::to_string(sequence.fetch_add(1));
   }
 
   std::shared_ptr<GoalSetAction::Result> buildCompleteResult(
@@ -503,8 +494,7 @@ private:
                              : raystar_interfaces::msg::PlanningResultInfo::STATUS_NO_PATH;
       if (has_path) {
         raystar_interfaces::msg::PathResult path_result;
-        path_result.cost = std::min(
-          goal.max_path_lengths[index], static_cast<double>(index + 1u));
+        path_result.cost = std::min(goal.max_path_lengths[index], static_cast<double>(index + 1u));
         path_result.path.header.frame_id = goal.goals[index].header.frame_id;
         path_result.path.poses.push_back(goal.start);
         path_result.path.poses.push_back(goal.goals[index]);
@@ -534,8 +524,7 @@ private:
       // presence only.
       result->success = false;
       aggregate.status = raystar_interfaces::msg::PlanningResultInfo::STATUS_PARTIAL_OUTPUT;
-      aggregate.limits_reached =
-        raystar_interfaces::msg::PlanningResultInfo::LIMIT_MAX_PATHS;
+      aggregate.limits_reached = raystar_interfaces::msg::PlanningResultInfo::LIMIT_MAX_PATHS;
       aggregate.request_satisfied = false;
       aggregate.output_complete = false;
       aggregate.completed_goal_count =
@@ -543,8 +532,7 @@ private:
       ++aggregate.found_path_count;
 
       auto& first = result->goal_results.front();
-      first.result_info.status =
-        raystar_interfaces::msg::PlanningResultInfo::STATUS_PARTIAL_OUTPUT;
+      first.result_info.status = raystar_interfaces::msg::PlanningResultInfo::STATUS_PARTIAL_OUTPUT;
       first.result_info.limits_reached =
         raystar_interfaces::msg::PlanningResultInfo::LIMIT_MAX_PATHS;
       first.result_info.request_satisfied = false;
@@ -562,8 +550,7 @@ private:
     result->requested_allow_self_crossing = goal_handle->get_goal()->allow_self_crossing;
     result->requested_allow_unknown = goal_handle->get_goal()->allow_unknown;
     result->result_info.map_id = goal_handle->get_goal()->map_id;
-    result->result_info.status =
-      raystar_interfaces::msg::PlanningResultInfo::STATUS_CANCELLED;
+    result->result_info.status = raystar_interfaces::msg::PlanningResultInfo::STATUS_CANCELLED;
     result->result_info.limits_reached =
       raystar_interfaces::msg::PlanningResultInfo::LIMIT_CANCELLED;
     result->result_info.requested_goal_count =
@@ -627,8 +614,8 @@ class TestClickedPointPublisher {
 public:
   TestClickedPointPublisher(rclcpp::Node::SharedPtr node, std::string topic)
     : node_(std::move(node)), topic_(std::move(topic)) {
-    publisher_ = node_->create_publisher<geometry_msgs::msg::PointStamped>(
-      topic_, rclcpp::QoS(10).reliable());
+    publisher_ =
+      node_->create_publisher<geometry_msgs::msg::PointStamped>(topic_, rclcpp::QoS(10).reliable());
   }
 
   void publish(double x, double y, const std::string& frame_id = "map") {
@@ -733,10 +720,8 @@ void setMultiGoalRows(raystar_rviz_plugins::RaystarPanel& panel,
     const int row = static_cast<int>(index);
     table->setItem(row, 0, new QTableWidgetItem(QString::number(goals[index].x, 'g', 17)));
     table->setItem(row, 1, new QTableWidgetItem(QString::number(goals[index].y, 'g', 17)));
-    table->setItem(row,
-                   2,
-                   new QTableWidgetItem(
-                     QString::number(goals[index].max_path_length, 'g', 17)));
+    table->setItem(
+      row, 2, new QTableWidgetItem(QString::number(goals[index].max_path_length, 'g', 17)));
   }
 }
 
@@ -861,8 +846,7 @@ TEST(RaystarPanelPlugin, PersistsMultiGoalListOfMapsAndEndpoints) {
     auto item = input_goals.listAppendNew();
     item.mapSetValue("x", QString::number(expected.x, 'g', 17));
     item.mapSetValue("y", QString::number(expected.y, 'g', 17));
-    item.mapSetValue(
-      "max_path_length", QString::number(expected.max_path_length, 'g', 17));
+    item.mapSetValue("max_path_length", QString::number(expected.max_path_length, 'g', 17));
   }
   panel->load(input);
 
@@ -873,8 +857,7 @@ TEST(RaystarPanelPlugin, PersistsMultiGoalListOfMapsAndEndpoints) {
     const int row = static_cast<int>(index);
     EXPECT_DOUBLE_EQ(expected_goals[index].x, tableText(*editor, row, 0).toDouble());
     EXPECT_DOUBLE_EQ(expected_goals[index].y, tableText(*editor, row, 1).toDouble());
-    EXPECT_DOUBLE_EQ(
-      expected_goals[index].max_path_length, tableText(*editor, row, 2).toDouble());
+    EXPECT_DOUBLE_EQ(expected_goals[index].max_path_length, tableText(*editor, row, 2).toDouble());
   }
 
   rviz_common::Config output;
@@ -1047,15 +1030,13 @@ TEST(RaystarPanelInteraction, SendsCostBoundedEnumerationGoal) {
   ASSERT_TRUE(waitForGui([&]() { return button->isEnabled(); }, std::chrono::seconds(2)));
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() { return server.lastGoal().has_value(); },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.lastGoal().has_value(); }, std::chrono::seconds(2)));
   const auto goal = server.lastGoal();
   ASSERT_TRUE(goal.has_value());
   EXPECT_EQ(goal->search_mode, PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH);
   EXPECT_EQ(goal->k, 0);
   EXPECT_DOUBLE_EQ(goal->max_path_length, 37.25);
-  ASSERT_TRUE(waitForGui([&]() { return server.successCount() == 1u; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.successCount() == 1u; }, std::chrono::seconds(2)));
   EXPECT_EQ(0u, server.workerErrorCount());
 }
 
@@ -1087,8 +1068,7 @@ TEST(RaystarPanelInteraction, CancelsShortTimeoutGoal) {
     std::chrono::seconds(2)))
     << label->text().toStdString();
   ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; }, std::chrono::seconds(2)));
-  ASSERT_TRUE(waitForGui([&]() { return server.canceledCount() > 0; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.canceledCount() > 0; }, std::chrono::seconds(2)));
   EXPECT_EQ(0u, server.workerErrorCount());
 }
 
@@ -1122,13 +1102,11 @@ TEST(RaystarPanelInteraction, DestructionCancelsGoalAndLeavesNoQueuedUiCallback)
   // gone away. The panel must retain only non-UI state long enough to cancel
   // the accepted goal, and must not dereference the destroyed object.
   ASSERT_TRUE(waitForGui([&]() { return server.cancelCount() > 0; }, std::chrono::seconds(2)));
-  ASSERT_TRUE(waitForGui([&]() { return server.canceledCount() > 0; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return server.canceledCount() > 0; }, std::chrono::seconds(2)));
   EXPECT_EQ(0u, server.workerErrorCount());
 }
 
-TEST(RaystarPanelInteraction,
-     SendsOneSharedTreeGoalSetWithIndependentBoundsAndRendersMixedResult) {
+TEST(RaystarPanelInteraction, SendsOneSharedTreeGoalSetWithIndependentBoundsAndRendersMixedResult) {
   const auto action_name = nextTestName("plan_paths");
   const auto goal_set_action_name = nextTestName("plan_goal_set");
   const auto map_topic = nextTestName("map");
@@ -1139,11 +1117,8 @@ TEST(RaystarPanelInteraction,
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(2),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(2), goal_set_action_name);
 
   auto* mode = searchModeCombo(*panel);
   auto* label = statusLabel(*panel);
@@ -1172,19 +1147,17 @@ TEST(RaystarPanelInteraction,
   setMultiGoalRows(*panel, expected_goals);
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)))
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)))
     << label->text().toStdString();
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() { return goal_set_server.lastGoal().has_value(); },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(
+    waitForGui([&]() { return goal_set_server.lastGoal().has_value(); }, std::chrono::seconds(2)));
   const auto goal = goal_set_server.lastGoal();
   ASSERT_TRUE(goal.has_value());
   EXPECT_EQ(1u, goal_set_server.goalCount());
   EXPECT_EQ(0u, single_server.goalCount());
-  EXPECT_TRUE(raystar_interfaces::mapIdsEqual(goal->map_id,
-                                               raystar_interfaces::computeMapId(map)));
+  EXPECT_TRUE(raystar_interfaces::mapIdsEqual(goal->map_id, raystar_interfaces::computeMapId(map)));
   EXPECT_EQ("map", goal->start.header.frame_id);
   EXPECT_DOUBLE_EQ(1.25, goal->start.pose.position.x);
   EXPECT_DOUBLE_EQ(2.5, goal->start.pose.position.y);
@@ -1196,8 +1169,7 @@ TEST(RaystarPanelInteraction,
     EXPECT_DOUBLE_EQ(expected_goals[index].x, goal->goals[index].pose.position.x);
     EXPECT_DOUBLE_EQ(expected_goals[index].y, goal->goals[index].pose.position.y);
     EXPECT_DOUBLE_EQ(1.0, goal->goals[index].pose.orientation.w);
-    EXPECT_DOUBLE_EQ(expected_goals[index].max_path_length,
-                     goal->max_path_lengths[index]);
+    EXPECT_DOUBLE_EQ(expected_goals[index].max_path_length, goal->max_path_lengths[index]);
   }
   EXPECT_EQ(goal->goals[0], goal->goals[1]);
   EXPECT_NE(goal->max_path_lengths[0], goal->max_path_lengths[1]);
@@ -1205,8 +1177,8 @@ TEST(RaystarPanelInteraction,
   EXPECT_TRUE(goal->allow_unknown);
   EXPECT_TRUE(goal->include_debug);
 
-  ASSERT_TRUE(waitForGui([&]() { return label->text().contains("SUCCEEDED"); },
-                         std::chrono::seconds(2)))
+  ASSERT_TRUE(
+    waitForGui([&]() { return label->text().contains("SUCCEEDED"); }, std::chrono::seconds(2)))
     << label->text().toStdString();
   ASSERT_EQ(3, goal_table->rowCount());
   EXPECT_EQ(QString("0"), tableText(*goal_table, 0, 0));
@@ -1241,8 +1213,7 @@ TEST(RaystarPanelInteraction,
   EXPECT_EQ(0u, goal_set_server.workerErrorCount());
 }
 
-TEST(RaystarPanelInteraction,
-     ChangingMultiGoalBulkBudgetUpdatesEveryExistingGoalAndEveryRequest) {
+TEST(RaystarPanelInteraction, ChangingMultiGoalBulkBudgetUpdatesEveryExistingGoalAndEveryRequest) {
   const auto action_name = nextTestName("plan_paths_unused");
   const auto goal_set_action_name = nextTestName("plan_goal_set");
   const auto map_topic = nextTestName("map");
@@ -1253,11 +1224,8 @@ TEST(RaystarPanelInteraction,
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(2),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(2), goal_set_action_name);
 
   auto* mode = searchModeCombo(*panel);
   auto* bulk_budget = maxPathLengthSpinbox(*panel);
@@ -1281,8 +1249,7 @@ TEST(RaystarPanelInteraction,
   setMultiGoalRows(*panel, {{3.25, 4.5, 7.0}, {-2.0, 6.125, 6.0}});
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)))
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)))
     << label->text().toStdString();
 
   const std::vector<double> decreasing_bounds = {7.0, 6.0, 5.0};
@@ -1299,9 +1266,8 @@ TEST(RaystarPanelInteraction,
 
     button->click();
     ++expected_goal_count;
-    ASSERT_TRUE(waitForGui(
-      [&]() { return goal_set_server.goalCount() == expected_goal_count; },
-      std::chrono::seconds(2)));
+    ASSERT_TRUE(waitForGui([&]() { return goal_set_server.goalCount() == expected_goal_count; },
+                           std::chrono::seconds(2)));
     const auto sent_goal = goal_set_server.lastGoal();
     ASSERT_TRUE(sent_goal.has_value());
     ASSERT_EQ(2u, sent_goal->max_path_lengths.size());
@@ -1332,11 +1298,8 @@ TEST(RaystarPanelInteraction, RejectsGoalSetResultForDifferentMapId) {
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(2),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(2), goal_set_action_name);
   searchModeCombo(*panel)->setCurrentIndex(2);
   auto* label = statusLabel(*panel);
   auto* button = planButton(*panel);
@@ -1348,12 +1311,11 @@ TEST(RaystarPanelInteraction, RejectsGoalSetResultForDifferentMapId) {
   ASSERT_NE(nullptr, goal_table);
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)));
   button->click();
-  ASSERT_TRUE(waitForGui(
-    [&]() { return label->text().contains(QStringLiteral("different cached map")); },
-    std::chrono::seconds(2)))
+  ASSERT_TRUE(
+    waitForGui([&]() { return label->text().contains(QStringLiteral("different cached map")); },
+               std::chrono::seconds(2)))
     << label->text().toStdString();
   EXPECT_EQ(0, path_table->rowCount());
   EXPECT_EQ(0, goal_table->rowCount());
@@ -1366,17 +1328,13 @@ TEST(RaystarPanelInteraction, RejectsGoalSetResultWithMismatchedInnerBoundEcho) 
   const auto action_name = nextTestName("plan_paths_unused");
   const auto goal_set_action_name = nextTestName("plan_goal_set");
   const auto map_topic = nextTestName("map");
-  TestGoalSetActionServer goal_set_server(
-    goal_set_action_name, ServerMode::inner_bound_mismatch);
+  TestGoalSetActionServer goal_set_server(goal_set_action_name, ServerMode::inner_bound_mismatch);
   ASSERT_TRUE(goal_set_server.waitForClient(std::chrono::seconds(2)));
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(2),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(2), goal_set_action_name);
   searchModeCombo(*panel)->setCurrentIndex(2);
   auto* label = statusLabel(*panel);
   auto* button = planButton(*panel);
@@ -1388,11 +1346,10 @@ TEST(RaystarPanelInteraction, RejectsGoalSetResultWithMismatchedInnerBoundEcho) 
   ASSERT_NE(nullptr, goal_table);
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)));
   button->click();
-  ASSERT_TRUE(waitForGui([&]() { return label->text().startsWith("Failed:"); },
-                         std::chrono::seconds(2)))
+  ASSERT_TRUE(
+    waitForGui([&]() { return label->text().startsWith("Failed:"); }, std::chrono::seconds(2)))
     << label->text().toStdString();
   EXPECT_TRUE(label->text().contains("multi-goal"));
   EXPECT_EQ(0, path_table->rowCount());
@@ -1411,11 +1368,8 @@ TEST(RaystarPanelInteraction, PartialGoalSetPathsAreShownAsNotPublished) {
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(2),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(2), goal_set_action_name);
   searchModeCombo(*panel)->setCurrentIndex(2);
   auto* label = statusLabel(*panel);
   auto* button = planButton(*panel);
@@ -1427,13 +1381,11 @@ TEST(RaystarPanelInteraction, PartialGoalSetPathsAreShownAsNotPublished) {
   ASSERT_NE(nullptr, goal_table);
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)));
   button->click();
   ASSERT_TRUE(waitForGui(
     [&]() {
-      return label->text().contains("SUCCEEDED") &&
-             label->text().contains("Partial output");
+      return label->text().contains("SUCCEEDED") && label->text().contains("Partial output");
     },
     std::chrono::seconds(2)))
     << label->text().toStdString();
@@ -1487,8 +1439,7 @@ TEST(RaystarPanelInteraction, CapturesStartAndConsecutiveMultiGoalsFromClickedPo
   ASSERT_NE(nullptr, goals);
 
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)));
   ASSERT_TRUE(waitForGui([&]() { return point_publisher.subscriptionCount() > 0u; },
                          std::chrono::seconds(2)));
 
@@ -1508,11 +1459,9 @@ TEST(RaystarPanelInteraction, CapturesStartAndConsecutiveMultiGoalsFromClickedPo
   capture_goal->click();
   ASSERT_TRUE(capture_goal->isChecked());
   point_publisher.publish(6.5, 7.25);
-  ASSERT_TRUE(waitForGui([&]() { return goals->rowCount() == 1; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return goals->rowCount() == 1; }, std::chrono::seconds(2)));
   point_publisher.publish(-1.5, 9.0);
-  ASSERT_TRUE(waitForGui([&]() { return goals->rowCount() == 2; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForGui([&]() { return goals->rowCount() == 2; }, std::chrono::seconds(2)));
   EXPECT_DOUBLE_EQ(6.5, tableText(*goals, 0, 0).toDouble());
   EXPECT_DOUBLE_EQ(7.25, tableText(*goals, 0, 1).toDouble());
   EXPECT_DOUBLE_EQ(12.75, tableText(*goals, 0, 2).toDouble());
@@ -1535,23 +1484,19 @@ TEST(RaystarPanelInteraction, MultiGoalDestructionCancelsAndLeavesNoQueuedUiCall
   TestMapPublisher map_publisher(goal_set_server.clientNode(), map_topic);
   auto abstraction = std::make_shared<TestRosNodeAbstraction>(goal_set_server.clientNode());
   TestDisplayContext context(abstraction);
-  auto panel = makeInitializedPanel(context,
-                                    action_name,
-                                    map_topic,
-                                    std::chrono::seconds(5),
-                                    goal_set_action_name);
+  auto panel = makeInitializedPanel(
+    context, action_name, map_topic, std::chrono::seconds(5), goal_set_action_name);
   searchModeCombo(*panel)->setCurrentIndex(2);
   auto* label = statusLabel(*panel);
   auto* button = planButton(*panel);
   ASSERT_NE(nullptr, label);
   ASSERT_NE(nullptr, button);
   const auto map = map_publisher.publishMap();
-  ASSERT_TRUE(waitForMapAndPlanReady(
-    *panel, map_publisher, map, std::chrono::seconds(2)));
+  ASSERT_TRUE(waitForMapAndPlanReady(*panel, map_publisher, map, std::chrono::seconds(2)));
 
   button->click();
-  ASSERT_TRUE(waitForGui([&]() { return goal_set_server.goalCount() > 0u; },
-                         std::chrono::seconds(2)));
+  ASSERT_TRUE(
+    waitForGui([&]() { return goal_set_server.goalCount() > 0u; }, std::chrono::seconds(2)));
   panel.reset();
 
   ASSERT_TRUE(waitForGui([&]() { return goal_set_server.cancelRequestCount() > 0u; },

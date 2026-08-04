@@ -187,16 +187,13 @@ static bool cacheMapAndWait(rclcpp::executors::SingleThreadedExecutor& executor,
     status_topic,
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local(),
     [&](raystar_interfaces::msg::MapStatus::ConstSharedPtr status) {
-      admitted = status && raystar_interfaces::mapIdsEqual(status->map_id, expected_id) &&
-                 status->occupied_threshold == 99U &&
-                 status->environment_identity_version ==
-                   raystar_interfaces::kEnvironmentIdentityVersion &&
-                 status->occupancy_semantics_version ==
-                   raystar_interfaces::kOccupancySemanticsVersion &&
-                 status->geometry_semantics_version ==
-                   raystar_interfaces::kGeometrySemanticsVersion &&
-                 status->topology_semantics_version ==
-                   raystar_interfaces::kTopologySemanticsVersion;
+      admitted =
+        status && raystar_interfaces::mapIdsEqual(status->map_id, expected_id) &&
+        status->occupied_threshold == 99U &&
+        status->environment_identity_version == raystar_interfaces::kEnvironmentIdentityVersion &&
+        status->occupancy_semantics_version == raystar_interfaces::kOccupancySemanticsVersion &&
+        status->geometry_semantics_version == raystar_interfaces::kGeometrySemanticsVersion &&
+        status->topology_semantics_version == raystar_interfaces::kTopologySemanticsVersion;
     });
   auto map_publisher = node->create_publisher<nav_msgs::msg::OccupancyGrid>(
     map_topic, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local());
@@ -586,8 +583,8 @@ static void expectStableSmallGridResponses(const RaystarService::Response& first
   const auto& first_info = first.result_info;
   const auto& second_info = second.result_info;
   EXPECT_TRUE(raystar_interfaces::mapIdsEqual(first_info.map_id, second_info.map_id));
-  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-    first_info.environment_id, second_info.environment_id));
+  EXPECT_TRUE(
+    raystar_interfaces::environmentIdsEqual(first_info.environment_id, second_info.environment_id));
   EXPECT_EQ(first_info.status, second_info.status);
   EXPECT_EQ(first_info.limits_reached, second_info.limits_reached);
   EXPECT_EQ(first_info.request_satisfied, second_info.request_satisfied);
@@ -599,8 +596,7 @@ static void expectStableSmallGridResponses(const RaystarService::Response& first
   EXPECT_EQ(first_info.found_path_count, second_info.found_path_count);
   EXPECT_EQ(first_info.returned_path_count, second_info.returned_path_count);
   EXPECT_EQ(first_info.search_mode, second_info.search_mode);
-  EXPECT_DOUBLE_EQ(first_info.requested_max_path_length,
-                   second_info.requested_max_path_length);
+  EXPECT_DOUBLE_EQ(first_info.requested_max_path_length, second_info.requested_max_path_length);
   EXPECT_EQ(first_info.cost_bound_exhausted, second_info.cost_bound_exhausted);
   EXPECT_EQ(first.path_results.size(), second.path_results.size());
   EXPECT_EQ(first.debug_nodes.size(), second.debug_nodes.size());
@@ -646,8 +642,7 @@ static void expectSingleObstacleSimplePathContract(const nav_msgs::msg::Occupanc
   EXPECT_TRUE(info.debug_output_complete);
   EXPECT_TRUE(raystar_interfaces::mapIdsEqual(info.map_id, raystar_interfaces::computeMapId(map)));
   EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-    info.environment_id,
-    raystar_interfaces::computeEnvironmentId(map, 99, false)));
+    info.environment_id, raystar_interfaces::computeEnvironmentId(map, 99, false)));
   EXPECT_TRUE(std::isfinite(info.map_time_ms));
   EXPECT_GE(info.map_time_ms, 0.0);
   EXPECT_TRUE(std::isfinite(info.plan_time_ms));
@@ -833,8 +828,8 @@ TEST_F(IntegrationTestFixture, ServiceCallReturnsPaths) {
 
 TEST_F(IntegrationTestFixture, FinalPublicCostSortsAffineRoundingReversal) {
   auto node = std::make_shared<rclcpp::Node>("public_cost_order_client");
-  auto client = node->create_client<RaystarService>(
-    raystarEndpoint(main_namespace_, "get_raystar_paths"));
+  auto client =
+    node->create_client<RaystarService>(raystarEndpoint(main_namespace_, "get_raystar_paths"));
   ASSERT_TRUE(client->wait_for_service(2s));
 
   auto request = std::make_shared<RaystarService::Request>();
@@ -853,8 +848,7 @@ TEST_F(IntegrationTestFixture, FinalPublicCostSortsAffineRoundingReversal) {
   map.info.origin.orientation.w = 1.0;
   map.data.assign(static_cast<size_t>(map.info.width) * map.info.height, 0);
   for (size_t y = 3; y < 14; ++y) {
-    for (size_t x = 3; x < 14; ++x)
-      map.data[y * map.info.width + x] = 100;
+    for (size_t x = 3; x < 14; ++x) map.data[y * map.info.width + x] = 100;
   }
   const auto world_x = [&](double grid_x) {
     return std::fma(grid_x, resolution, map.info.origin.position.x);
@@ -911,8 +905,7 @@ TEST_F(IntegrationTestFixture, GoalSetActionReturnsOrderedPerGoalCertificates) {
   const auto invalid_wrapped = invalid_result_future.get();
   EXPECT_EQ(invalid_wrapped.code, rclcpp_action::ResultCode::ABORTED);
   ASSERT_NE(invalid_wrapped.result, nullptr);
-  EXPECT_EQ(invalid_wrapped.result->result_info.status,
-            PlanningResultInfo::STATUS_INVALID_REQUEST);
+  EXPECT_EQ(invalid_wrapped.result->result_info.status, PlanningResultInfo::STATUS_INVALID_REQUEST);
   EXPECT_FALSE(invalid_wrapped.result->success);
   EXPECT_TRUE(invalid_wrapped.result->goal_results.empty());
 
@@ -929,8 +922,7 @@ TEST_F(IntegrationTestFixture, GoalSetActionReturnsOrderedPerGoalCertificates) {
   ASSERT_NE(wrapped.result, nullptr);
   EXPECT_TRUE(wrapped.result->success) << wrapped.result->message;
   EXPECT_EQ(wrapped.result->requested_start, valid_goal.start);
-  EXPECT_EQ(wrapped.result->requested_allow_self_crossing,
-            valid_goal.allow_self_crossing);
+  EXPECT_EQ(wrapped.result->requested_allow_self_crossing, valid_goal.allow_self_crossing);
   EXPECT_EQ(wrapped.result->requested_allow_unknown, valid_goal.allow_unknown);
   EXPECT_EQ(wrapped.result->result_info.requested_goal_count, 2u);
   EXPECT_EQ(wrapped.result->result_info.returned_goal_count, 2u);
@@ -938,10 +930,10 @@ TEST_F(IntegrationTestFixture, GoalSetActionReturnsOrderedPerGoalCertificates) {
   EXPECT_TRUE(wrapped.result->result_info.search_complete);
   EXPECT_TRUE(wrapped.result->result_info.output_complete);
   EXPECT_TRUE(wrapped.result->result_info.request_satisfied);
-  const auto expected_environment_id = raystar_interfaces::computeEnvironmentId(
-    makeTestGrid(), 99, false);
-  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-    wrapped.result->result_info.environment_id, expected_environment_id));
+  const auto expected_environment_id =
+    raystar_interfaces::computeEnvironmentId(makeTestGrid(), 99, false);
+  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(wrapped.result->result_info.environment_id,
+                                                      expected_environment_id));
   ASSERT_EQ(wrapped.result->goal_results.size(), 2u);
   for (size_t i = 0; i < wrapped.result->goal_results.size(); ++i) {
     const auto& goal_result = wrapped.result->goal_results[i];
@@ -951,8 +943,8 @@ TEST_F(IntegrationTestFixture, GoalSetActionReturnsOrderedPerGoalCertificates) {
     EXPECT_TRUE(goal_result.result_info.cost_bound_exhausted);
     EXPECT_TRUE(goal_result.result_info.output_complete);
     EXPECT_TRUE(goal_result.result_info.request_satisfied);
-    EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-      goal_result.result_info.environment_id, expected_environment_id));
+    EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(goal_result.result_info.environment_id,
+                                                        expected_environment_id));
     EXPECT_FALSE(goal_result.path_results.empty());
     EXPECT_DOUBLE_EQ(goal_result.goal.pose.position.y, i == 0 ? 14.5 : 16.5);
   }
@@ -1039,8 +1031,7 @@ TEST_F(IntegrationTestFixture, GoalSetAllUnreachableStillUsesSucceededTransport)
     disconnected_map.data[y * disconnected_map.info.width + 18] = 100;
     disconnected_map.data[y * disconnected_map.info.width + 26] = 100;
   }
-  ASSERT_TRUE(cacheMapAndWait(
-    executor, node, disconnected_map, spawned.node_namespace, 5s));
+  ASSERT_TRUE(cacheMapAndWait(executor, node, disconnected_map, spawned.node_namespace, 5s));
 
   auto goal = makeTestGoalSetActionGoal();
   goal.map_id = raystar_interfaces::computeMapId(disconnected_map);
@@ -1094,13 +1085,11 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   const auto planning_wrapped = planning_result_future.get();
   ASSERT_EQ(planning_wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
   ASSERT_NE(planning_wrapped.result, nullptr);
-  ASSERT_EQ(planning_wrapped.result->path_results.size(), 2u)
-    << planning_wrapped.result->message;
+  ASSERT_EQ(planning_wrapped.result->path_results.size(), 2u) << planning_wrapped.result->message;
 
   RaystarTransitionAction::Goal transition_goal;
   transition_goal.map_id = planning_goal.map_id;
-  transition_goal.expected_environment_id =
-    planning_wrapped.result->result_info.environment_id;
+  transition_goal.expected_environment_id = planning_wrapped.result->result_info.environment_id;
   transition_goal.allow_unknown = false;
   for (const auto& path_result : planning_wrapped.result->path_results) {
     ASSERT_GE(path_result.topology_path.poses.size(), 2u);
@@ -1131,8 +1120,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   const auto wrapped = transition_result_future.get();
 
   const auto feedback_deadline = std::chrono::steady_clock::now() + 2s;
-  while ((feedback_messages.empty() ||
-          feedback_messages.back()->completed_transition_count != 2u ||
+  while ((feedback_messages.empty() || feedback_messages.back()->completed_transition_count != 2u ||
           feedback_messages.back()->stage != "transition batch complete") &&
          std::chrono::steady_clock::now() < feedback_deadline) {
     executor.spin_some(20ms);
@@ -1142,8 +1130,8 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   ASSERT_NE(wrapped.result, nullptr);
   EXPECT_TRUE(wrapped.result->success) << wrapped.result->message;
   EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_COMPLETE);
-  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-    wrapped.result->environment_id, transition_goal.expected_environment_id));
+  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(wrapped.result->environment_id,
+                                                      transition_goal.expected_environment_id));
   EXPECT_EQ(wrapped.result->requested_transition_count, 2u);
   EXPECT_EQ(wrapped.result->completed_transition_count, 2u);
   ASSERT_EQ(wrapped.result->transitions.size(), 2u);
@@ -1189,24 +1177,20 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   const auto& winding_transition = wrapped.result->transitions[1];
   bool winding_repeats_triangle_occurrence = false;
   for (size_t first = 0; first < winding_transition.triangle_occurrences.size(); ++first) {
-    for (size_t second = first + 1;
-         second < winding_transition.triangle_occurrences.size();
+    for (size_t second = first + 1; second < winding_transition.triangle_occurrences.size();
          ++second) {
       winding_repeats_triangle_occurrence =
-        winding_repeats_triangle_occurrence ||
-        winding_transition.triangle_occurrences[first] ==
-          winding_transition.triangle_occurrences[second];
+        winding_repeats_triangle_occurrence || winding_transition.triangle_occurrences[first] ==
+                                                 winding_transition.triangle_occurrences[second];
     }
   }
   EXPECT_TRUE(winding_repeats_triangle_occurrence)
     << "The ROS UPS certificate must retain lifted winding occurrences";
-  EXPECT_NE(winding_transition.message.find("independently retraced"),
-            std::string::npos)
+  EXPECT_NE(winding_transition.message.find("independently retraced"), std::string::npos)
     << winding_transition.message;
   for (const auto& transition : wrapped.result->transitions) {
     SCOPED_TRACE(transition.message);
-    EXPECT_EQ(transition.status,
-              raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
+    EXPECT_EQ(transition.status, raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
     EXPECT_TRUE(transition.collision_free);
     EXPECT_TRUE(transition.homotopy_preserved);
     EXPECT_TRUE(transition.locally_shortest);
@@ -1214,13 +1198,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
     if (transition.path.poses.size() >= 2) {
       expectIndependentCollisionFreePath(makeTestGrid(), transition.path, false);
       raystar::ConservativeBinary64PathLength length_certificate;
-      for (std::size_t pose_index = 1;
-           pose_index < transition.path.poses.size();
-           ++pose_index) {
+      for (std::size_t pose_index = 1; pose_index < transition.path.poses.size(); ++pose_index) {
         const auto& first = transition.path.poses[pose_index - 1].pose.position;
         const auto& second = transition.path.poses[pose_index].pose.position;
-        ASSERT_TRUE(length_certificate.addSegment(
-          first.x, first.y, second.x, second.y));
+        ASSERT_TRUE(length_certificate.addSegment(first.x, first.y, second.x, second.y));
       }
       double certified_length = std::numeric_limits<double>::quiet_NaN();
       ASSERT_TRUE(length_certificate.upperBound(certified_length));
@@ -1245,11 +1226,9 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   EXPECT_FALSE(mismatched_wrapped.result->success);
   EXPECT_EQ(mismatched_wrapped.result->status,
             RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
-  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(
-    mismatched_wrapped.result->environment_id,
-    transition_goal.expected_environment_id));
-  EXPECT_NE(mismatched_wrapped.result->message.find("expected_environment_id"),
-            std::string::npos);
+  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(mismatched_wrapped.result->environment_id,
+                                                      transition_goal.expected_environment_id));
+  EXPECT_NE(mismatched_wrapped.result->message.find("expected_environment_id"), std::string::npos);
 }
 
 TEST_F(IntegrationTestFixture, TransitionGraphRejectsObstacleCrossingSharedPrefix) {
@@ -1274,8 +1253,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsObstacleCrossingSharedPrefi
     // The shared 5.5,15.5 -> 25.5,15.5 segment crosses the central
     // obstacle. Both endpoints and the post-prefix pairwise reference are in
     // free space, so validating only alpha_a^{-1} * alpha_b would miss it.
-    result.poses = {
-      pose(5.5, 15.5), pose(25.5, 15.5), pose(25.5, endpoint_y)};
+    result.poses = {pose(5.5, 15.5), pose(25.5, 15.5), pose(25.5, endpoint_y)};
     return result;
   };
 
@@ -1299,14 +1277,11 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsObstacleCrossingSharedPrefi
   EXPECT_EQ(wrapped.code, rclcpp_action::ResultCode::ABORTED);
   ASSERT_NE(wrapped.result, nullptr);
   EXPECT_FALSE(wrapped.result->success);
-  EXPECT_EQ(wrapped.result->status,
-            RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
+  EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
   EXPECT_EQ(wrapped.result->completed_transition_count, 0u);
   EXPECT_TRUE(wrapped.result->transitions.empty());
-  EXPECT_NE(wrapped.result->message.find("Tether configuration 0"),
-            std::string::npos);
-  EXPECT_NE(wrapped.result->message.find("collision-free reference"),
-            std::string::npos);
+  EXPECT_NE(wrapped.result->message.find("Tether configuration 0"), std::string::npos);
+  EXPECT_NE(wrapped.result->message.find("collision-free reference"), std::string::npos);
 }
 
 TEST_F(IntegrationTestFixture, TransitionGraphAcceptsDegenerateHomeIdentityReference) {
@@ -1346,12 +1321,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphAcceptsDegenerateHomeIdentityRefer
   EXPECT_EQ(wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
   ASSERT_NE(wrapped.result, nullptr);
   EXPECT_TRUE(wrapped.result->success) << wrapped.result->message;
-  EXPECT_EQ(wrapped.result->status,
-            RaystarTransitionAction::Result::STATUS_COMPLETE);
+  EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_COMPLETE);
   ASSERT_EQ(wrapped.result->transitions.size(), 1u);
   const auto& transition = wrapped.result->transitions[0];
-  EXPECT_EQ(transition.status,
-            raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
+  EXPECT_EQ(transition.status, raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
   EXPECT_DOUBLE_EQ(transition.path_length, 0.0);
   ASSERT_EQ(transition.path.poses.size(), 1u);
   EXPECT_DOUBLE_EQ(transition.path.poses[0].pose.position.x, 5.5);
@@ -1386,14 +1359,10 @@ TEST_F(IntegrationTestFixture, TransitionPathLengthCoversSerializedAffineRoundin
   const auto pose_at = [&](double grid_x, double grid_y) {
     geometry_msgs::msg::PoseStamped pose;
     pose.header.frame_id = "map";
-    pose.pose.position.x = std::fma(
-      grid_x,
-      static_cast<double>(map.info.resolution),
-      map.info.origin.position.x);
-    pose.pose.position.y = std::fma(
-      grid_y,
-      static_cast<double>(map.info.resolution),
-      map.info.origin.position.y);
+    pose.pose.position.x =
+      std::fma(grid_x, static_cast<double>(map.info.resolution), map.info.origin.position.x);
+    pose.pose.position.y =
+      std::fma(grid_y, static_cast<double>(map.info.resolution), map.info.origin.position.y);
     pose.pose.orientation.w = 1.0;
     return pose;
   };
@@ -1429,8 +1398,7 @@ TEST_F(IntegrationTestFixture, TransitionPathLengthCoversSerializedAffineRoundin
   ASSERT_TRUE(wrapped.result->success) << wrapped.result->message;
   ASSERT_EQ(wrapped.result->transitions.size(), 1u);
   const auto& transition = wrapped.result->transitions.front();
-  ASSERT_EQ(transition.status,
-            raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
+  ASSERT_EQ(transition.status, raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
   ASSERT_EQ(transition.path.poses.size(), 2u);
 
   raystar::ConservativeBinary64PathLength certificate;
@@ -1486,11 +1454,9 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsNonTautConfigurationReferen
   EXPECT_EQ(wrapped.code, rclcpp_action::ResultCode::ABORTED);
   ASSERT_NE(wrapped.result, nullptr);
   EXPECT_FALSE(wrapped.result->success);
-  EXPECT_EQ(wrapped.result->status,
-            RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
+  EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
   EXPECT_TRUE(wrapped.result->transitions.empty());
-  EXPECT_NE(wrapped.result->message.find("locally shortest (taut)"),
-            std::string::npos);
+  EXPECT_NE(wrapped.result->message.find("locally shortest (taut)"), std::string::npos);
 }
 
 TEST_F(IntegrationTestFixture, ExhaustedSearchReportsFewerPathsWithoutStringParsing) {
@@ -1583,8 +1549,7 @@ TEST_F(IntegrationTestFixture, CostBoundedEnumerationIsCertifiedAcrossServiceAnd
   auto below_request = makeTestRequest();
   below_request->search_mode = RaystarService::Request::SEARCH_MODE_ALL_WITHIN_LENGTH;
   below_request->k = 0;
-  below_request->max_path_length =
-    std::nextafter(baseline->path_results.front().cost, 0.0);
+  below_request->max_path_length = std::nextafter(baseline->path_results.front().cost, 0.0);
   const auto below = callService(executor, service_client, below_request);
   ASSERT_NE(below, nullptr);
   EXPECT_FALSE(below->success);
@@ -1681,14 +1646,12 @@ TEST_F(IntegrationTestFixture, RadicalSumBoundarySurvivesServiceAndSharedTreeAct
   EXPECT_TRUE(goal_result.result_info.request_satisfied);
   ASSERT_EQ(goal_result.path_results.size(), 1u);
   EXPECT_DOUBLE_EQ(goal_result.path_results.front().cost, inclusive_bound);
-  EXPECT_EQ(goal_result.path_results.front().path,
-            goal_result.path_results.front().topology_path);
+  EXPECT_EQ(goal_result.path_results.front().path, goal_result.path_results.front().topology_path);
 }
 
 TEST_F(IntegrationTestFixture, MetricSearchSupersetExtrasRemainCompleteAndResourceNeutral) {
-  const auto spawned = spawnRaystarNode(
-    "metric_search_superset",
-    {"max_path_points:=4", "max_cost_bounded_paths:=1"});
+  const auto spawned =
+    spawnRaystarNode("metric_search_superset", {"max_path_points:=4", "max_cost_bounded_paths:=1"});
   ASSERT_GT(spawned.pid, 0) << "Unable to exec metric-superset raystar_node: "
                             << (spawned.launch_errno ? std::strerror(spawned.launch_errno)
                                                      : "fork/pipe failure");
@@ -1727,8 +1690,7 @@ TEST_F(IntegrationTestFixture, MetricSearchSupersetExtrasRemainCompleteAndResour
   ASSERT_TRUE(accepted->success) << accepted->message;
   ASSERT_EQ(accepted->path_results.size(), 1u);
   EXPECT_DOUBLE_EQ(accepted->path_results.front().cost, inclusive_bound);
-  EXPECT_EQ(accepted->path_results.front().path,
-            accepted->path_results.front().topology_path);
+  EXPECT_EQ(accepted->path_results.front().path, accepted->path_results.front().topology_path);
   EXPECT_TRUE(accepted->result_info.output_complete);
   EXPECT_TRUE(accepted->result_info.request_satisfied);
 
@@ -1798,17 +1760,15 @@ TEST_F(IntegrationTestFixture, SerializedLengthCertificateFiltersRoundedDownSear
   request->k = 1;
 
   // Exact squared length is 1 + 2^-54, although nearest-rounded hypot is 1.
-  ASSERT_DOUBLE_EQ(
-    std::hypot(request->goal.pose.position.x - request->start.pose.position.x,
-               request->goal.pose.position.y - request->start.pose.position.y),
-    1.0);
+  ASSERT_DOUBLE_EQ(std::hypot(request->goal.pose.position.x - request->start.pose.position.x,
+                              request->goal.pose.position.y - request->start.pose.position.y),
+                   1.0);
   const auto baseline = callService(executor, client, request);
   ASSERT_NE(baseline, nullptr);
   ASSERT_TRUE(baseline->success) << baseline->message;
   ASSERT_EQ(baseline->path_results.size(), 1u);
-  EXPECT_DOUBLE_EQ(
-    baseline->path_results.front().cost,
-    std::nextafter(1.0, std::numeric_limits<double>::infinity()));
+  EXPECT_DOUBLE_EQ(baseline->path_results.front().cost,
+                   std::nextafter(1.0, std::numeric_limits<double>::infinity()));
   expectStructuredResultInvariants(*baseline);
 
   request->search_mode = RaystarService::Request::SEARCH_MODE_ALL_WITHIN_LENGTH;
@@ -2292,17 +2252,15 @@ TEST_F(IntegrationTestFixture, PreservesContinuousEndpointsAndMetricCost) {
   EXPECT_DOUBLE_EQ(bounded->path_results.front().cost, path_result.cost);
   for (const auto& bounded_path : bounded->path_results) {
     EXPECT_LE(bounded_path.cost, request->max_path_length);
-    for (const auto* serialized_path :
-         {&bounded_path.path, &bounded_path.topology_path}) {
+    for (const auto* serialized_path : {&bounded_path.path, &bounded_path.topology_path}) {
       long double serialized_length = 0.0L;
       for (size_t index = 1; index < serialized_path->poses.size(); ++index) {
         const auto& left = serialized_path->poses[index - 1].pose.position;
         const auto& right = serialized_path->poses[index].pose.position;
-        serialized_length += static_cast<long double>(
-          std::hypot(right.x - left.x, right.y - left.y));
+        serialized_length +=
+          static_cast<long double>(std::hypot(right.x - left.x, right.y - left.y));
       }
-      EXPECT_LE(serialized_length,
-                static_cast<long double>(request->max_path_length));
+      EXPECT_LE(serialized_length, static_cast<long double>(request->max_path_length));
     }
   }
   EXPECT_TRUE(bounded->result_info.cost_bound_exhausted);
@@ -2800,8 +2758,7 @@ TEST_F(IntegrationTestFixture, DynamicParametersAreDescribedAndUpdatedAtomically
   const auto occupancy_policy_update = occupancy_policy_update_future.get();
   EXPECT_FALSE(occupancy_policy_update.successful);
   EXPECT_FALSE(occupancy_policy_update.reason.empty());
-  auto threshold_after_update_future =
-    parameter_client->get_parameters({"occupied_threshold"});
+  auto threshold_after_update_future = parameter_client->get_parameters({"occupied_threshold"});
   ASSERT_TRUE(waitForFuture(executor, threshold_after_update_future, 5s));
   const auto threshold_after_update = threshold_after_update_future.get();
   ASSERT_EQ(threshold_after_update.size(), 1u);
@@ -2964,19 +2921,16 @@ TEST_F(IntegrationTestFixture, MaxNodesStopsExpansionAndLimitedServerRecovers) {
     << limited_response->message;
 
   auto bounded_limited_request = makeTestRequest();
-  bounded_limited_request->search_mode =
-    RaystarService::Request::SEARCH_MODE_ALL_WITHIN_LENGTH;
+  bounded_limited_request->search_mode = RaystarService::Request::SEARCH_MODE_ALL_WITHIN_LENGTH;
   bounded_limited_request->k = 0;
   bounded_limited_request->max_path_length = 1000.0;
-  const auto bounded_limited_response =
-    callService(executor, client, bounded_limited_request);
+  const auto bounded_limited_response = callService(executor, client, bounded_limited_request);
   ASSERT_NE(bounded_limited_response, nullptr);
   EXPECT_FALSE(bounded_limited_response->success);
   EXPECT_EQ(bounded_limited_response->result_info.status,
             PlanningResultInfo::STATUS_PARTIAL_SEARCH);
-  EXPECT_NE(bounded_limited_response->result_info.limits_reached &
-              PlanningResultInfo::LIMIT_MAX_NODES,
-            0u);
+  EXPECT_NE(
+    bounded_limited_response->result_info.limits_reached & PlanningResultInfo::LIMIT_MAX_NODES, 0u);
   EXPECT_FALSE(bounded_limited_response->result_info.search_complete);
   EXPECT_FALSE(bounded_limited_response->result_info.cost_bound_exhausted);
   EXPECT_TRUE(bounded_limited_response->result_info.output_complete);
@@ -2998,8 +2952,7 @@ TEST_F(IntegrationTestFixture, MaxNodesStopsExpansionAndLimitedServerRecovers) {
 }
 
 TEST_F(IntegrationTestFixture, MaxCostBoundedPathsReturnsUncertifiedPartialSearch) {
-  const auto spawned =
-    spawnRaystarNode("bounded_path_limited", {"max_cost_bounded_paths:=1"});
+  const auto spawned = spawnRaystarNode("bounded_path_limited", {"max_cost_bounded_paths:=1"});
   ASSERT_GT(spawned.pid, 0) << "Unable to exec max-paths raystar_node: "
                             << (spawned.launch_errno ? std::strerror(spawned.launch_errno)
                                                      : "fork/pipe failure");

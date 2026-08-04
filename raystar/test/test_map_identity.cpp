@@ -90,16 +90,13 @@ TEST(EnvironmentIdentity, IsStableAcrossTimestampOnlyRepublishes) {
   ++republished_map.header.stamp.sec;
   ++republished_map.info.map_load_time.nanosec;
 
-  const auto baseline =
-    raystar_interfaces::computeEnvironmentId(baseline_map, 99, false);
-  const auto republished =
-    raystar_interfaces::computeEnvironmentId(republished_map, 99, false);
+  const auto baseline = raystar_interfaces::computeEnvironmentId(baseline_map, 99, false);
+  const auto republished = raystar_interfaces::computeEnvironmentId(republished_map, 99, false);
 
   EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(baseline, republished));
   EXPECT_FALSE(raystar_interfaces::isZeroEnvironmentId(baseline));
-  EXPECT_FALSE(raystar_interfaces::mapIdsEqual(
-    raystar_interfaces::computeMapId(baseline_map),
-    raystar_interfaces::computeMapId(republished_map)));
+  EXPECT_FALSE(raystar_interfaces::mapIdsEqual(raystar_interfaces::computeMapId(baseline_map),
+                                               raystar_interfaces::computeMapId(republished_map)));
 }
 
 TEST(EnvironmentIdentity, BindsMapPolicyAndSemanticVersions) {

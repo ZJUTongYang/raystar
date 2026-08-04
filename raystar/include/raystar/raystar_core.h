@@ -455,21 +455,13 @@ struct SearchObjective {
     return SearchObjective{SearchMode::top_k, requested_k, 0.0, {}};
   }
 
-  [[nodiscard]] static SearchObjective allWithinCost(
-    double maximum_cost, BoundedPathAdmissionCallback admission = {}) {
-    return SearchObjective{
-      SearchMode::all_within_cost, 0, maximum_cost, std::move(admission)};
+  [[nodiscard]] static SearchObjective allWithinCost(double maximum_cost,
+                                                     BoundedPathAdmissionCallback admission = {}) {
+    return SearchObjective{SearchMode::all_within_cost, 0, maximum_cost, std::move(admission)};
   }
 };
 
-enum class PlanningLimitReached {
-  none,
-  max_nodes,
-  timeout,
-  cancelled,
-  max_path_points,
-  max_paths
-};
+enum class PlanningLimitReached { none, max_nodes, timeout, cancelled, max_path_points, max_paths };
 
 enum class PlanningCompletion {
   none,
@@ -577,12 +569,11 @@ public:
   // Expand one topology tree from `start` and attach every requested goal to
   // each expanded visibility region. Goal-set lower bounds drive one shared
   // priority queue; results remain separated and carry per-goal completion.
-  MultiGoalPlanResult planToGoalsWithinCosts(
-    const GridMap& grid_map,
-    const PlanEndpoint& start,
-    const std::vector<CostBoundedGoal>& goals,
-    bool allow_self_crossing,
-    const PlanningLimits& limits = PlanningLimits{});
+  MultiGoalPlanResult planToGoalsWithinCosts(const GridMap& grid_map,
+                                             const PlanEndpoint& start,
+                                             const std::vector<CostBoundedGoal>& goals,
+                                             bool allow_self_crossing,
+                                             const PlanningLimits& limits = PlanningLimits{});
 
   // Construct alpha_a^{-1} * alpha_b after removing their exact common
   // prefix, then run portal tracing and funnel shortening in the Polymap's

@@ -34,8 +34,8 @@
 
 namespace {
 
-using raystar::GridMap;
 using raystar::CostBoundedGoal;
+using raystar::GridMap;
 using raystar::MultiGoalPlanResult;
 using raystar::PathSolution;
 using raystar::PlanEndpoint;
@@ -141,8 +141,7 @@ std::string defaultTestmapPath() {
     "test/testmap.pgm";
   std::error_code error;
   if (!std::filesystem::is_regular_file(installed, error)) {
-    throw std::runtime_error(
-            "Installed Raystar profiling map is missing: " + installed.string());
+    throw std::runtime_error("Installed Raystar profiling map is missing: " + installed.string());
   }
   return installed.string();
 }
@@ -657,8 +656,7 @@ void enforceDeterminism(const TrialRecord& baseline, TrialRecord& record) {
                        record.max_path_cost == baseline.max_path_cost &&
                        record.goal_count == baseline.goal_count &&
                        record.success == baseline.success && record.outcome == baseline.outcome &&
-                       record.limit == baseline.limit &&
-                       record.completion == baseline.completion &&
+                       record.limit == baseline.limit && record.completion == baseline.completion &&
                        record.request_satisfied == baseline.request_satisfied &&
                        record.search_complete == baseline.search_complete &&
                        record.found_paths == baseline.found_paths &&
@@ -709,8 +707,8 @@ std::vector<CostBoundedGoal> makeProfileGoals(const Scenario& scenario,
   const int height = static_cast<int>(scenario.map.height);
   for (int y = height - 2; y >= 1 && goals.size() < goal_count; --y) {
     for (int x = width - 2; x >= 1 && goals.size() < goal_count; --x) {
-      const std::size_t index = static_cast<std::size_t>(y) * scenario.map.width +
-                                static_cast<std::size_t>(x);
+      const std::size_t index =
+        static_cast<std::size_t>(y) * scenario.map.width + static_cast<std::size_t>(x);
       const std::pair<int, int> cell{x, y};
       if (scenario.map.data[index] != 0 || selected_cells.count(cell) != 0)
         continue;
@@ -741,8 +739,8 @@ TrialRecord runSingleTrial(const Scenario& scenario,
   const SearchObjective objective = mode == ProfileMode::top_k
                                       ? SearchObjective::topK(k)
                                       : SearchObjective::allWithinCost(max_path_cost);
-  const PlanResult result = core.plan(
-    scenario.map, scenario.start, scenario.goal, objective, false, limits);
+  const PlanResult result =
+    core.plan(scenario.map, scenario.start, scenario.goal, objective, false, limits);
   const auto wall_end = Clock::now();
 
   record.success = result.success;
@@ -764,12 +762,11 @@ TrialRecord runSingleTrial(const Scenario& scenario,
   record.per_goal_limits.push_back(result.limit_reached);
   record.per_goal_completions.push_back(result.completion);
   record.per_goal_found_paths.push_back(result.path_solutions.size());
-  record.request_satisfied =
-    mode == ProfileMode::top_k
-      ? result.outcome == PlanningOutcome::complete &&
-          result.completion == PlanningCompletion::requested_k_reached &&
-          record.found_paths == static_cast<std::size_t>(k)
-      : goal_complete;
+  record.request_satisfied = mode == ProfileMode::top_k
+                               ? result.outcome == PlanningOutcome::complete &&
+                                   result.completion == PlanningCompletion::requested_k_reached &&
+                                   record.found_paths == static_cast<std::size_t>(k)
+                               : goal_complete;
   record.search_complete = goal_complete;
   const auto [rss_available, process_hwm_kib] = processHwmKib();
   record.rss_available = rss_available;
@@ -827,8 +824,8 @@ bool validateMultiTerminalConsistency(const raystar::RaystarCore& core,
     any_limit = any_limit || goal_result.outcome == PlanningOutcome::limit_reached;
     any_invalid = any_invalid || goal_result.outcome == PlanningOutcome::invalid_request;
     any_failed = any_failed || goal_result.outcome == PlanningOutcome::failed;
-    aggregate_limit_observed = aggregate_limit_observed ||
-                               goal_result.limit_reached == result.limit_reached;
+    aggregate_limit_observed =
+      aggregate_limit_observed || goal_result.limit_reached == result.limit_reached;
 
     if (goal_result.outcome == PlanningOutcome::complete) {
       if (goal_result.path_solutions.empty() ||
@@ -891,10 +888,8 @@ bool validateMultiScenarioContract(const MultiGoalPlanResult& result,
       return fail("one or more goals lack a complete bounded-enumeration certificate");
     }
     for (const auto& solution : goal_result.path_solutions) {
-      const double tolerance = 1e-9 *
-                               std::max({1.0,
-                                         std::abs(goals[index].max_path_cost),
-                                         std::abs(solution.path_cost_)});
+      const double tolerance =
+        1e-9 * std::max({1.0, std::abs(goals[index].max_path_cost), std::abs(solution.path_cost_)});
       if (!std::isfinite(solution.path_cost_) ||
           solution.path_cost_ > goals[index].max_path_cost + tolerance) {
         return fail("multi-goal enumeration returned a path above its inclusive bound");
@@ -928,8 +923,8 @@ TrialRecord runMultiTrial(const Scenario& scenario,
   record.outcome = result.outcome;
   record.limit = result.limit_reached;
   for (const auto& goal_result : result.goal_results) {
-    const bool goal_complete = hasBoundedCompletion(
-      goal_result.outcome, goal_result.limit_reached, goal_result.completion);
+    const bool goal_complete =
+      hasBoundedCompletion(goal_result.outcome, goal_result.limit_reached, goal_result.completion);
     record.per_goal_complete.push_back(goal_complete);
     record.per_goal_outcomes.push_back(goal_result.outcome);
     record.per_goal_limits.push_back(goal_result.limit_reached);
@@ -967,8 +962,7 @@ TrialRecord runMultiTrial(const Scenario& scenario,
     if (record.diagnostic.empty())
       record.diagnostic = "planner returned paths for an unrequested goal";
   }
-  record.terminal_consistency_pass =
-    validateMultiTerminalConsistency(core, result, goals, record);
+  record.terminal_consistency_pass = validateMultiTerminalConsistency(core, result, goals, record);
   record.scenario_contract_pass = validateMultiScenarioContract(result, goals, record);
   record.accepted = record.path_validation_pass && record.terminal_consistency_pass &&
                     record.scenario_contract_pass && record.determinism_pass;
@@ -987,7 +981,7 @@ std::size_t occupiedCellCount(const GridMap& map) {
     std::count_if(map.data.begin(), map.data.end(), [](std::uint8_t value) { return value != 0; }));
 }
 
-template<typename Values, typename Formatter>
+template <typename Values, typename Formatter>
 std::string joinPipeSeparated(const Values& values, Formatter formatter) {
   std::ostringstream stream;
   for (std::size_t index = 0; index < values.size(); ++index) {
@@ -1026,8 +1020,8 @@ void printRecord(const Scenario& scenario,
     record.per_goal_limits, [](PlanningLimitReached value) { return limitName(value); });
   const std::string per_goal_completions = joinPipeSeparated(
     record.per_goal_completions, [](PlanningCompletion value) { return completionName(value); });
-  const std::string per_goal_found_paths = joinPipeSeparated(
-    record.per_goal_found_paths, [](std::size_t value) { return value; });
+  const std::string per_goal_found_paths =
+    joinPipeSeparated(record.per_goal_found_paths, [](std::size_t value) { return value; });
 
   std::cout << std::fixed << std::setprecision(3) << "3," << scenario.name << ','
             << scenario.map.width << ',' << scenario.map.height << ',' << scenario.map.resolution
@@ -1049,12 +1043,11 @@ void printRecord(const Scenario& scenario,
             << (record.rss_available ? "true" : "false") << ',' << record.process_hwm_kib_after_plan
             << ',' << record.verdict << ',' << (record.accepted ? "PASS" : "FAIL") << ','
             << modeName(record.mode) << ',' << std::defaultfloat
-            << std::setprecision(std::numeric_limits<double>::max_digits10)
-            << record.max_path_cost << ',' << record.goal_count << ',' << record.completion << ','
-            << per_goal_complete << ',' << per_goal_outcomes << ',' << per_goal_limits << ','
-            << per_goal_completions << ',' << per_goal_found_paths << ','
-            << limits.max_cost_bounded_paths << ',' << limits.max_path_points << ','
-            << limits.max_multi_goal_count << '\n';
+            << std::setprecision(std::numeric_limits<double>::max_digits10) << record.max_path_cost
+            << ',' << record.goal_count << ',' << record.completion << ',' << per_goal_complete
+            << ',' << per_goal_outcomes << ',' << per_goal_limits << ',' << per_goal_completions
+            << ',' << per_goal_found_paths << ',' << limits.max_cost_bounded_paths << ','
+            << limits.max_path_points << ',' << limits.max_multi_goal_count << '\n';
   std::cout.flush();
 }
 
@@ -1083,9 +1076,8 @@ std::size_t parsePositiveSize(const std::string& value, const std::string& optio
   }
   if (consumed != value.size() || parsed == 0 ||
       parsed > static_cast<unsigned long long>(std::numeric_limits<int>::max())) {
-    throw std::invalid_argument(
-            option + " must be between 1 and " +
-            std::to_string(std::numeric_limits<int>::max()));
+    throw std::invalid_argument(option + " must be between 1 and " +
+                                std::to_string(std::numeric_limits<int>::max()));
   }
   return static_cast<std::size_t>(parsed);
 }
@@ -1110,8 +1102,7 @@ ProfileMode parseMode(const std::string& value) {
     return ProfileMode::all_within_length;
   if (value == "multi-goal")
     return ProfileMode::multi_goal;
-  throw std::invalid_argument(
-          "--mode must be one of: top-k, all-within-length, multi-goal");
+  throw std::invalid_argument("--mode must be one of: top-k, all-within-length, multi-goal");
 }
 
 std::vector<int> parseKValues(const std::string& value) {
@@ -1219,8 +1210,7 @@ Options parseOptions(int argc, char** argv) {
         throw std::invalid_argument("--goal-count must be between 2 and 32");
       }
       if (*options.goal_count > options.max_multi_goal_count) {
-        throw std::invalid_argument(
-                "--goal-count must not exceed --max-multi-goal-count");
+        throw std::invalid_argument("--goal-count must not exceed --max-multi-goal-count");
       }
     } else if (options.goal_count) {
       throw std::invalid_argument("--goal-count is only valid in multi-goal mode");
@@ -1283,12 +1273,11 @@ int main(int argc, char** argv) {
           return runSingleTrial(scenario, options.mode, k, max_path_cost, core, limits);
         };
         const std::string case_description =
-          options.mode == ProfileMode::top_k
-            ? " K=" + std::to_string(k)
-            : " bound=" + std::to_string(max_path_cost) +
-                (options.mode == ProfileMode::multi_goal
-                   ? " goals=" + std::to_string(multi_goals.size())
-                   : "");
+          options.mode == ProfileMode::top_k ? " K=" + std::to_string(k)
+                                             : " bound=" + std::to_string(max_path_cost) +
+                                                 (options.mode == ProfileMode::multi_goal
+                                                    ? " goals=" + std::to_string(multi_goals.size())
+                                                    : "");
 
         const TrialRecord first = run_trial();
         printRecord(scenario, k, "first", 0, limits, first);
@@ -1312,8 +1301,7 @@ int main(int argc, char** argv) {
           printRecord(scenario, k, "measured", iteration + 1, limits, record);
           all_passed = all_passed && record.accepted;
           if (!record.accepted) {
-            std::cerr << scenario.name << case_description << " measured " << iteration + 1
-                      << ": "
+            std::cerr << scenario.name << case_description << " measured " << iteration + 1 << ": "
                       << record.diagnostic << '\n';
           }
         }

@@ -49,33 +49,32 @@ TEST(CompletedTransitionEnvironmentCacheTest, CanonicalizesGoalSetButMatchesEver
     7, makePolicy(), base, {second_goal, first_goal, first_goal});
   cache.store(stored_key, environment);
 
-  const TransitionEnvironmentKey reordered_key(
-    7, makePolicy(), base, {first_goal, second_goal});
+  const TransitionEnvironmentKey reordered_key(7, makePolicy(), base, {first_goal, second_goal});
   EXPECT_EQ(cache.find(reordered_key), environment);
 
   auto different_policy = makePolicy();
   different_policy.allow_unknown = true;
-  EXPECT_FALSE(cache.find(
-    TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
+  EXPECT_FALSE(
+    cache.find(TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
   different_policy = makePolicy();
   different_policy.occupied_threshold = 50;
-  EXPECT_FALSE(cache.find(
-    TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
+  EXPECT_FALSE(
+    cache.find(TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
   different_policy = makePolicy();
   --different_policy.max_map_cells;
-  EXPECT_FALSE(cache.find(
-    TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
+  EXPECT_FALSE(
+    cache.find(TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
   different_policy = makePolicy();
   --different_policy.max_map_bytes;
-  EXPECT_FALSE(cache.find(
-    TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
+  EXPECT_FALSE(
+    cache.find(TransitionEnvironmentKey(7, different_policy, base, {first_goal, second_goal})));
 
-  EXPECT_FALSE(cache.find(
-    TransitionEnvironmentKey(8, makePolicy(), base, {first_goal, second_goal})));
+  EXPECT_FALSE(
+    cache.find(TransitionEnvironmentKey(8, makePolicy(), base, {first_goal, second_goal})));
   EXPECT_FALSE(cache.find(TransitionEnvironmentKey(
     7, makePolicy(), makeEndpoint(2, 2, 2.25, 2.5), {first_goal, second_goal})));
-  EXPECT_FALSE(cache.find(TransitionEnvironmentKey(
-    7, makePolicy(), base, {makeEndpoint(5, 5, 5.25, 5.5), second_goal})));
+  EXPECT_FALSE(cache.find(
+    TransitionEnvironmentKey(7, makePolicy(), base, {makeEndpoint(5, 5, 5.25, 5.5), second_goal})));
   EXPECT_FALSE(cache.find(TransitionEnvironmentKey(7, makePolicy(), base, {first_goal})));
 }
 

@@ -104,12 +104,11 @@ bool addCertifiedSegment(ConservativeBinary64PathLength& certificate,
   return certificate.addSegment(first.first, first.second, second.first, second.second);
 }
 
-bool buildPolylineLengthCertificate(
-  const Point2d& start,
-  const std::vector<std::pair<int, int>>& turning_points,
-  const Point2d& goal,
-  ConservativeBinary64PathLength& certificate,
-  const StopToken* stop_token = nullptr) {
+bool buildPolylineLengthCertificate(const Point2d& start,
+                                    const std::vector<std::pair<int, int>>& turning_points,
+                                    const Point2d& goal,
+                                    ConservativeBinary64PathLength& certificate,
+                                    const StopToken* stop_token = nullptr) {
   Point2d previous = start;
   for (const auto& turning_point : turning_points) {
     if (stop_token && stop_token->poll())
@@ -125,13 +124,12 @@ bool buildPolylineLengthCertificate(
   return addCertifiedSegment(certificate, previous, goal);
 }
 
-bool buildCandidateLengthCertificate(
-  const Point2d& start,
-  const std::vector<Node>& nodes,
-  const Candidate& candidate,
-  const Point2d& goal,
-  ConservativeBinary64PathLength& certificate,
-  const StopToken* stop_token = nullptr) {
+bool buildCandidateLengthCertificate(const Point2d& start,
+                                     const std::vector<Node>& nodes,
+                                     const Candidate& candidate,
+                                     const Point2d& goal,
+                                     ConservativeBinary64PathLength& certificate,
+                                     const StopToken* stop_token = nullptr) {
   if (stop_token && stop_token->poll())
     return false;
   if (candidate.nodeIndex() < 0)
@@ -141,8 +139,7 @@ bool buildCandidateLengthCertificate(
     return false;
   const auto& node = nodes[node_index];
   const int child_index_value = candidate.childIndex();
-  if (child_index_value < 0 ||
-      static_cast<size_t>(child_index_value) >= node.children().size()) {
+  if (child_index_value < 0 || static_cast<size_t>(child_index_value) >= node.children().size()) {
     return false;
   }
 
@@ -158,7 +155,8 @@ bool buildCandidateLengthCertificate(
   }
   if (stop_token && stop_token->poll())
     return false;
-  const Point2d& child = node.children()[static_cast<size_t>(child_index_value)].endpoint().position;
+  const Point2d& child =
+    node.children()[static_cast<size_t>(child_index_value)].endpoint().position;
   return addCertifiedSegment(certificate, previous, child) &&
          addCertifiedSegment(certificate, child, goal);
 }
@@ -576,8 +574,7 @@ bool validateMultiGoalPlanRequest(const GridMap& grid_map,
   }
   if (goals.size() > limits.max_multi_goal_count) {
     error = "Invalid multi-goal request: requested " + std::to_string(goals.size()) +
-            " goals exceeds max_multi_goal_count=" +
-            std::to_string(limits.max_multi_goal_count);
+            " goals exceeds max_multi_goal_count=" + std::to_string(limits.max_multi_goal_count);
     return false;
   }
   if (!validatePlanEndpointShape(grid_map, start, "start", error))
@@ -1336,20 +1333,18 @@ OperationStatus RaystarCore::getScopedVisibilityRegion(Polymap& theMap,
   return OperationStatus::success;
 }
 
-HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(
-  const Polymap& polymap,
-  const PathSolution& alpha_a,
-  const PathSolution& alpha_b,
-  const StopToken& stop_token) {
+HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(const Polymap& polymap,
+                                                            const PathSolution& alpha_a,
+                                                            const PathSolution& alpha_b,
+                                                            const StopToken& stop_token) {
   return shortenWithinHomotopy(
     polymap, alpha_a.projectedPath(), alpha_b.projectedPath(), stop_token);
 }
 
-HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(
-  const Polymap& polymap,
-  const std::vector<Point2d>& first,
-  const std::vector<Point2d>& second,
-  const StopToken& stop_token) {
+HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(const Polymap& polymap,
+                                                            const std::vector<Point2d>& first,
+                                                            const std::vector<Point2d>& second,
+                                                            const StopToken& stop_token) {
   HomotopyShorteningResult invalid;
   if (stop_token.poll()) {
     invalid.status = HomotopyShorteningStatus::stopped;
@@ -1494,12 +1489,7 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
                              int K,
                              bool allow_self_crossing,
                              const PlanningLimits& limits) {
-  return plan(grid_map,
-              start,
-              goal,
-              SearchObjective::topK(K),
-              allow_self_crossing,
-              limits);
+  return plan(grid_map, start, goal, SearchObjective::topK(K), allow_self_crossing, limits);
 }
 
 PlanResult RaystarCore::plan(const GridMap& grid_map,
@@ -1537,20 +1527,14 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
                              int K,
                              bool allow_self_crossing,
                              const PlanningLimits& limits) {
-  return plan(grid_map,
-              start,
-              goal,
-              SearchObjective::topK(K),
-              allow_self_crossing,
-              limits);
+  return plan(grid_map, start, goal, SearchObjective::topK(K), allow_self_crossing, limits);
 }
 
-MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
-  const GridMap& grid_map,
-  const PlanEndpoint& start,
-  const std::vector<CostBoundedGoal>& goals,
-  bool allow_self_crossing,
-  const PlanningLimits& limits) try {
+MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(const GridMap& grid_map,
+                                                        const PlanEndpoint& start,
+                                                        const std::vector<CostBoundedGoal>& goals,
+                                                        bool allow_self_crossing,
+                                                        const PlanningLimits& limits) try {
   resetSearchState();
 
   MultiGoalPlanResult result;
@@ -1574,8 +1558,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
   }
 
   for (auto& goal_result : result.goal_results) {
-    const size_t reserve =
-      std::min(limits.max_cost_bounded_paths, limits.max_path_points / 2);
+    const size_t reserve = std::min(limits.max_cost_bounded_paths, limits.max_path_points / 2);
     goal_result.path_solutions.reserve(reserve);
   }
 
@@ -1589,9 +1572,8 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
       return true;
     }
     if (timeout_enabled &&
-        std::chrono::duration_cast<std::chrono::milliseconds>(PlanningClock::now() -
-                                                              request_start_time) >=
-          limits.planning_timeout) {
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+          PlanningClock::now() - request_start_time) >= limits.planning_timeout) {
       requested_stop_reason = PlanningLimitReached::timeout;
       return true;
     }
@@ -1610,8 +1592,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
   };
   const auto total_path_count = [&]() {
     size_t count = 0;
-    for (const auto& goal_result : result.goal_results)
-      count += goal_result.path_solutions.size();
+    for (const auto& goal_result : result.goal_results) count += goal_result.path_solutions.size();
     return count;
   };
   const auto stop_for_limit = [&](PlanningLimitReached limit,
@@ -1624,8 +1605,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
     result.polymap = std::move(polymap);
     if (planner_start) {
       result.plan_time_ms =
-        std::chrono::duration_cast<std::chrono::microseconds>(PlanningClock::now() -
-                                                              *planner_start)
+        std::chrono::duration_cast<std::chrono::microseconds>(PlanningClock::now() - *planner_start)
           .count() /
         1000.0;
     }
@@ -1636,8 +1616,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
       goal_result.success = !goal_result.path_solutions.empty();
       goal_result.outcome = PlanningOutcome::limit_reached;
       goal_result.limit_reached = limit;
-      goal_result.message =
-        planningLimitMessage(limit, limits, goal_result.path_solutions.size());
+      goal_result.message = planningLimitMessage(limit, limits, goal_result.path_solutions.size());
     }
     sort_goal_paths();
     return result;
@@ -1673,8 +1652,8 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
   }
   for (size_t i = 0; i < goals.size(); ++i) {
     const auto& cell = goals[i].endpoint.cell_;
-    if (work_map.at(static_cast<unsigned int>(cell.first), static_cast<unsigned int>(cell.second)) !=
-        0) {
+    if (work_map.at(static_cast<unsigned int>(cell.first),
+                    static_cast<unsigned int>(cell.second)) != 0) {
       result.outcome = PlanningOutcome::invalid_request;
       result.message = "Invalid goal[" + std::to_string(i) +
                        "]: corresponding cell is occupied or on the map boundary";
@@ -1740,8 +1719,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
       continue;
     }
     reachable_goal_indices.emplace_back(i);
-    polymap_goals.push_back(
-      {endpoint.cell_.first, endpoint.cell_.second, endpoint.position_});
+    polymap_goals.push_back({endpoint.cell_.first, endpoint.cell_.second, endpoint.position_});
   }
   // Do not overlap the Core classification scratch buffers with Polymap's own
   // flood-fill mask. The documented map working-set estimate budgets one such
@@ -1759,8 +1737,8 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
     return result;
   }
 
-  auto map_build = Polymap::create(
-    work_map, start_x, start_y, start.position_, polymap_goals, stop_token, limits);
+  auto map_build =
+    Polymap::create(work_map, start_x, start_y, start.position_, polymap_goals, stop_token, limits);
   const auto map_end_time = PlanningClock::now();
   result.map_time_ms =
     std::chrono::duration_cast<std::chrono::microseconds>(map_end_time - map_start_time).count() /
@@ -1805,11 +1783,10 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
     result.outcome = outcome;
     result.expanded_nodes = N_.size();
     result.message = message;
-    result.plan_time_ms =
-      std::chrono::duration_cast<std::chrono::microseconds>(PlanningClock::now() -
-                                                            planner_start_time)
-        .count() /
-      1000.0;
+    result.plan_time_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+                            PlanningClock::now() - planner_start_time)
+                            .count() /
+                          1000.0;
     result.polymap = theMap;
     for (size_t i = 0; i < result.goal_results.size(); ++i) {
       if (finished[i])
@@ -1825,8 +1802,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
   };
 
   std::vector<bool> active(goals.size(), false);
-  for (const size_t i : reachable_goal_indices)
-    active[i] = true;
+  for (const size_t i : reachable_goal_indices) active[i] = true;
   size_t active_count = reachable_goal_indices.size();
   size_t accumulated_path_points = 0;
 
@@ -1953,25 +1929,25 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
                     stop_token);
       new_node.is_continuous_root_ = true;
       new_node.local_shortest_path_.clear();
-      const auto full_visibility_status =
-        new_node.setFullVisibilityRegion(visibility, stop_token);
+      const auto full_visibility_status = new_node.setFullVisibilityRegion(visibility, stop_token);
       if (full_visibility_status == OperationStatus::stopped || stop_token.poll())
         return stop_for_request(theMap, planner_start);
       if (full_visibility_status == OperationStatus::failure)
         return fail_planning("Root full visibility projection failed");
 
       std::string child_error;
-      const auto child_status = generateChildrenFromSource(theMap.get(),
-                                                           new_node.Nindex_,
-                                                           start_position,
-                                                           exact_geometry::Point(start_gx, start_gy),
-                                                           new_node.start_angle_,
-                                                           new_node.end_angle_,
-                                                           new_node.Gcost_,
-                                                           new_node.visibility_region_,
-                                                           new_node.C_,
-                                                           stop_token,
-                                                           &child_error);
+      const auto child_status =
+        generateChildrenFromSource(theMap.get(),
+                                   new_node.Nindex_,
+                                   start_position,
+                                   exact_geometry::Point(start_gx, start_gy),
+                                   new_node.start_angle_,
+                                   new_node.end_angle_,
+                                   new_node.Gcost_,
+                                   new_node.visibility_region_,
+                                   new_node.C_,
+                                   stop_token,
+                                   &child_error);
       if (child_status == OperationStatus::stopped || stop_token.poll())
         return stop_for_request(theMap, planner_start);
       if (child_status == OperationStatus::failure)
@@ -2088,8 +2064,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
       if (point_location_status == OperationStatus::stopped || stop_token.poll())
         return stop_for_request(theMap, planner_start);
       if (point_location_status == OperationStatus::failure)
-        return fail_planning("Goal[" + std::to_string(i) +
-                             "] point-location validation failed");
+        return fail_planning("Goal[" + std::to_string(i) + "] point-location validation failed");
       if (!location.first && !location.second)
         continue;
 
@@ -2121,8 +2096,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
       ConservativeBinary64PathLength::Comparison bound_comparison =
         ConservativeBinary64PathLength::Comparison::equal;
       const auto certificate_stop = [&]() { return stop_token.poll(); };
-      if (!path_certificate.compareTo(
-            goals[i].max_path_cost, bound_comparison, certificate_stop)) {
+      if (!path_certificate.compareTo(goals[i].max_path_cost, bound_comparison, certificate_stop)) {
         if (stop_token.poll())
           return stop_for_request(theMap, planner_start);
         return fail_planning("Could not resolve a goal path against its inclusive cost bound");
@@ -2149,8 +2123,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
         if (admission == BoundedPathAdmission::reject)
           continue;
         if (admission != BoundedPathAdmission::accept) {
-          return fail_planning("Goal[" + std::to_string(i) +
-                               "] bounded path admission failed");
+          return fail_planning("Goal[" + std::to_string(i) + "] bounded path admission failed");
         }
       }
 
@@ -2178,10 +2151,10 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
         return stop_for_limit(PlanningLimitReached::max_path_points, theMap, planner_start);
       }
       goal_result.path_solutions.emplace_back(start.position_,
-                                               N_.back().local_shortest_path_,
-                                               goal_position,
-                                               path_cost,
-                                               N_.back().path_node_index_);
+                                              N_.back().local_shortest_path_,
+                                              goal_position,
+                                              path_cost,
+                                              N_.back().path_node_index_);
       accumulated_path_points += path_points;
     }
 
@@ -2234,8 +2207,7 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(
 
   result.expanded_nodes = N_.size();
   result.plan_time_ms =
-    std::chrono::duration_cast<std::chrono::microseconds>(PlanningClock::now() -
-                                                          planner_start_time)
+    std::chrono::duration_cast<std::chrono::microseconds>(PlanningClock::now() - planner_start_time)
       .count() /
     1000.0;
   result.polymap = theMap;
@@ -2284,12 +2256,12 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
       invalid_result.message = std::move(validation_error);
       return invalid_result;
     }
-    auto multi_result = planToGoalsWithinCosts(
-      grid_map,
-      start,
-      {{goal, objective.max_path_cost, objective.path_admission}},
-      allow_self_crossing,
-      limits);
+    auto multi_result =
+      planToGoalsWithinCosts(grid_map,
+                             start,
+                             {{goal, objective.max_path_cost, objective.path_admission}},
+                             allow_self_crossing,
+                             limits);
     PlanResult single_result;
     if (!multi_result.goal_results.empty()) {
       auto& goal_result = multi_result.goal_results.front();

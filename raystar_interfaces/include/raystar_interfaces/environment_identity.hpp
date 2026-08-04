@@ -57,16 +57,14 @@ inline EnvironmentId computeEnvironmentId(
   hasher.addFloating(map.info.origin.orientation.z);
   hasher.addFloating(map.info.origin.orientation.w);
   hasher.addInteger<std::uint64_t>(static_cast<std::uint64_t>(map.data.size()));
-  for (const std::int8_t value : map.data)
-    hasher.addByte(static_cast<std::uint8_t>(value));
+  for (const std::int8_t value : map.data) hasher.addByte(static_cast<std::uint8_t>(value));
 
   hasher.addInteger(occupied_threshold);
   hasher.addByte(allow_unknown ? 1U : 0U);
   return hasher.finish();
 }
 
-inline bool environmentIdsEqual(const EnvironmentId& first,
-                                const EnvironmentId& second) noexcept {
+inline bool environmentIdsEqual(const EnvironmentId& first, const EnvironmentId& second) noexcept {
   return first.uuid == second.uuid;
 }
 

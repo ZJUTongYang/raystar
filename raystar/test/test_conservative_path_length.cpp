@@ -21,8 +21,7 @@ TEST(ConservativeBinary64PathLengthTest, CatchesHypotRoundingBelowInclusiveBound
   ASSERT_TRUE(certificate.addSegment(0.0, 0.0, 1.0, dy));
   double upper_bound = std::numeric_limits<double>::quiet_NaN();
   ASSERT_TRUE(certificate.upperBound(upper_bound));
-  EXPECT_DOUBLE_EQ(
-    upper_bound, std::nextafter(1.0, std::numeric_limits<double>::infinity()));
+  EXPECT_DOUBLE_EQ(upper_bound, std::nextafter(1.0, std::numeric_limits<double>::infinity()));
   EXPECT_GT(upper_bound, 1.0);
 
   // sqrt(2) rounds upward on the test platform.  The same exact-square
@@ -133,8 +132,7 @@ TEST(ConservativeBinary64PathLengthTest, UnresolvedAndStoppedRefinementFailClose
 }
 
 TEST(ConservativeBinary64PathLengthTest, ArbitraryPrecisionInputIsHardCappedSafely) {
-  ConservativeBinary64PathLength certificate(
-    std::numeric_limits<unsigned int>::max());
+  ConservativeBinary64PathLength certificate(std::numeric_limits<unsigned int>::max());
   ASSERT_TRUE(certificate.addSegment(19.5, 52.5, 20.0, 30.0));
   ASSERT_TRUE(certificate.addSegment(20.0, 30.0, 20.5, 29.0));
   double upper_bound = std::numeric_limits<double>::quiet_NaN();
@@ -192,8 +190,7 @@ TEST(ConservativeBinary64PathLengthTest, DirectlyRoundsLargeExactDyadicSumsUpwar
     ASSERT_TRUE(many_small_segments.addSegment(0.0, 0.0, small_length, 0.0));
   double upper_bound = std::numeric_limits<double>::quiet_NaN();
   ASSERT_TRUE(many_small_segments.upperBound(upper_bound));
-  EXPECT_DOUBLE_EQ(
-    upper_bound, std::ldexp(static_cast<double>(segment_count), -40));
+  EXPECT_DOUBLE_EQ(upper_bound, std::ldexp(static_cast<double>(segment_count), -40));
 
   // This non-power-of-two value reproduces a 100k-segment case where an
   // 80-bit sequential sum can start more than eight binary64 ULPs below the
@@ -201,8 +198,7 @@ TEST(ConservativeBinary64PathLengthTest, DirectlyRoundsLargeExactDyadicSumsUpwar
   ConservativeBinary64PathLength repeated_non_power_of_two;
   constexpr double repeated_length = 0x1.4e8fcf1c6e0d0p+0;
   for (std::size_t index = 0; index < segment_count; ++index) {
-    ASSERT_TRUE(
-      repeated_non_power_of_two.addSegment(0.0, 0.0, repeated_length, 0.0));
+    ASSERT_TRUE(repeated_non_power_of_two.addSegment(0.0, 0.0, repeated_length, 0.0));
   }
   ASSERT_TRUE(repeated_non_power_of_two.upperBound(upper_bound));
   EXPECT_DOUBLE_EQ(upper_bound, 0x1.fe802f66c16cap+16);
@@ -215,8 +211,7 @@ TEST(ConservativeBinary64PathLengthTest, DirectlyRoundsLargeExactDyadicSumsUpwar
   for (std::size_t index = 0; index < 1024; ++index)
     ASSERT_TRUE(half_ulp_sum.addSegment(0.0, 0.0, half_ulp_piece, 0.0));
   ASSERT_TRUE(half_ulp_sum.upperBound(upper_bound));
-  EXPECT_DOUBLE_EQ(
-    upper_bound, std::nextafter(1.0, std::numeric_limits<double>::infinity()));
+  EXPECT_DOUBLE_EQ(upper_bound, std::nextafter(1.0, std::numeric_limits<double>::infinity()));
 
   // Preserve a tiny exact addend across a 900-bit exponent range.  Any
   // positive addend makes the directed ceiling advance by one large-value ULP.
@@ -225,9 +220,8 @@ TEST(ConservativeBinary64PathLengthTest, DirectlyRoundsLargeExactDyadicSumsUpwar
   ASSERT_TRUE(dynamic_range.addSegment(0.0, 0.0, large_length, 0.0));
   ASSERT_TRUE(dynamic_range.addSegment(0.0, 0.0, 1.0, 0.0));
   ASSERT_TRUE(dynamic_range.upperBound(upper_bound));
-  EXPECT_DOUBLE_EQ(
-    upper_bound,
-    std::nextafter(large_length, std::numeric_limits<double>::infinity()));
+  EXPECT_DOUBLE_EQ(upper_bound,
+                   std::nextafter(large_length, std::numeric_limits<double>::infinity()));
 }
 
 TEST(ConservativeBinary64PathLengthTest, FailsClosedWhenNoFiniteBoundExists) {
@@ -242,8 +236,8 @@ TEST(ConservativeBinary64PathLengthTest, FailsClosedWhenNoFiniteBoundExists) {
   // above DBL_MAX and therefore has no finite public binary64 certificate.
   ConservativeBinary64PathLength aggregate_overflow;
   ASSERT_TRUE(aggregate_overflow.addSegment(0.0, 0.0, maximum, 0.0));
-  ASSERT_TRUE(aggregate_overflow.addSegment(
-    0.0, 0.0, std::numeric_limits<double>::denorm_min(), 0.0));
+  ASSERT_TRUE(
+    aggregate_overflow.addSegment(0.0, 0.0, std::numeric_limits<double>::denorm_min(), 0.0));
   upper_bound = 0.0;
   EXPECT_FALSE(aggregate_overflow.upperBound(upper_bound));
   EXPECT_TRUE(std::isnan(upper_bound));
@@ -269,8 +263,7 @@ TEST(ConservativeBinary64PathLengthTest, TightSumCanFitWhenLooseSegmentCeilingsO
 
   ConservativeBinary64PathLength true_overflow;
   ASSERT_TRUE(true_overflow.addSegment(0.0, 0.0, maximum, 0.0));
-  ASSERT_TRUE(true_overflow.addSegment(
-    0.0, 0.0, std::numeric_limits<double>::denorm_min(), 0.0));
+  ASSERT_TRUE(true_overflow.addSegment(0.0, 0.0, std::numeric_limits<double>::denorm_min(), 0.0));
   upper_bound = 0.0;
   EXPECT_FALSE(true_overflow.upperBound(upper_bound));
   EXPECT_TRUE(std::isnan(upper_bound));

@@ -26,10 +26,9 @@ public:
 
   TransitionProgressReporter(std::size_t requested,
                              const TransitionProgressCallback& callback) noexcept
-    : requested_(boundedUint32(requested)),
-      pair_feedback_count_(
-        std::min<std::size_t>(requested_, kMaxPairFeedbackMessages)),
-      callback_(&callback) {}
+    : requested_(boundedUint32(requested))
+    , pair_feedback_count_(std::min<std::size_t>(requested_, kMaxPairFeedbackMessages))
+    , callback_(&callback) {}
 
   void publishStage(const char* stage) noexcept {
     emit(last_observed_completed_, stage, false);
@@ -39,8 +38,7 @@ public:
     if (requested_ == 0 || next_pair_feedback_ >= pair_feedback_count_)
       return;
 
-    const std::uint32_t bounded_completed =
-      std::min(requested_, boundedUint32(completed));
+    const std::uint32_t bounded_completed = std::min(requested_, boundedUint32(completed));
     if (bounded_completed < last_observed_completed_)
       return;
     last_observed_completed_ = bounded_completed;
@@ -75,8 +73,8 @@ private:
       return requested_;
     const std::uint64_t numerator =
       static_cast<std::uint64_t>(index) * static_cast<std::uint64_t>(requested_ - 1);
-    return 1u + static_cast<std::uint32_t>(
-                  numerator / static_cast<std::uint64_t>(pair_feedback_count_ - 1));
+    return 1u + static_cast<std::uint32_t>(numerator /
+                                           static_cast<std::uint64_t>(pair_feedback_count_ - 1));
   }
 
   void emit(std::uint32_t completed, const char* stage, bool final) noexcept {

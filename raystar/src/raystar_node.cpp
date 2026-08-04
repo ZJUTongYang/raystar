@@ -455,8 +455,7 @@ bool publishedPathLength(const nav_msgs::msg::Path& path,
     const auto& first = path.poses[index - 1].pose.position;
     const auto& second = path.poses[index].pose.position;
     const double segment = std::hypot(second.x - first.x, second.y - first.y);
-    if (!std::isfinite(segment) ||
-        !certificate.addSegment(first.x, first.y, second.x, second.y)) {
+    if (!std::isfinite(segment) || !certificate.addSegment(first.x, first.y, second.x, second.y)) {
       return false;
     }
     accumulated += static_cast<long double>(segment);
@@ -479,11 +478,11 @@ bool publishedLengthsMatch(double first, double second) {
 enum class MetricBoundEligibility { within_bound, outside_bound, invalid };
 
 MetricBoundEligibility classifyPathViewMetricBound(const BoundedPathView& path,
-                                                    const GridMap& map,
-                                                    double inclusive_bound,
-                                                    const StopToken& stop_token) {
-  if (!std::isfinite(path.path_cost) || path.path_cost < 0.0 ||
-      !std::isfinite(inclusive_bound) || inclusive_bound < 0.0) {
+                                                   const GridMap& map,
+                                                   double inclusive_bound,
+                                                   const StopToken& stop_token) {
+  if (!std::isfinite(path.path_cost) || path.path_cost < 0.0 || !std::isfinite(inclusive_bound) ||
+      inclusive_bound < 0.0) {
     return MetricBoundEligibility::invalid;
   }
 
@@ -498,8 +497,7 @@ MetricBoundEligibility classifyPathViewMetricBound(const BoundedPathView& path,
     double world_y = std::numeric_limits<double>::quiet_NaN();
     if (!continuousGridToWorld(map, grid_point, world_x, world_y))
       return false;
-    if (have_previous &&
-        !certificate.addSegment(previous_x, previous_y, world_x, world_y)) {
+    if (have_previous && !certificate.addSegment(previous_x, previous_y, world_x, world_y)) {
       return false;
     }
     previous_x = world_x;
@@ -512,8 +510,7 @@ MetricBoundEligibility classifyPathViewMetricBound(const BoundedPathView& path,
     return MetricBoundEligibility::invalid;
   for (const auto& turning_point : path.turning_points) {
     if (!add_point(
-          {static_cast<double>(turning_point.first),
-           static_cast<double>(turning_point.second)})) {
+          {static_cast<double>(turning_point.first), static_cast<double>(turning_point.second)})) {
       return MetricBoundEligibility::invalid;
     }
   }
@@ -525,8 +522,7 @@ MetricBoundEligibility classifyPathViewMetricBound(const BoundedPathView& path,
   if (!certificate.upperBound(upper_bound, certificate_stop))
     return MetricBoundEligibility::invalid;
   const double core_metric_cost = gridCostToMetric(path.path_cost, map.resolution);
-  if (!std::isfinite(core_metric_cost) ||
-      !publishedLengthsMatch(core_metric_cost, upper_bound)) {
+  if (!std::isfinite(core_metric_cost) || !publishedLengthsMatch(core_metric_cost, upper_bound)) {
     return MetricBoundEligibility::invalid;
   }
   return upper_bound <= inclusive_bound ? MetricBoundEligibility::within_bound
@@ -534,17 +530,16 @@ MetricBoundEligibility classifyPathViewMetricBound(const BoundedPathView& path,
 }
 
 MetricBoundEligibility classifyTopologyMetricBound(const nav_msgs::msg::Path& topology_path,
-                                                    double core_cost,
-                                                    double inclusive_bound,
-                                                    const StopPredicate& stop_requested = {}) {
+                                                   double core_cost,
+                                                   double inclusive_bound,
+                                                   const StopPredicate& stop_requested = {}) {
   if (!std::isfinite(core_cost) || core_cost < 0.0 || !std::isfinite(inclusive_bound) ||
       inclusive_bound < 0.0) {
     return MetricBoundEligibility::invalid;
   }
   double rounded_length = std::numeric_limits<double>::quiet_NaN();
   double upper_bound = std::numeric_limits<double>::quiet_NaN();
-  if (!publishedPathLength(
-        topology_path, rounded_length, upper_bound, stop_requested) ||
+  if (!publishedPathLength(topology_path, rounded_length, upper_bound, stop_requested) ||
       !publishedLengthsMatch(core_cost, upper_bound)) {
     return MetricBoundEligibility::invalid;
   }
@@ -552,23 +547,19 @@ MetricBoundEligibility classifyTopologyMetricBound(const nav_msgs::msg::Path& to
                                         : MetricBoundEligibility::outside_bound;
 }
 
-bool finalizePublishedPathResult(
-  raystar_interfaces::msg::PathResult& result,
-  double core_cost,
-  double inclusive_bound = std::numeric_limits<double>::infinity(),
-  const StopPredicate& stop_requested = {}) {
+bool finalizePublishedPathResult(raystar_interfaces::msg::PathResult& result,
+                                 double core_cost,
+                                 double inclusive_bound = std::numeric_limits<double>::infinity(),
+                                 const StopPredicate& stop_requested = {}) {
   if (!std::isfinite(core_cost) || core_cost < 0.0 || std::isnan(inclusive_bound))
     return false;
   double dense_length = std::numeric_limits<double>::quiet_NaN();
   double topology_length = std::numeric_limits<double>::quiet_NaN();
   double dense_upper_bound = std::numeric_limits<double>::quiet_NaN();
   double topology_upper_bound = std::numeric_limits<double>::quiet_NaN();
-  if (!publishedPathLength(
-        result.path, dense_length, dense_upper_bound, stop_requested) ||
-      !publishedPathLength(result.topology_path,
-                           topology_length,
-                           topology_upper_bound,
-                           stop_requested)) {
+  if (!publishedPathLength(result.path, dense_length, dense_upper_bound, stop_requested) ||
+      !publishedPathLength(
+        result.topology_path, topology_length, topology_upper_bound, stop_requested)) {
     return false;
   }
 
@@ -589,8 +580,7 @@ bool finalizeCostBoundedPublishedPathResult(raystar_interfaces::msg::PathResult&
                                             double core_cost,
                                             double inclusive_bound,
                                             const StopPredicate& stop_requested = {}) {
-  if (finalizePublishedPathResult(
-        result, core_cost, inclusive_bound, stop_requested))
+  if (finalizePublishedPathResult(result, core_cost, inclusive_bound, stop_requested))
     return true;
 
   // Interpolation is visualization-only. Rounding its intermediate world
@@ -602,47 +592,35 @@ bool finalizeCostBoundedPublishedPathResult(raystar_interfaces::msg::PathResult&
   return finalizePublishedPathResult(result, core_cost, inclusive_bound, stop_requested);
 }
 
-bool hasMetricFaithfulWorldTransform(double origin_x,
-                                    double origin_y,
-                                    double extent_x,
-                                    double extent_y,
-                                    double resolution) {
+bool hasMetricFaithfulWorldTransform(
+  double origin_x, double origin_y, double extent_x, double extent_y, double resolution) {
   // The published path contract allows a small representation discrepancy
   // from Core's metric cost.  Admit only transforms whose binary64 quantum is
   // comfortably below that budget at both the multiply and add magnitudes.
   // Per-path validation below remains the authoritative final check.
-  const double representation_budget =
-    std::max(kPublishedLengthAbsoluteToleranceMeters,
-             kPublishedLengthRelativeTolerance * resolution) /
-    32.0;
+  const double representation_budget = std::max(kPublishedLengthAbsoluteToleranceMeters,
+                                                kPublishedLengthRelativeTolerance * resolution) /
+                                       32.0;
   // The representation tolerance alone is insufficient for very small map
   // resolutions: a large origin can have an ULP smaller than 1e-9 metres yet
   // still collapse many adjacent cells. Requiring the coordinate quantum to
   // be much smaller than one cell makes every rounded adjacent transform
   // strictly monotone as well as metrically distinguishable.
-  const double coordinate_budget =
-    std::min(representation_budget, resolution / 32.0);
+  const double coordinate_budget = std::min(representation_budget, resolution / 32.0);
   const double max_world_x = std::fma(1.0, extent_x, origin_x);
   const double max_world_y = std::fma(1.0, extent_y, origin_y);
   const double first_world_x = std::fma(1.0, resolution, origin_x);
   const double first_world_y = std::fma(1.0, resolution, origin_y);
-  const std::array<double, 8> transform_values{origin_x,
-                                               origin_y,
-                                               extent_x,
-                                               extent_y,
-                                               first_world_x,
-                                               first_world_y,
-                                               max_world_x,
-                                               max_world_y};
+  const std::array<double, 8> transform_values{
+    origin_x, origin_y, extent_x, extent_y, first_world_x, first_world_y, max_world_x, max_world_y};
   if (!std::isfinite(coordinate_budget) || coordinate_budget <= 0.0 ||
       !std::all_of(transform_values.begin(), transform_values.end(), [&](double value) {
-        return std::isfinite(value) &&
-               binary64SpacingForSearchPadding(value) <= coordinate_budget;
+        return std::isfinite(value) && binary64SpacingForSearchPadding(value) <= coordinate_budget;
       })) {
     return false;
   }
-  if (!(first_world_x > origin_x) || !(first_world_y > origin_y) ||
-      !(max_world_x > origin_x) || !(max_world_y > origin_y)) {
+  if (!(first_world_x > origin_x) || !(first_world_y > origin_y) || !(max_world_x > origin_x) ||
+      !(max_world_y > origin_y)) {
     return false;
   }
   const auto distance_is_represented = [](double actual, double expected) {
@@ -650,10 +628,10 @@ bool hasMetricFaithfulWorldTransform(double origin_x,
       return false;
     const long double error =
       std::abs(static_cast<long double>(actual) - static_cast<long double>(expected));
-    const long double tolerance = std::max(
-      static_cast<long double>(kPublishedLengthAbsoluteToleranceMeters),
-      static_cast<long double>(kPublishedLengthRelativeTolerance) *
-        static_cast<long double>(expected));
+    const long double tolerance =
+      std::max(static_cast<long double>(kPublishedLengthAbsoluteToleranceMeters),
+               static_cast<long double>(kPublishedLengthRelativeTolerance) *
+                 static_cast<long double>(expected));
     return error <= tolerance;
   };
   return distance_is_represented(first_world_x - origin_x, resolution) &&
@@ -1044,13 +1022,11 @@ bool RaystarNode::loadRequestConfiguration(RequestConfiguration& configuration,
   configuration = RequestConfiguration{};
   configuration.occupied_threshold = static_cast<int>(occupied_threshold);
   configuration.planning.max_k = static_cast<int>(max_k);
-  configuration.planning.max_cost_bounded_paths =
-    static_cast<size_t>(max_cost_bounded_paths);
+  configuration.planning.max_cost_bounded_paths = static_cast<size_t>(max_cost_bounded_paths);
   configuration.planning.max_multi_goal_count = static_cast<size_t>(max_multi_goal_count);
   configuration.planning.max_transition_configurations =
     static_cast<size_t>(max_transition_configurations);
-  configuration.planning.max_transition_pairs =
-    static_cast<size_t>(max_transition_pairs);
+  configuration.planning.max_transition_pairs = static_cast<size_t>(max_transition_pairs);
   configuration.planning.max_nodes = static_cast<size_t>(max_nodes);
   configuration.planning.planning_timeout = std::chrono::milliseconds(planning_timeout_ms);
   configuration.planning.max_map_cells = static_cast<size_t>(max_map_cells);
@@ -1115,8 +1091,7 @@ void RaystarNode::handleMap(nav_msgs::msg::OccupancyGrid::ConstSharedPtr map) {
     status.height = map->info.height;
     status.resolution = map->info.resolution;
     status.occupied_threshold = static_cast<uint32_t>(configuration.occupied_threshold);
-    status.environment_identity_version =
-      raystar_interfaces::kEnvironmentIdentityVersion;
+    status.environment_identity_version = raystar_interfaces::kEnvironmentIdentityVersion;
     status.occupancy_semantics_version = raystar_interfaces::kOccupancySemanticsVersion;
     status.geometry_semantics_version = raystar_interfaces::kGeometrySemanticsVersion;
     status.topology_semantics_version = raystar_interfaces::kTopologySemanticsVersion;
@@ -1172,23 +1147,18 @@ std::shared_ptr<const Polymap> RaystarNode::findCachedTransitionEnvironment(
                                            configuration.planning.max_map_bytes};
   std::vector<TransitionEnvironmentEndpoint> cache_goals;
   cache_goals.reserve(goals.size());
-  for (const auto& goal : goals)
-    cache_goals.emplace_back(goal);
-  return transition_environment_cache_.find(
-    TransitionEnvironmentKey(cached_map_.generation,
-                             policy,
-                             TransitionEnvironmentEndpoint(base),
-                             std::move(cache_goals)));
+  for (const auto& goal : goals) cache_goals.emplace_back(goal);
+  return transition_environment_cache_.find(TransitionEnvironmentKey(
+    cached_map_.generation, policy, TransitionEnvironmentEndpoint(base), std::move(cache_goals)));
 }
 
-void RaystarNode::cacheCompletedTransitionEnvironment(
-  const nav_msgs::msg::OccupancyGrid& grid,
-  const raystar_interfaces::MapId& map_id,
-  bool allow_unknown,
-  const RequestConfiguration& configuration,
-  const PolymapEndpoint& base,
-  const std::vector<PolymapEndpoint>& goals,
-  std::shared_ptr<const Polymap> environment) {
+void RaystarNode::cacheCompletedTransitionEnvironment(const nav_msgs::msg::OccupancyGrid& grid,
+                                                      const raystar_interfaces::MapId& map_id,
+                                                      bool allow_unknown,
+                                                      const RequestConfiguration& configuration,
+                                                      const PolymapEndpoint& base,
+                                                      const std::vector<PolymapEndpoint>& goals,
+                                                      std::shared_ptr<const Polymap> environment) {
   if (!environment)
     return;
   std::lock_guard<std::mutex> lock(map_cache_mutex_);
@@ -1202,13 +1172,10 @@ void RaystarNode::cacheCompletedTransitionEnvironment(
                                            configuration.planning.max_map_bytes};
   std::vector<TransitionEnvironmentEndpoint> cache_goals;
   cache_goals.reserve(goals.size());
-  for (const auto& goal : goals)
-    cache_goals.emplace_back(goal);
+  for (const auto& goal : goals) cache_goals.emplace_back(goal);
   transition_environment_cache_.store(
-    TransitionEnvironmentKey(cached_map_.generation,
-                             policy,
-                             TransitionEnvironmentEndpoint(base),
-                             std::move(cache_goals)),
+    TransitionEnvironmentKey(
+      cached_map_.generation, policy, TransitionEnvironmentEndpoint(base), std::move(cache_goals)),
     std::move(environment));
 }
 
@@ -1275,21 +1242,16 @@ bool RaystarNode::occupancyGridToBinaryMap(const nav_msgs::msg::OccupancyGrid& g
   const size_t cell_count = map_estimate.cell_count;
 
   const double metric_resolution = static_cast<double>(grid.info.resolution);
-  const double extent_x =
-    gridCostToMetric(static_cast<double>(width), grid.info.resolution);
-  const double extent_y =
-    gridCostToMetric(static_cast<double>(height), grid.info.resolution);
+  const double extent_x = gridCostToMetric(static_cast<double>(width), grid.info.resolution);
+  const double extent_y = gridCostToMetric(static_cast<double>(height), grid.info.resolution);
   const double max_world_x = std::fma(1.0, extent_x, origin.position.x);
   const double max_world_y = std::fma(1.0, extent_y, origin.position.y);
   if (!std::isfinite(max_world_x) || !std::isfinite(max_world_y)) {
     error = "Invalid map: world-coordinate extent is not finite";
     return false;
   }
-  if (!hasMetricFaithfulWorldTransform(origin.position.x,
-                                       origin.position.y,
-                                       extent_x,
-                                       extent_y,
-                                       metric_resolution)) {
+  if (!hasMetricFaithfulWorldTransform(
+        origin.position.x, origin.position.y, extent_x, extent_y, metric_resolution)) {
     error =
       "Invalid map: binary64 grid-to-world transform lacks metric fidelity "
       "for published path lengths";
@@ -1448,13 +1410,12 @@ void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goa
     auto result = std::make_shared<PlanAction::Result>();
     const auto rejected_goal = goal_handle ? goal_handle->get_goal() : nullptr;
     if (rejected_goal) {
-      initializePlanningResponse(
-        *result,
-        rejected_goal->search_mode,
-        rejected_goal->k,
-        rejected_goal->max_path_length,
-        rejected_goal->map_id,
-        rejected_goal->include_debug);
+      initializePlanningResponse(*result,
+                                 rejected_goal->search_mode,
+                                 rejected_goal->k,
+                                 rejected_goal->max_path_length,
+                                 rejected_goal->map_id,
+                                 rejected_goal->include_debug);
     } else {
       resetPlanningResponse(*result);
     }
@@ -1465,8 +1426,7 @@ void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goa
 }
 
 rclcpp_action::GoalResponse RaystarNode::handleGoalSetActionGoal(
-  const rclcpp_action::GoalUUID& uuid,
-  std::shared_ptr<const GoalSetAction::Goal> goal) {
+  const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const GoalSetAction::Goal> goal) {
   if (!goal || shutting_down_.load(std::memory_order_acquire) || !rclcpp::ok())
     return rclcpp_action::GoalResponse::REJECT;
 
@@ -1551,8 +1511,7 @@ void RaystarNode::handleGoalSetActionAccepted(
 }
 
 rclcpp_action::GoalResponse RaystarNode::handleTransitionActionGoal(
-  const rclcpp_action::GoalUUID& uuid,
-  std::shared_ptr<const TransitionAction::Goal> goal) {
+  const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const TransitionAction::Goal> goal) {
   if (!goal || shutting_down_.load(std::memory_order_acquire) || !rclcpp::ok())
     return rclcpp_action::GoalResponse::REJECT;
 
@@ -1895,8 +1854,8 @@ void RaystarNode::executeGoalSetAction(
     output.goal_results.clear();
     output.debug_nodes.clear();
     output.result_info.status = PlanningResultInfo::STATUS_CANCELLED;
-    output.result_info.limits_reached = static_cast<uint16_t>(
-      output.result_info.limits_reached | PlanningResultInfo::LIMIT_CANCELLED);
+    output.result_info.limits_reached = static_cast<uint16_t>(output.result_info.limits_reached |
+                                                              PlanningResultInfo::LIMIT_CANCELLED);
     output.result_info.request_satisfied = false;
     output.result_info.search_complete = false;
     output.result_info.output_complete = false;
@@ -2014,7 +1973,8 @@ void RaystarNode::executeGoalSetAction(
       if (result) {
         result->success = false;
         result->result_info.status = PlanningResultInfo::STATUS_FAILED;
-        result->message = "Cancellation was accepted but the Action state transition did not complete";
+        result->message =
+          "Cancellation was accepted but the Action state transition did not complete";
       }
     }
   }
@@ -2084,9 +2044,8 @@ void RaystarNode::executeTransitionAction(
       return cancel_requested->load(std::memory_order_acquire);
     };
     const TransitionProgressCallback progress_callback =
-      [weak_goal_handle](std::uint32_t requested,
-                         std::uint32_t completed,
-                         const char* stage) noexcept {
+      [weak_goal_handle](
+        std::uint32_t requested, std::uint32_t completed, const char* stage) noexcept {
         try {
           const auto handle = weak_goal_handle.lock();
           if (!handle || !handle->is_active() || !handle->is_executing())
@@ -2108,18 +2067,12 @@ void RaystarNode::executeTransitionAction(
       nav_msgs::msg::OccupancyGrid::ConstSharedPtr cached_map;
       std::string map_error;
       if (!resolveCachedMap(goal->map_id, cached_map, map_error)) {
-        progress_callback(result->requested_transition_count,
-                          0,
-                          "validating transition request");
+        progress_callback(result->requested_transition_count, 0, "validating transition request");
         result->status = TransitionAction::Result::STATUS_INVALID_REQUEST;
         result->message = std::move(map_error);
       } else {
-        executeTransitionPlanning(*goal,
-                                  *result,
-                                  *cached_map,
-                                  goal->map_id,
-                                  stop_requested,
-                                  progress_callback);
+        executeTransitionPlanning(
+          *goal, *result, *cached_map, goal->map_id, stop_requested, progress_callback);
       }
     } else {
       result->status = TransitionAction::Result::STATUS_FAILED;
@@ -2384,20 +2337,18 @@ void RaystarNode::executePlanning(const RequestT& request_value,
         "Invalid max_path_length: could not derive its binary64 Core search bound";
       return;
     }
-    const auto metric_admission =
-      [&work_map, metric_bound = request->max_path_length](
-        const BoundedPathView& path, const StopToken& stop_token) {
-        switch (classifyPathViewMetricBound(
-          path, work_map, metric_bound, stop_token)) {
-        case MetricBoundEligibility::within_bound:
-          return BoundedPathAdmission::accept;
-        case MetricBoundEligibility::outside_bound:
-          return BoundedPathAdmission::reject;
-        case MetricBoundEligibility::invalid:
-          return BoundedPathAdmission::failure_or_stop;
-        }
+    const auto metric_admission = [&work_map, metric_bound = request->max_path_length](
+                                    const BoundedPathView& path, const StopToken& stop_token) {
+      switch (classifyPathViewMetricBound(path, work_map, metric_bound, stop_token)) {
+      case MetricBoundEligibility::within_bound:
+        return BoundedPathAdmission::accept;
+      case MetricBoundEligibility::outside_bound:
+        return BoundedPathAdmission::reject;
+      case MetricBoundEligibility::invalid:
         return BoundedPathAdmission::failure_or_stop;
-      };
+      }
+      return BoundedPathAdmission::failure_or_stop;
+    };
     objective = SearchObjective::allWithinCost(grid_cost, metric_admission);
   }
 
@@ -2439,9 +2390,8 @@ void RaystarNode::executePlanning(const RequestT& request_value,
       map_id,
       request->allow_unknown,
       configuration,
-      PolymapEndpoint{start_endpoint.cell_.first,
-                      start_endpoint.cell_.second,
-                      start_endpoint.position_},
+      PolymapEndpoint{
+        start_endpoint.cell_.first, start_endpoint.cell_.second, start_endpoint.position_},
       {PolymapEndpoint{
         goal_endpoint.cell_.first, goal_endpoint.cell_.second, goal_endpoint.position_}},
       result.polymap);
@@ -2454,9 +2404,8 @@ void RaystarNode::executePlanning(const RequestT& request_value,
   result_info.plan_time_ms = result.plan_time_ms;
   result_info.limits_reached = planningLimitMask(result.limit_reached);
   result_info.cost_bound_exhausted =
-    cost_bounded_mode &&
-    (result.completion == PlanningCompletion::cost_bound_exhausted ||
-     result.completion == PlanningCompletion::frontier_exhausted);
+    cost_bounded_mode && (result.completion == PlanningCompletion::cost_bound_exhausted ||
+                          result.completion == PlanningCompletion::frontier_exhausted);
   switch (result.outcome) {
   case PlanningOutcome::complete:
     result_info.search_complete = true;
@@ -2521,8 +2470,7 @@ void RaystarNode::executePlanning(const RequestT& request_value,
   std::vector<size_t> metric_eligible_solution_indices;
   metric_eligible_solution_indices.reserve(result.path_solutions.size());
   size_t precertification_omitted_count = 0;
-  for (size_t solution_index = 0; solution_index < result.path_solutions.size();
-       ++solution_index) {
+  for (size_t solution_index = 0; solution_index < result.path_solutions.size(); ++solution_index) {
     if (!cost_bounded_mode) {
       metric_eligible_solution_indices.emplace_back(solution_index);
       continue;
@@ -2554,8 +2502,7 @@ void RaystarNode::executePlanning(const RequestT& request_value,
                            configuration.planning.max_response_bytes);
       continue;
     }
-    const double core_metric_cost =
-      gridCostToMetric(solution.path_cost_, work_map.resolution);
+    const double core_metric_cost = gridCostToMetric(solution.path_cost_, work_map.resolution);
     const auto eligibility = classifyTopologyMetricBound(
       topology_path, core_metric_cost, request->max_path_length, stop_requested);
     if (eligibility == MetricBoundEligibility::outside_bound) {
@@ -2572,8 +2519,7 @@ void RaystarNode::executePlanning(const RequestT& request_value,
     }
     metric_eligible_solution_indices.emplace_back(solution_index);
   }
-  result_info.found_path_count =
-    boundedUint32(metric_eligible_solution_indices.size());
+  result_info.found_path_count = boundedUint32(metric_eligible_solution_indices.size());
 
   std::vector<size_t> emitted_solution_indices;
   size_t omitted_path_count = precertification_omitted_count;
@@ -2598,11 +2544,8 @@ void RaystarNode::executePlanning(const RequestT& request_value,
     const auto& sol = result.path_solutions[solution_index];
     raystar_interfaces::msg::PathResult path_result;
     std::string path_error;
-    if (!buildTopologyPathMsg(sol,
-                              work_map,
-                              grid.header.frame_id,
-                              path_result.topology_path,
-                              path_error)) {
+    if (!buildTopologyPathMsg(
+          sol, work_map, grid.header.frame_id, path_result.topology_path, path_error)) {
       ++omitted_path_count;
       appendResponseNotice(response->message,
                            "A topology path was omitted: " + path_error,
@@ -2630,10 +2573,9 @@ void RaystarNode::executePlanning(const RequestT& request_value,
       }
     }
     const auto points_fit = [&](size_t serialized_path_points) {
-      return topology_point_count <=
-               configuration.planning.max_path_points - emitted_path_points &&
-             serialized_path_points <= configuration.planning.max_path_points -
-                                           emitted_path_points - topology_point_count;
+      return topology_point_count <= configuration.planning.max_path_points - emitted_path_points &&
+             serialized_path_points <=
+               configuration.planning.max_path_points - emitted_path_points - topology_point_count;
     };
     if (!points_fit(point_count) && cost_bounded_mode && !topology_only &&
         points_fit(topology_point_count)) {
@@ -2657,19 +2599,15 @@ void RaystarNode::executePlanning(const RequestT& request_value,
     size_t path_bytes = 0;
     size_t topology_path_bytes = 0;
     size_t candidate_response_bytes = response_bytes;
-    const auto bytes_fit = [&](size_t serialized_path_points,
-                               size_t& candidate_bytes) {
+    const auto bytes_fit = [&](size_t serialized_path_points, size_t& candidate_bytes) {
       candidate_bytes = response_bytes;
       return estimatePathResponseBytes(
                serialized_path_points, grid.header.frame_id.size(), path_bytes) &&
              estimatePathResponseBytes(
                topology_point_count, grid.header.frame_id.size(), topology_path_bytes) &&
-             checkedAdd(candidate_bytes,
-                        path_bytes,
-                        configuration.planning.max_response_bytes) &&
-             checkedAdd(candidate_bytes,
-                        topology_path_bytes,
-                        configuration.planning.max_response_bytes);
+             checkedAdd(candidate_bytes, path_bytes, configuration.planning.max_response_bytes) &&
+             checkedAdd(
+               candidate_bytes, topology_path_bytes, configuration.planning.max_response_bytes);
     };
     bool response_bytes_fit = bytes_fit(point_count, candidate_response_bytes);
     if (!response_bytes_fit && cost_bounded_mode && !topology_only) {
@@ -2696,14 +2634,13 @@ void RaystarNode::executePlanning(const RequestT& request_value,
 
     if (topology_only) {
       path_result.path = path_result.topology_path;
-    } else if (!buildPathMsg(
-                 sol,
-                 work_map,
-                 grid.header.frame_id,
-                 configuration.planning.max_path_points - emitted_path_points -
-                   topology_point_count,
-                 path_result.path,
-                 path_error)) {
+    } else if (!buildPathMsg(sol,
+                             work_map,
+                             grid.header.frame_id,
+                             configuration.planning.max_path_points - emitted_path_points -
+                               topology_point_count,
+                             path_result.path,
+                             path_error)) {
       ++omitted_path_count;
       appendResponseNotice(response->message,
                            "A path was omitted: " + path_error,
@@ -2711,24 +2648,20 @@ void RaystarNode::executePlanning(const RequestT& request_value,
                            configuration.planning.max_response_bytes);
       continue;
     }
-    const double core_metric_cost =
-      gridCostToMetric(sol.path_cost_, work_map.resolution);
+    const double core_metric_cost = gridCostToMetric(sol.path_cost_, work_map.resolution);
     const bool finalized =
       cost_bounded_mode
         ? finalizeCostBoundedPublishedPathResult(
             path_result, core_metric_cost, request->max_path_length, stop_requested)
-        : finalizePublishedPathResult(path_result,
-                                      core_metric_cost,
-                                      std::numeric_limits<double>::infinity(),
-                                      stop_requested);
+        : finalizePublishedPathResult(
+            path_result, core_metric_cost, std::numeric_limits<double>::infinity(), stop_requested);
     if (!finalized) {
       ++omitted_path_count;
-      appendResponseNotice(
-        response->message,
-        "A path was omitted because its serialized world geometry could not "
-        "faithfully represent the bounded Core cost",
-        response_bytes,
-        configuration.planning.max_response_bytes);
+      appendResponseNotice(response->message,
+                           "A path was omitted because its serialized world geometry could not "
+                           "faithfully represent the bounded Core cost",
+                           response_bytes,
+                           configuration.planning.max_response_bytes);
       continue;
     }
     // The bounded finalizer may replace a dense interpolation with the
@@ -2737,8 +2670,8 @@ void RaystarNode::executePlanning(const RequestT& request_value,
     // cannot spuriously consume another path's response budget.
     if (!bytes_fit(path_result.path.poses.size(), candidate_response_bytes)) {
       ++omitted_path_count;
-      path_output_limits = static_cast<uint16_t>(
-        path_output_limits | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
+      path_output_limits =
+        static_cast<uint16_t>(path_output_limits | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
       appendResponseNotice(response->message,
                            "A certified path did not fit max_response_bytes=" +
                              std::to_string(configuration.planning.max_response_bytes),
@@ -2754,8 +2687,7 @@ void RaystarNode::executePlanning(const RequestT& request_value,
     emitted_path_points += serialized_path_points;
   }
 
-  if (!stableSortPublishedPathsWithSources(
-        response->path_results, emitted_solution_indices)) {
+  if (!stableSortPublishedPathsWithSources(response->path_results, emitted_solution_indices)) {
     throw std::logic_error("published path/source index cardinality mismatch");
   }
 
@@ -2768,15 +2700,14 @@ void RaystarNode::executePlanning(const RequestT& request_value,
   }
   result_info.returned_path_count = boundedUint32(response->path_results.size());
   const size_t metric_found_path_count = metric_eligible_solution_indices.size();
-  result_info.output_complete = omitted_path_count == 0 &&
-                                response->path_results.size() == metric_found_path_count;
+  result_info.output_complete =
+    omitted_path_count == 0 && response->path_results.size() == metric_found_path_count;
   if (!result_info.output_complete)
     markPathOutputIncomplete(result_info, path_output_limits);
   result_info.request_satisfied =
-    cost_bounded_mode
-      ? result_info.cost_bound_exhausted && result_info.output_complete
-      : result_info.requested_path_count > 0 &&
-          result_info.returned_path_count == result_info.requested_path_count;
+    cost_bounded_mode ? result_info.cost_bound_exhausted && result_info.output_complete
+                      : result_info.requested_path_count > 0 &&
+                          result_info.returned_path_count == result_info.requested_path_count;
   response->success = !response->path_results.empty();
   if (cost_bounded_mode && result_info.search_complete && metric_found_path_count == 0)
     result_info.status = PlanningResultInfo::STATUS_NO_PATH;
@@ -2912,12 +2843,11 @@ void RaystarNode::executePlanning(const RequestT& request_value,
   RCLCPP_ERROR(get_logger(), "%s", response_value.message.c_str());
 }
 
-void RaystarNode::executeGoalSetPlanning(
-  const GoalSetAction::Goal& request,
-  GoalSetAction::Result& response,
-  const nav_msgs::msg::OccupancyGrid& grid,
-  const raystar_interfaces::MapId& map_id,
-  const StopPredicate& stop_requested) noexcept try {
+void RaystarNode::executeGoalSetPlanning(const GoalSetAction::Goal& request,
+                                         GoalSetAction::Result& response,
+                                         const nav_msgs::msg::OccupancyGrid& grid,
+                                         const raystar_interfaces::MapId& map_id,
+                                         const StopPredicate& stop_requested) noexcept try {
   std::unique_lock<std::mutex> planner_lock(planner_cache_mutex_);
   response = GoalSetAction::Result{};
   response.requested_start = request.start;
@@ -2963,7 +2893,8 @@ void RaystarNode::executeGoalSetPlanning(
     return;
   }
   if (request.goals.size() != request.max_path_lengths.size()) {
-    response.message = "Invalid goal-set request: goals and max_path_lengths must have equal lengths";
+    response.message =
+      "Invalid goal-set request: goals and max_path_lengths must have equal lengths";
     return;
   }
   if (request.goals.size() > configuration.planning.max_multi_goal_count) {
@@ -2984,8 +2915,8 @@ void RaystarNode::executeGoalSetPlanning(
   }
   for (size_t i = 0; i < request.goals.size(); ++i) {
     if (request.goals[i].header.frame_id.size() > kMaxFrameIdBytes) {
-      response.message = "Invalid goal[" + std::to_string(i) +
-                         "]: frame_id must be at most 256 bytes";
+      response.message =
+        "Invalid goal[" + std::to_string(i) + "]: frame_id must be at most 256 bytes";
       return;
     }
     if (!std::isfinite(request.max_path_lengths[i]) || request.max_path_lengths[i] <= 0.0) {
@@ -3055,20 +2986,18 @@ void RaystarNode::executeGoalSetPlanning(
                          "]: could not derive its binary64 Core search bound";
       return;
     }
-    const auto metric_admission =
-      [&work_map, metric_bound = request.max_path_lengths[i]](
-        const BoundedPathView& path, const StopToken& stop_token) {
-        switch (classifyPathViewMetricBound(
-          path, work_map, metric_bound, stop_token)) {
-        case MetricBoundEligibility::within_bound:
-          return BoundedPathAdmission::accept;
-        case MetricBoundEligibility::outside_bound:
-          return BoundedPathAdmission::reject;
-        case MetricBoundEligibility::invalid:
-          return BoundedPathAdmission::failure_or_stop;
-        }
+    const auto metric_admission = [&work_map, metric_bound = request.max_path_lengths[i]](
+                                    const BoundedPathView& path, const StopToken& stop_token) {
+      switch (classifyPathViewMetricBound(path, work_map, metric_bound, stop_token)) {
+      case MetricBoundEligibility::within_bound:
+        return BoundedPathAdmission::accept;
+      case MetricBoundEligibility::outside_bound:
+        return BoundedPathAdmission::reject;
+      case MetricBoundEligibility::invalid:
         return BoundedPathAdmission::failure_or_stop;
-      };
+      }
+      return BoundedPathAdmission::failure_or_stop;
+    };
     core_goals.push_back(
       {PlanEndpoint({static_cast<int>(goal_point.cell_x), static_cast<int>(goal_point.cell_y)},
                     {goal_point.x, goal_point.y}),
@@ -3107,18 +3036,16 @@ void RaystarNode::executeGoalSetPlanning(
     std::vector<PolymapEndpoint> environment_goals;
     environment_goals.reserve(core_goals.size());
     for (const auto& goal : core_goals) {
-      environment_goals.push_back({goal.endpoint.cell_.first,
-                                   goal.endpoint.cell_.second,
-                                   goal.endpoint.position_});
+      environment_goals.push_back(
+        {goal.endpoint.cell_.first, goal.endpoint.cell_.second, goal.endpoint.position_});
     }
     cacheCompletedTransitionEnvironment(
       grid,
       map_id,
       request.allow_unknown,
       configuration,
-      PolymapEndpoint{start_endpoint.cell_.first,
-                      start_endpoint.cell_.second,
-                      start_endpoint.position_},
+      PolymapEndpoint{
+        start_endpoint.cell_.first, start_endpoint.cell_.second, start_endpoint.position_},
       environment_goals,
       result.polymap);
   }
@@ -3156,8 +3083,8 @@ void RaystarNode::executeGoalSetPlanning(
     response.message = "Request-echo metadata exceeds max_response_bytes=" +
                        std::to_string(configuration.planning.max_response_bytes);
     aggregate.status = PlanningResultInfo::STATUS_PARTIAL_OUTPUT;
-    aggregate.limits_reached = static_cast<uint16_t>(
-      aggregate.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
+    aggregate.limits_reached = static_cast<uint16_t>(aggregate.limits_reached |
+                                                     PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
     aggregate.output_complete = false;
     return;
   }
@@ -3166,8 +3093,8 @@ void RaystarNode::executeGoalSetPlanning(
     response.message = "Response metadata exceeds max_response_bytes=" +
                        std::to_string(configuration.planning.max_response_bytes);
     aggregate.status = PlanningResultInfo::STATUS_PARTIAL_OUTPUT;
-    aggregate.limits_reached = static_cast<uint16_t>(
-      aggregate.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
+    aggregate.limits_reached = static_cast<uint16_t>(aggregate.limits_reached |
+                                                     PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
     aggregate.output_complete = false;
     return;
   }
@@ -3186,9 +3113,8 @@ void RaystarNode::executeGoalSetPlanning(
     total_found_paths += core_goal_result.path_solutions.size();
     aggregate.limits_reached = static_cast<uint16_t>(
       aggregate.limits_reached | planningLimitMask(core_goal_result.limit_reached));
-    const bool search_complete =
-      core_goal_result.outcome == PlanningOutcome::complete ||
-      core_goal_result.outcome == PlanningOutcome::no_path;
+    const bool search_complete = core_goal_result.outcome == PlanningOutcome::complete ||
+                                 core_goal_result.outcome == PlanningOutcome::no_path;
     if (search_complete)
       ++completed_goals;
     all_search_complete = all_search_complete && search_complete;
@@ -3208,9 +3134,8 @@ void RaystarNode::executeGoalSetPlanning(
         !checkedAdd(goal_metadata_bytes,
                     goal_output.message.size(),
                     configuration.planning.max_response_bytes) ||
-        !checkedAdd(response_bytes,
-                    goal_metadata_bytes,
-                    configuration.planning.max_response_bytes)) {
+        !checkedAdd(
+          response_bytes, goal_metadata_bytes, configuration.planning.max_response_bytes)) {
       all_output_complete = false;
       all_requests_satisfied = false;
       aggregate.limits_reached = static_cast<uint16_t>(
@@ -3257,8 +3182,7 @@ void RaystarNode::executeGoalSetPlanning(
     std::vector<size_t> metric_eligible_solution_indices;
     metric_eligible_solution_indices.reserve(core_goal_result.path_solutions.size());
     size_t omitted = 0;
-    for (size_t solution_index = 0;
-         solution_index < core_goal_result.path_solutions.size();
+    for (size_t solution_index = 0; solution_index < core_goal_result.path_solutions.size();
          ++solution_index) {
       if (stop_requested && stop_requested()) {
         mark_goal_set_cancelled();
@@ -3272,13 +3196,9 @@ void RaystarNode::executeGoalSetPlanning(
         ++omitted;
         continue;
       }
-      const double core_metric_cost =
-        gridCostToMetric(solution.path_cost_, work_map.resolution);
+      const double core_metric_cost = gridCostToMetric(solution.path_cost_, work_map.resolution);
       const auto eligibility = classifyTopologyMetricBound(
-        topology_path,
-        core_metric_cost,
-        request.max_path_lengths[i],
-        stop_requested);
+        topology_path, core_metric_cost, request.max_path_lengths[i], stop_requested);
       if (eligibility == MetricBoundEligibility::outside_bound) {
         continue;
       }
@@ -3301,11 +3221,8 @@ void RaystarNode::executeGoalSetPlanning(
       const auto& solution = core_goal_result.path_solutions[solution_index];
       raystar_interfaces::msg::PathResult path_result;
       std::string path_error;
-      if (!buildTopologyPathMsg(solution,
-                                work_map,
-                                grid.header.frame_id,
-                                path_result.topology_path,
-                                path_error)) {
+      if (!buildTopologyPathMsg(
+            solution, work_map, grid.header.frame_id, path_result.topology_path, path_error)) {
         ++omitted;
         continue;
       }
@@ -3321,7 +3238,7 @@ void RaystarNode::executeGoalSetPlanning(
         return topology_point_count <=
                  configuration.planning.max_path_points - emitted_path_points &&
                serialized_path_points <= configuration.planning.max_path_points -
-                                             emitted_path_points - topology_point_count;
+                                           emitted_path_points - topology_point_count;
       };
       if (!points_fit(point_count) && !topology_only && points_fit(topology_point_count)) {
         topology_only = true;
@@ -3329,26 +3246,22 @@ void RaystarNode::executeGoalSetPlanning(
       }
       if (!points_fit(point_count)) {
         omitted = metric_found_path_count - goal_output.path_results.size();
-        info.limits_reached = static_cast<uint16_t>(
-          info.limits_reached | PlanningResultInfo::LIMIT_MAX_PATH_POINTS);
+        info.limits_reached =
+          static_cast<uint16_t>(info.limits_reached | PlanningResultInfo::LIMIT_MAX_PATH_POINTS);
         break;
       }
       size_t path_bytes = 0;
       size_t topology_path_bytes = 0;
       size_t candidate_response_bytes = response_bytes;
-      const auto bytes_fit = [&](size_t serialized_path_points,
-                                 size_t& candidate_bytes) {
+      const auto bytes_fit = [&](size_t serialized_path_points, size_t& candidate_bytes) {
         candidate_bytes = response_bytes;
         return estimatePathResponseBytes(
                  serialized_path_points, grid.header.frame_id.size(), path_bytes) &&
                estimatePathResponseBytes(
                  topology_point_count, grid.header.frame_id.size(), topology_path_bytes) &&
-               checkedAdd(candidate_bytes,
-                          path_bytes,
-                          configuration.planning.max_response_bytes) &&
-               checkedAdd(candidate_bytes,
-                          topology_path_bytes,
-                          configuration.planning.max_response_bytes);
+               checkedAdd(candidate_bytes, path_bytes, configuration.planning.max_response_bytes) &&
+               checkedAdd(
+                 candidate_bytes, topology_path_bytes, configuration.planning.max_response_bytes);
       };
       bool response_bytes_fit = bytes_fit(point_count, candidate_response_bytes);
       if (!response_bytes_fit && !topology_only) {
@@ -3358,30 +3271,25 @@ void RaystarNode::executeGoalSetPlanning(
       }
       if (!response_bytes_fit) {
         omitted = metric_found_path_count - goal_output.path_results.size();
-        info.limits_reached = static_cast<uint16_t>(
-          info.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
+        info.limits_reached =
+          static_cast<uint16_t>(info.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
         break;
       }
       if (topology_only) {
         path_result.path = path_result.topology_path;
-      } else if (!buildPathMsg(
-                   solution,
-                   work_map,
-                   grid.header.frame_id,
-                   configuration.planning.max_path_points - emitted_path_points -
-                     topology_point_count,
-                   path_result.path,
-                   path_error)) {
+      } else if (!buildPathMsg(solution,
+                               work_map,
+                               grid.header.frame_id,
+                               configuration.planning.max_path_points - emitted_path_points -
+                                 topology_point_count,
+                               path_result.path,
+                               path_error)) {
         ++omitted;
         continue;
       }
-      const double core_metric_cost =
-        gridCostToMetric(solution.path_cost_, work_map.resolution);
+      const double core_metric_cost = gridCostToMetric(solution.path_cost_, work_map.resolution);
       if (!finalizeCostBoundedPublishedPathResult(
-            path_result,
-            core_metric_cost,
-            request.max_path_lengths[i],
-            stop_requested)) {
+            path_result, core_metric_cost, request.max_path_lengths[i], stop_requested)) {
         ++omitted;
         continue;
       }
@@ -3389,8 +3297,8 @@ void RaystarNode::executeGoalSetPlanning(
       // dense-to-topology fallback performed by the final certificate.
       if (!bytes_fit(path_result.path.poses.size(), candidate_response_bytes)) {
         ++omitted;
-        info.limits_reached = static_cast<uint16_t>(
-          info.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
+        info.limits_reached =
+          static_cast<uint16_t>(info.limits_reached | PlanningResultInfo::LIMIT_MAX_RESPONSE_BYTES);
         continue;
       }
       const size_t serialized_path_points =
@@ -3401,15 +3309,15 @@ void RaystarNode::executeGoalSetPlanning(
       emitted_path_points += serialized_path_points;
       ++total_returned_paths;
     }
-    if (!stableSortPublishedPathsWithSources(
-          goal_output.path_results, goal_emitted_solution_indices)) {
+    if (!stableSortPublishedPathsWithSources(goal_output.path_results,
+                                             goal_emitted_solution_indices)) {
       throw std::logic_error("published goal path/source index cardinality mismatch");
     }
     for (const size_t solution_index : goal_emitted_solution_indices)
       emitted_solutions.emplace_back(i, solution_index);
     info.returned_path_count = boundedUint32(goal_output.path_results.size());
-    info.output_complete = omitted == 0 &&
-                           goal_output.path_results.size() == metric_found_path_count;
+    info.output_complete =
+      omitted == 0 && goal_output.path_results.size() == metric_found_path_count;
     if (!info.output_complete) {
       markPathOutputIncomplete(info);
       all_output_complete = false;
@@ -3426,9 +3334,8 @@ void RaystarNode::executeGoalSetPlanning(
     response.goal_results.emplace_back(std::move(goal_output));
   }
 
-  const bool complete_goal_result_set =
-    result.goal_results.size() == request.goals.size() &&
-    response.goal_results.size() == request.goals.size();
+  const bool complete_goal_result_set = result.goal_results.size() == request.goals.size() &&
+                                        response.goal_results.size() == request.goals.size();
   if (!complete_goal_result_set) {
     all_output_complete = false;
     all_requests_satisfied = false;
@@ -3457,12 +3364,11 @@ void RaystarNode::executeGoalSetPlanning(
     configuration.planning.max_response_bytes > response_bytes
       ? configuration.planning.max_response_bytes - response_bytes
       : 0;
-  const size_t debug_node_count =
-    request.include_debug
-      ? std::min({nodes.size(),
-                  configuration.planning.max_debug_nodes,
-                  response_budget_remaining / kDebugNodeBytes})
-      : 0u;
+  const size_t debug_node_count = request.include_debug
+                                    ? std::min({nodes.size(),
+                                                configuration.planning.max_debug_nodes,
+                                                response_budget_remaining / kDebugNodeBytes})
+                                    : 0u;
   response.debug_nodes.reserve(debug_node_count);
   for (size_t i = 0; i < debug_node_count; ++i) {
     if (stop_requested && stop_requested()) {
@@ -3549,8 +3455,8 @@ void RaystarNode::executeTransitionPlanning(
   response.environment_id = raystar_interfaces::computeEnvironmentId(
     grid, configuration.occupied_threshold, request.allow_unknown);
   if (!raystar_interfaces::isZeroEnvironmentId(request.expected_environment_id) &&
-      !raystar_interfaces::environmentIdsEqual(
-        request.expected_environment_id, response.environment_id)) {
+      !raystar_interfaces::environmentIdsEqual(request.expected_environment_id,
+                                               response.environment_id)) {
     response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
     response.message =
       "expected_environment_id does not match the cached map, occupancy policy, "
@@ -3578,8 +3484,7 @@ void RaystarNode::executeTransitionPlanning(
   };
   if (effective_stop_requested()) {
     response.status = stopped_status();
-    response.message = "UPS transition construction " + stopped_reason() +
-                       " before validation";
+    response.message = "UPS transition construction " + stopped_reason() + " before validation";
     return;
   }
   if (request.tether_configurations.empty()) {
@@ -3587,8 +3492,7 @@ void RaystarNode::executeTransitionPlanning(
     response.message = "At least one tether configuration is required";
     return;
   }
-  if (request.tether_configurations.size() >
-      configuration.planning.max_transition_configurations) {
+  if (request.tether_configurations.size() > configuration.planning.max_transition_configurations) {
     response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
     response.message = "Tether configuration count exceeds max_transition_configurations=" +
                        std::to_string(configuration.planning.max_transition_configurations);
@@ -3620,9 +3524,8 @@ void RaystarNode::executeTransitionPlanning(
   GridMap work_map;
   if (!occupancyGridToBinaryMap(
         grid, request.allow_unknown, configuration, effective_stop_requested, work_map, error)) {
-    response.status = effective_stop_requested()
-                        ? stopped_status()
-                        : TransitionAction::Result::STATUS_INVALID_REQUEST;
+    response.status = effective_stop_requested() ? stopped_status()
+                                                 : TransitionAction::Result::STATUS_INVALID_REQUEST;
     response.message = std::move(error);
     return;
   }
@@ -3648,19 +3551,12 @@ void RaystarNode::executeTransitionPlanning(
       return false;
     double gx = (wx - work_map.origin_x) / static_cast<double>(work_map.resolution);
     double gy = (wy - work_map.origin_y) / static_cast<double>(work_map.resolution);
-    gx = canonicalizeWorldGridCoordinate(wx,
-                                         work_map.origin_x,
-                                         static_cast<double>(work_map.resolution),
-                                         work_map.width,
-                                         gx);
-    gy = canonicalizeWorldGridCoordinate(wy,
-                                         work_map.origin_y,
-                                         static_cast<double>(work_map.resolution),
-                                         work_map.height,
-                                         gy);
+    gx = canonicalizeWorldGridCoordinate(
+      wx, work_map.origin_x, static_cast<double>(work_map.resolution), work_map.width, gx);
+    gy = canonicalizeWorldGridCoordinate(
+      wy, work_map.origin_y, static_cast<double>(work_map.resolution), work_map.height, gy);
     if (!std::isfinite(gx) || !std::isfinite(gy) || gx < 0.0 || gy < 0.0 ||
-        gx > static_cast<double>(work_map.width) ||
-        gy > static_cast<double>(work_map.height)) {
+        gx > static_cast<double>(work_map.width) || gy > static_cast<double>(work_map.height)) {
       return false;
     }
     point = {gx, gy};
@@ -3673,8 +3569,7 @@ void RaystarNode::executeTransitionPlanning(
   endpoints.reserve(request.tether_configurations.size());
   size_t input_point_count = 0;
   std::optional<ContinuousGridPoint> base;
-  for (size_t configuration_index = 0;
-       configuration_index < request.tether_configurations.size();
+  for (size_t configuration_index = 0; configuration_index < request.tether_configurations.size();
        ++configuration_index) {
     const auto& input_path = request.tether_configurations[configuration_index];
     if (input_path.header.frame_id != grid.header.frame_id ||
@@ -3686,13 +3581,12 @@ void RaystarNode::executeTransitionPlanning(
     }
     if (input_path.poses.empty()) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
-                         " is empty";
+      response.message =
+        "Tether configuration " + std::to_string(configuration_index) + " is empty";
       return;
     }
-    if (!canAppendCount(input_point_count,
-                        input_path.poses.size(),
-                        configuration.planning.max_path_points)) {
+    if (!canAppendCount(
+          input_point_count, input_path.poses.size(), configuration.planning.max_path_points)) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
       response.message = "Input tether paths exceed max_path_points=" +
                          std::to_string(configuration.planning.max_path_points);
@@ -3704,21 +3598,18 @@ void RaystarNode::executeTransitionPlanning(
     for (size_t point_index = 0; point_index < input_path.poses.size(); ++point_index) {
       const auto& pose = input_path.poses[point_index];
       std::string pose_error;
-      if (!validatePlanarPose(pose,
-                              "Tether configuration waypoint",
-                              grid.header.frame_id,
-                              pose_error)) {
+      if (!validatePlanarPose(
+            pose, "Tether configuration waypoint", grid.header.frame_id, pose_error)) {
         response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-        response.message = "Configuration " + std::to_string(configuration_index) +
-                           " waypoint " + std::to_string(point_index) + ": " + pose_error;
+        response.message = "Configuration " + std::to_string(configuration_index) + " waypoint " +
+                           std::to_string(point_index) + ": " + pose_error;
         return;
       }
       Point2d point;
       if (!waypoint_to_grid(pose.pose.position.x, pose.pose.position.y, point)) {
         response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-        response.message = "Configuration " + std::to_string(configuration_index) +
-                           " waypoint " + std::to_string(point_index) +
-                           " lies outside the map geometry";
+        response.message = "Configuration " + std::to_string(configuration_index) + " waypoint " +
+                           std::to_string(point_index) + " lies outside the map geometry";
         return;
       }
       if (path.empty() || path.back() != point)
@@ -3727,8 +3618,7 @@ void RaystarNode::executeTransitionPlanning(
 
     ContinuousGridPoint configuration_base;
     const auto& first_pose = input_path.poses.front().pose.position;
-    if (!worldToContinuousMap(
-          work_map, first_pose.x, first_pose.y, configuration_base)) {
+    if (!worldToContinuousMap(work_map, first_pose.x, first_pose.y, configuration_base)) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
       response.message = "Tether configuration " + std::to_string(configuration_index) +
                          " base is not a strict map-interior point";
@@ -3752,8 +3642,8 @@ void RaystarNode::executeTransitionPlanning(
     const PolymapEndpoint polymap_endpoint{static_cast<int>(endpoint.cell_x),
                                            static_cast<int>(endpoint.cell_y),
                                            {endpoint.x, endpoint.y}};
-    const auto duplicate_endpoint = std::find_if(
-      endpoints.begin(), endpoints.end(), [&polymap_endpoint](const auto& existing) {
+    const auto duplicate_endpoint =
+      std::find_if(endpoints.begin(), endpoints.end(), [&polymap_endpoint](const auto& existing) {
         return existing.cell_x == polymap_endpoint.cell_x &&
                existing.cell_y == polymap_endpoint.cell_y &&
                existing.position == polymap_endpoint.position;
@@ -3764,9 +3654,8 @@ void RaystarNode::executeTransitionPlanning(
   }
 
   const StopToken stop_token(effective_stop_requested);
-  const PolymapEndpoint base_endpoint{static_cast<int>(base->cell_x),
-                                      static_cast<int>(base->cell_y),
-                                      Point2d{base->x, base->y}};
+  const PolymapEndpoint base_endpoint{
+    static_cast<int>(base->cell_x), static_cast<int>(base->cell_y), Point2d{base->x, base->y}};
   std::shared_ptr<const Polymap> polymap_owner = findCachedTransitionEnvironment(
     grid, map_id, request.allow_unknown, configuration, base_endpoint, endpoints);
   if (polymap_owner) {
@@ -3774,27 +3663,26 @@ void RaystarNode::executeTransitionPlanning(
                  "Reusing the completed free-triangle environment for %zu UPS transition(s)",
                  request.transition_pairs.size());
   } else {
-    auto polymap_result = endpoints.size() == 1
-                            ? Polymap::create(work_map,
-                                             base_endpoint.cell_x,
-                                             base_endpoint.cell_y,
-                                             endpoints.front().cell_x,
-                                             endpoints.front().cell_y,
-                                             base_endpoint.position,
-                                             endpoints.front().position,
-                                             stop_token,
-                                             configuration.planning)
-                            : Polymap::create(work_map,
-                                             base_endpoint.cell_x,
-                                             base_endpoint.cell_y,
-                                             base_endpoint.position,
-                                             endpoints,
-                                             stop_token,
-                                             configuration.planning);
+    auto polymap_result = endpoints.size() == 1 ? Polymap::create(work_map,
+                                                                  base_endpoint.cell_x,
+                                                                  base_endpoint.cell_y,
+                                                                  endpoints.front().cell_x,
+                                                                  endpoints.front().cell_y,
+                                                                  base_endpoint.position,
+                                                                  endpoints.front().position,
+                                                                  stop_token,
+                                                                  configuration.planning)
+                                                : Polymap::create(work_map,
+                                                                  base_endpoint.cell_x,
+                                                                  base_endpoint.cell_y,
+                                                                  base_endpoint.position,
+                                                                  endpoints,
+                                                                  stop_token,
+                                                                  configuration.planning);
     if (polymap_result.status == PolymapCreateStatus::stopped) {
       response.status = stopped_status();
-      response.message = "UPS transition construction " + stopped_reason() +
-                         " while building the map";
+      response.message =
+        "UPS transition construction " + stopped_reason() + " while building the map";
       return;
     }
     if (!polymap_result) {
@@ -3805,13 +3693,8 @@ void RaystarNode::executeTransitionPlanning(
       return;
     }
     polymap_owner = std::make_shared<Polymap>(std::move(*polymap_result.value));
-    cacheCompletedTransitionEnvironment(grid,
-                                        map_id,
-                                        request.allow_unknown,
-                                        configuration,
-                                        base_endpoint,
-                                        endpoints,
-                                        polymap_owner);
+    cacheCompletedTransitionEnvironment(
+      grid, map_id, request.allow_unknown, configuration, base_endpoint, endpoints, polymap_owner);
   }
   const Polymap& polymap = *polymap_owner;
 
@@ -3822,8 +3705,7 @@ void RaystarNode::executeTransitionPlanning(
   // the composed alpha_a^{-1} * alpha_b path and would therefore evade the
   // pairwise corridor trace.
   progress.publishStage("validating tether configurations");
-  for (size_t configuration_index = 0;
-       configuration_index < configurations.size();
+  for (size_t configuration_index = 0; configuration_index < configurations.size();
        ++configuration_index) {
     if (stop_token.poll()) {
       response.status = stopped_status();
@@ -3832,8 +3714,8 @@ void RaystarNode::executeTransitionPlanning(
                          std::to_string(configuration_index);
       return;
     }
-    const auto validation = polymap.shortenPathWithinHomotopy(
-      configurations[configuration_index], stop_token);
+    const auto validation =
+      polymap.shortenPathWithinHomotopy(configurations[configuration_index], stop_token);
     if (validation.status == HomotopyShorteningStatus::stopped) {
       response.status = stopped_status();
       response.message = "UPS transition construction " + stopped_reason() +
@@ -3843,8 +3725,7 @@ void RaystarNode::executeTransitionPlanning(
     }
     if (!validation) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " +
-                         std::to_string(configuration_index) +
+      response.message = "Tether configuration " + std::to_string(configuration_index) +
                          " is not a collision-free reference in the cached map";
       if (!validation.message.empty())
         response.message += ": " + validation.message.substr(0, kMaxDiagnosticBytes);
@@ -3852,21 +3733,17 @@ void RaystarNode::executeTransitionPlanning(
       return;
     }
     double input_cost = 0.0;
-    for (size_t point_index = 1;
-         point_index < configurations[configuration_index].size();
+    for (size_t point_index = 1; point_index < configurations[configuration_index].size();
          ++point_index) {
       const auto& previous = configurations[configuration_index][point_index - 1];
       const auto& current = configurations[configuration_index][point_index];
-      input_cost += std::hypot(current.first - previous.first,
-                               current.second - previous.second);
+      input_cost += std::hypot(current.first - previous.first, current.second - previous.second);
     }
-    const double taut_tolerance =
-      1.0e-10 * std::max({1.0, input_cost, validation.path_cost});
+    const double taut_tolerance = 1.0e-10 * std::max({1.0, input_cost, validation.path_cost});
     if (!std::isfinite(input_cost) ||
         std::abs(input_cost - validation.path_cost) > taut_tolerance) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " +
-                         std::to_string(configuration_index) +
+      response.message = "Tether configuration " + std::to_string(configuration_index) +
                          " is not a locally shortest (taut) reference";
       return;
     }
@@ -3889,16 +3766,15 @@ void RaystarNode::executeTransitionPlanning(
       return;
     }
     const auto& requested_pair = request.transition_pairs[index];
-    const auto shortening = RaystarCore::shortenWithinHomotopy(
-      polymap,
-      configurations[requested_pair.from_configuration],
-      configurations[requested_pair.to_configuration],
-      stop_token);
+    const auto shortening =
+      RaystarCore::shortenWithinHomotopy(polymap,
+                                         configurations[requested_pair.from_configuration],
+                                         configurations[requested_pair.to_configuration],
+                                         stop_token);
     if (shortening.status == HomotopyShorteningStatus::stopped) {
       response.status = stopped_status();
       response.message = "UPS transition construction " + stopped_reason() +
-                         " while shortening pair " +
-                         std::to_string(index);
+                         " while shortening pair " + std::to_string(index);
       return;
     }
 
@@ -3937,9 +3813,8 @@ void RaystarNode::executeTransitionPlanning(
     output.path.header.stamp = now();
     output.path.header.frame_id = grid.header.frame_id;
 
-    if (!canAppendCount(output_point_count,
-                        shortening.path.size(),
-                        configuration.planning.max_path_points)) {
+    if (!canAppendCount(
+          output_point_count, shortening.path.size(), configuration.planning.max_path_points)) {
       response.status = TransitionAction::Result::STATUS_FAILED;
       response.message = "UPS output exceeds max_path_points=" +
                          std::to_string(configuration.planning.max_path_points);
@@ -3947,8 +3822,7 @@ void RaystarNode::executeTransitionPlanning(
     }
     size_t path_bytes = 0;
     const bool triangle_bytes_valid =
-      output.triangle_occurrences.size() <=
-      std::numeric_limits<size_t>::max() / sizeof(uint32_t);
+      output.triangle_occurrences.size() <= std::numeric_limits<size_t>::max() / sizeof(uint32_t);
     if (!estimatePathResponseBytes(
           shortening.path.size(), grid.header.frame_id.size(), path_bytes) ||
         !triangle_bytes_valid ||
@@ -3968,8 +3842,7 @@ void RaystarNode::executeTransitionPlanning(
       geometry_msgs::msg::PoseStamped pose;
       pose.header = output.path.header;
       pose.pose.orientation.w = 1.0;
-      if (!continuousGridToWorld(
-            work_map, point, pose.pose.position.x, pose.pose.position.y)) {
+      if (!continuousGridToWorld(work_map, point, pose.pose.position.x, pose.pose.position.y)) {
         response.status = TransitionAction::Result::STATUS_FAILED;
         response.message = "Could not convert a UPS output waypoint to world coordinates";
         return;
@@ -3981,16 +3854,12 @@ void RaystarNode::executeTransitionPlanning(
       double certified_world_length = 0.0;
       const auto certificate_stop = [&stop_token]() { return stop_token.poll(); };
       if (output.path.poses.size() > 1 &&
-          !publishedPathLength(output.path,
-                               rounded_world_length,
-                               certified_world_length,
-                               certificate_stop)) {
+          !publishedPathLength(
+            output.path, rounded_world_length, certified_world_length, certificate_stop)) {
         const bool stopped = stop_token.poll();
-        response.status = stopped ? stopped_status()
-                                  : TransitionAction::Result::STATUS_FAILED;
-        response.message = stopped
-                             ? "UPS transition length certification " + stopped_reason()
-                             : "Could not certify the serialized UPS path length";
+        response.status = stopped ? stopped_status() : TransitionAction::Result::STATUS_FAILED;
+        response.message = stopped ? "UPS transition length certification " + stopped_reason()
+                                   : "Could not certify the serialized UPS path length";
         return;
       }
       const double nominal_metric_length =
@@ -4098,8 +3967,7 @@ bool RaystarNode::buildTopologyPathMsg(const PathSolution& solution,
     geometry_msgs::msg::PoseStamped pose;
     pose.header = msg.header;
     pose.pose.orientation.w = 1.0;
-    if (!continuousGridToWorld(
-          grid_map, point, pose.pose.position.x, pose.pose.position.y)) {
+    if (!continuousGridToWorld(grid_map, point, pose.pose.position.x, pose.pose.position.y)) {
       error = "topology path contains a point outside the finite world transform";
       msg.poses.clear();
       return false;

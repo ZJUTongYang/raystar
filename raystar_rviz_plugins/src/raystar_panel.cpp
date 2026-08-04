@@ -397,19 +397,10 @@ void RaystarPanel::setupUi() {
           this,
           &RaystarPanel::configureGoalSetActionClient);
   connect(add_goal_button_, &QPushButton::clicked, this, &RaystarPanel::onAddGoalClicked);
-  connect(remove_goals_button_,
-          &QPushButton::clicked,
-          this,
-          &RaystarPanel::onRemoveGoalsClicked);
+  connect(remove_goals_button_, &QPushButton::clicked, this, &RaystarPanel::onRemoveGoalsClicked);
   connect(cancel_button_, &QPushButton::clicked, this, &RaystarPanel::onCancelClicked);
-  connect(capture_start_button_,
-          &QPushButton::toggled,
-          this,
-          &RaystarPanel::onCaptureStartClicked);
-  connect(capture_goal_button_,
-          &QPushButton::toggled,
-          this,
-          &RaystarPanel::onCaptureGoalClicked);
+  connect(capture_start_button_, &QPushButton::toggled, this, &RaystarPanel::onCaptureStartClicked);
+  connect(capture_goal_button_, &QPushButton::toggled, this, &RaystarPanel::onCaptureGoalClicked);
 }
 
 void RaystarPanel::onSearchModeChanged(int index) {
@@ -422,8 +413,7 @@ void RaystarPanel::onSearchModeChanged(int index) {
   setCaptureMode(CaptureMode::none);
   k_spinbox_->setEnabled(!bounded);
   max_path_length_spinbox_->setEnabled(bounded);
-  max_path_length_label_->setText(
-    multi_goal ? "Set all budgets (m):" : "Max length (m):");
+  max_path_length_label_->setText(multi_goal ? "Set all budgets (m):" : "Max length (m):");
   single_goal_group_->setVisible(!multi_goal);
   multi_goal_group_->setVisible(multi_goal);
   goal_results_group_->setVisible(multi_goal);
@@ -497,13 +487,11 @@ void RaystarPanel::onInitialize() {
 }
 
 void RaystarPanel::updatePlanButtonState() {
-  const bool multi_goal =
-    search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode;
+  const bool multi_goal = search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode;
   const bool action_is_current =
-    multi_goal
-      ? goal_set_action_client_ &&
-          goal_set_action_name_edit_->text().toStdString() == goal_set_action_client_name_
-      : action_client_ && action_name_edit_->text().toStdString() == action_client_name_;
+    multi_goal ? goal_set_action_client_ &&
+                   goal_set_action_name_edit_->text().toStdString() == goal_set_action_client_name_
+               : action_client_ && action_name_edit_->text().toStdString() == action_client_name_;
   const bool map_is_current = latest_map_ && !latest_map_->data.empty() &&
                               map_topic_edit_->text().toStdString() == subscribed_topic_;
   const bool goals_available = !multi_goal || multi_goal_table_->rowCount() > 0;
@@ -597,8 +585,7 @@ void RaystarPanel::configureActionClient() {
 
 void RaystarPanel::configureGoalSetActionClient() {
   if (!ros_initialized_) {
-    status_label_->setText(
-      "Multi-goal Action selected; waiting for RViz ROS initialization.");
+    status_label_->setText("Multi-goal Action selected; waiting for RViz ROS initialization.");
     return;
   }
 
@@ -634,13 +621,11 @@ void RaystarPanel::configureGoalSetActionClient() {
   try {
     goal_set_action_client_ = rclcpp_action::create_client<GoalSetAction>(node, action_name);
     goal_set_action_client_name_ = action_name;
-    status_label_->setText(
-      QString("Using multi-goal Action %1").arg(boundedQString(action_name)));
+    status_label_->setText(QString("Using multi-goal Action %1").arg(boundedQString(action_name)));
   } catch (const std::exception& exception) {
     goal_set_action_client_.reset();
-    status_label_->setText(
-      boundedQString(std::string("Could not create multi-goal Action client: ") +
-                     exception.what()));
+    status_label_->setText(boundedQString(
+      std::string("Could not create multi-goal Action client: ") + exception.what()));
   } catch (...) {
     goal_set_action_client_.reset();
     status_label_->setText("Error: Could not create the multi-goal Action client.");
@@ -770,14 +755,12 @@ void RaystarPanel::onClickedPointTopicChanged(const QString& topic) {
   subscribed_clicked_point_topic_.clear();
   if (callback_state_) {
     std::lock_guard<std::mutex> lock(callback_state_->mutex);
-    callback_state_->point_subscription_id =
-      nextCounter(callback_state_->point_subscription_id);
+    callback_state_->point_subscription_id = nextCounter(callback_state_->point_subscription_id);
     callback_state_->pending_points.clear();
   }
   status_label_->setText(
-    ros_initialized_
-      ? "Clicked-point topic changed; press Enter or leave the field to subscribe."
-      : "Clicked-point topic selected; waiting for RViz ROS initialization.");
+    ros_initialized_ ? "Clicked-point topic changed; press Enter or leave the field to subscribe."
+                     : "Clicked-point topic selected; waiting for RViz ROS initialization.");
 }
 
 void RaystarPanel::subscribeToClickedPoint() {
@@ -794,8 +777,7 @@ void RaystarPanel::subscribeToClickedPoint() {
   auto abstraction = context ? context->getRosNodeAbstraction().lock() : nullptr;
   auto node = abstraction ? abstraction->get_raw_node() : nullptr;
   if (!ros_initialized_ || !node) {
-    status_label_->setText(
-      "Clicked-point topic selected; waiting for RViz ROS initialization.");
+    status_label_->setText("Clicked-point topic selected; waiting for RViz ROS initialization.");
     return;
   }
 
@@ -808,8 +790,7 @@ void RaystarPanel::subscribeToClickedPoint() {
     if (!callback_state_->alive) {
       return;
     }
-    callback_state_->point_subscription_id =
-      nextCounter(callback_state_->point_subscription_id);
+    callback_state_->point_subscription_id = nextCounter(callback_state_->point_subscription_id);
     subscription_id = callback_state_->point_subscription_id;
     callback_state_->pending_points.clear();
   }
@@ -866,9 +847,8 @@ void RaystarPanel::updateGoalRowLabels() {
 
 void RaystarPanel::addGoalRow(double x, double y, double max_path_length) {
   if (static_cast<std::size_t>(multi_goal_table_->rowCount()) >= kMaxUiGoals) {
-    status_label_->setText(
-      QString("Error: The Panel accepts at most %1 goals.")
-        .arg(static_cast<qulonglong>(kMaxUiGoals)));
+    status_label_->setText(QString("Error: The Panel accepts at most %1 goals.")
+                             .arg(static_cast<qulonglong>(kMaxUiGoals)));
     return;
   }
   const int row = multi_goal_table_->rowCount();
@@ -942,8 +922,8 @@ void RaystarPanel::setCaptureMode(CaptureMode mode) {
   const QSignalBlocker start_blocker(capture_start_button_);
   const QSignalBlocker goal_blocker(capture_goal_button_);
   capture_start_button_->setChecked(mode == CaptureMode::start_once);
-  capture_goal_button_->setChecked(
-    mode == CaptureMode::goal_once || mode == CaptureMode::append_goals);
+  capture_goal_button_->setChecked(mode == CaptureMode::goal_once ||
+                                   mode == CaptureMode::append_goals);
 }
 
 void RaystarPanel::onCaptureStartClicked(bool checked) {
@@ -987,8 +967,7 @@ void RaystarPanel::onCaptureGoalClicked(bool checked) {
     setCaptureMode(CaptureMode::none);
     return;
   }
-  const bool multi_goal =
-    search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode;
+  const bool multi_goal = search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode;
   setCaptureMode(multi_goal ? CaptureMode::append_goals : CaptureMode::goal_once);
   status_label_->setText(
     multi_goal
@@ -1256,9 +1235,8 @@ void RaystarPanel::planGoalSet() {
     return;
   }
   if (!goal_set_action_client_->action_server_is_ready()) {
-    status_label_->setText(
-      QString("Error: Multi-goal Action %1 is not ready")
-        .arg(boundedQString(goal_set_action_client_name_)));
+    status_label_->setText(QString("Error: Multi-goal Action %1 is not ready")
+                             .arg(boundedQString(goal_set_action_client_name_)));
     return;
   }
   if (!latest_map_ || latest_map_->data.empty()) {
@@ -1352,8 +1330,7 @@ void RaystarPanel::planGoalSet() {
   std::uint64_t request_id = 0;
   {
     std::lock_guard<std::mutex> lock(state->mutex);
-    if (!state->alive || state->map_generation != request_generation ||
-        state->pending_map_update) {
+    if (!state->alive || state->map_generation != request_generation || state->pending_map_update) {
       status_label_->setText("Map changed; wait for the new map before planning.");
       return;
     }
@@ -1421,87 +1398,83 @@ void RaystarPanel::planGoalSet() {
         }
       };
 
-    options.result_callback =
-      [callback_state,
-       request_id,
-       request_generation,
-       request_map_id,
-       requested_start,
-       requested_goals,
-       requested_bounds,
-       requested_allow_self_crossing,
-       requested_allow_unknown,
-       requested_include_debug](const GoalSetGoalHandle::WrappedResult& wrapped_result) {
-        CallbackState::PendingResponse pending;
-        pending.request_id = request_id;
-        pending.map_generation = request_generation;
-        pending.result_code = wrapped_result.code;
-        if (!wrapped_result.result) {
-          pending.error = "The Raystar multi-goal action returned an empty result.";
-        } else if (!raystar_interfaces::mapIdsEqual(
-                     wrapped_result.result->result_info.map_id, request_map_id)) {
+    options.result_callback = [callback_state,
+                               request_id,
+                               request_generation,
+                               request_map_id,
+                               requested_start,
+                               requested_goals,
+                               requested_bounds,
+                               requested_allow_self_crossing,
+                               requested_allow_unknown,
+                               requested_include_debug](
+                                const GoalSetGoalHandle::WrappedResult& wrapped_result) {
+      CallbackState::PendingResponse pending;
+      pending.request_id = request_id;
+      pending.map_generation = request_generation;
+      pending.result_code = wrapped_result.code;
+      if (!wrapped_result.result) {
+        pending.error = "The Raystar multi-goal action returned an empty result.";
+      } else if (!raystar_interfaces::mapIdsEqual(wrapped_result.result->result_info.map_id,
+                                                  request_map_id)) {
+        pending.error = "The Raystar multi-goal action result refers to a different cached map.";
+      } else if (wrapped_result.result->requested_start != requested_start ||
+                 wrapped_result.result->requested_allow_self_crossing !=
+                   requested_allow_self_crossing ||
+                 wrapped_result.result->requested_allow_unknown != requested_allow_unknown) {
+        pending.error =
+          "The Raystar multi-goal action result does not echo the requested start or policy.";
+      } else if (wrapped_result.result->result_info.debug_requested != requested_include_debug) {
+        pending.error =
+          "The Raystar multi-goal action result does not echo the debug-output policy.";
+      } else if (static_cast<std::size_t>(
+                   wrapped_result.result->result_info.requested_goal_count) !=
+                   requested_goals.size() ||
+                 static_cast<std::size_t>(wrapped_result.result->result_info.returned_goal_count) !=
+                   wrapped_result.result->goal_results.size()) {
+        pending.error = "The Raystar multi-goal action result has inconsistent goal counts.";
+      } else if ((wrapped_result.result->success ||
+                  wrapped_result.result->result_info.request_satisfied) &&
+                 wrapped_result.result->goal_results.size() != requested_goals.size()) {
+        pending.error =
+          "The Raystar multi-goal action claims completion without every goal result.";
+      } else {
+        bool associations_match =
+          wrapped_result.result->goal_results.size() <= requested_goals.size();
+        for (std::size_t i = 0;
+             associations_match && i < wrapped_result.result->goal_results.size();
+             ++i) {
+          const auto& goal_result = wrapped_result.result->goal_results[i];
+          associations_match =
+            static_cast<std::size_t>(goal_result.goal_index) == i &&
+            goal_result.goal == requested_goals[i] &&
+            goal_result.requested_max_path_length == requested_bounds[i] &&
+            goal_result.result_info.search_mode ==
+              PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH &&
+            goal_result.result_info.requested_max_path_length == requested_bounds[i] &&
+            goal_result.result_info.debug_requested == requested_include_debug &&
+            raystar_interfaces::mapIdsEqual(goal_result.result_info.map_id, request_map_id) &&
+            raystar_interfaces::environmentIdsEqual(
+              goal_result.result_info.environment_id,
+              wrapped_result.result->result_info.environment_id);
+        }
+        if (!associations_match) {
           pending.error =
-            "The Raystar multi-goal action result refers to a different cached map.";
-        } else if (wrapped_result.result->requested_start != requested_start ||
-                   wrapped_result.result->requested_allow_self_crossing !=
-                     requested_allow_self_crossing ||
-                   wrapped_result.result->requested_allow_unknown != requested_allow_unknown) {
-          pending.error =
-            "The Raystar multi-goal action result does not echo the requested start or policy.";
-        } else if (wrapped_result.result->result_info.debug_requested !=
-                   requested_include_debug) {
-          pending.error =
-            "The Raystar multi-goal action result does not echo the debug-output policy.";
-        } else if (static_cast<std::size_t>(
-                     wrapped_result.result->result_info.requested_goal_count) !=
-                     requested_goals.size() ||
-                   static_cast<std::size_t>(
-                     wrapped_result.result->result_info.returned_goal_count) !=
-                     wrapped_result.result->goal_results.size()) {
-          pending.error =
-            "The Raystar multi-goal action result has inconsistent goal counts.";
-        } else if ((wrapped_result.result->success ||
-                    wrapped_result.result->result_info.request_satisfied) &&
-                   wrapped_result.result->goal_results.size() != requested_goals.size()) {
-          pending.error =
-            "The Raystar multi-goal action claims completion without every goal result.";
+            "The Raystar multi-goal action result does not preserve goal associations.";
         } else {
-          bool associations_match =
-            wrapped_result.result->goal_results.size() <= requested_goals.size();
-          for (std::size_t i = 0;
-               associations_match && i < wrapped_result.result->goal_results.size();
-               ++i) {
-            const auto& goal_result = wrapped_result.result->goal_results[i];
-            associations_match =
-              static_cast<std::size_t>(goal_result.goal_index) == i &&
-              goal_result.goal == requested_goals[i] &&
-              goal_result.requested_max_path_length == requested_bounds[i] &&
-              goal_result.result_info.search_mode ==
-                PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH &&
-              goal_result.result_info.requested_max_path_length == requested_bounds[i] &&
-              goal_result.result_info.debug_requested == requested_include_debug &&
-              raystar_interfaces::mapIdsEqual(goal_result.result_info.map_id, request_map_id) &&
-              raystar_interfaces::environmentIdsEqual(
-                goal_result.result_info.environment_id,
-                wrapped_result.result->result_info.environment_id);
-          }
-          if (!associations_match) {
-            pending.error =
-              "The Raystar multi-goal action result does not preserve goal associations.";
-          } else {
-            pending.goal_set_response = wrapped_result.result;
-          }
+          pending.goal_set_response = wrapped_result.result;
         }
+      }
 
-        std::lock_guard<std::mutex> lock(callback_state->mutex);
-        if (!callback_state->alive || callback_state->active_request_id != request_id ||
-            callback_state->active_map_generation != request_generation ||
-            callback_state->map_generation != request_generation) {
-          return;
-        }
-        callback_state->active_goal_set_goal.reset();
-        callback_state->pending_response = std::move(pending);
-      };
+      std::lock_guard<std::mutex> lock(callback_state->mutex);
+      if (!callback_state->alive || callback_state->active_request_id != request_id ||
+          callback_state->active_map_generation != request_generation ||
+          callback_state->map_generation != request_generation) {
+        return;
+      }
+      callback_state->active_goal_set_goal.reset();
+      callback_state->pending_response = std::move(pending);
+    };
 
     (void)action_client->async_send_goal(goal, options);
     bool still_current = false;
@@ -1526,8 +1499,7 @@ void RaystarPanel::planGoalSet() {
 }
 
 void RaystarPanel::clearResults() {
-  configurePathResultsTable(
-    search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode);
+  configurePathResultsTable(search_mode_combo_->currentIndex() == kMultiGoalWithinLengthsMode);
   results_table_->clearContents();
   results_table_->setRowCount(0);
   goal_results_table_->clearContents();
@@ -1750,8 +1722,7 @@ void RaystarPanel::displayPlanningResponse(const CallbackState::PendingResponse&
 
   const auto& info = response.result_info;
   const QString transport_state = transportStateText(result.result_code);
-  const bool bounded_mode =
-    info.search_mode == PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH;
+  const bool bounded_mode = info.search_mode == PlanningAction::Goal::SEARCH_MODE_ALL_WITHIN_LENGTH;
   QString status;
   if (bounded_mode) {
     status = QString("%1 / %2: returned %3 path(s) within %4 m (%5 found by Core)")
@@ -1855,10 +1826,9 @@ void RaystarPanel::displayGoalSetResponse(const CallbackState::PendingResponse& 
     goal_results_table_->setItem(
       row,
       6,
-      new QTableWidgetItem(
-        QString("%1 / %2")
-          .arg(static_cast<qulonglong>(info.returned_path_count))
-          .arg(static_cast<qulonglong>(info.found_path_count))));
+      new QTableWidgetItem(QString("%1 / %2")
+                             .arg(static_cast<qulonglong>(info.returned_path_count))
+                             .arg(static_cast<qulonglong>(info.found_path_count))));
 
     per_goal_counts_consistent =
       per_goal_counts_consistent &&
@@ -1869,14 +1839,12 @@ void RaystarPanel::displayGoalSetResponse(const CallbackState::PendingResponse& 
       per_goal_certificates_consistent && info.request_satisfied == complete;
     double previous_cost = -std::numeric_limits<double>::infinity();
     for (const auto& path_result : goal_result.path_results) {
-      path_contracts_consistent =
-        path_contracts_consistent && std::isfinite(path_result.cost) &&
-        path_result.cost <= goal_result.requested_max_path_length &&
-        path_result.cost >= previous_cost;
+      path_contracts_consistent = path_contracts_consistent && std::isfinite(path_result.cost) &&
+                                  path_result.cost <= goal_result.requested_max_path_length &&
+                                  path_result.cost >= previous_cost;
       previous_cost = path_result.cost;
     }
-    if (path_count > std::numeric_limits<std::size_t>::max() -
-                       goal_result.path_results.size()) {
+    if (path_count > std::numeric_limits<std::size_t>::max() - goal_result.path_results.size()) {
       path_count = std::numeric_limits<std::size_t>::max();
     } else {
       path_count += goal_result.path_results.size();
@@ -1906,17 +1874,15 @@ void RaystarPanel::displayGoalSetResponse(const CallbackState::PendingResponse& 
       results_table_->setItem(
         output_row,
         2,
-        new QTableWidgetItem(
-          response.success
-            ? QString("path_%1").arg(static_cast<qulonglong>(marker_index))
-            : QStringLiteral("not published")));
+        new QTableWidgetItem(response.success
+                               ? QString("path_%1").arg(static_cast<qulonglong>(marker_index))
+                               : QStringLiteral("not published")));
       results_table_->setItem(
         output_row, 3, new QTableWidgetItem(QString::number(path_result.cost, 'g', 10)));
-      results_table_->setItem(
-        output_row,
-        4,
-        new QTableWidgetItem(
-          QString::number(static_cast<qulonglong>(path_result.path.poses.size()))));
+      results_table_->setItem(output_row,
+                              4,
+                              new QTableWidgetItem(QString::number(
+                                static_cast<qulonglong>(path_result.path.poses.size()))));
       ++output_row;
     }
   }
@@ -1929,45 +1895,42 @@ void RaystarPanel::displayGoalSetResponse(const CallbackState::PendingResponse& 
     const auto& debug_node = response.debug_nodes[static_cast<std::size_t>(row)];
     node_table_->setItem(
       row, 0, new QTableWidgetItem(QString::number(static_cast<qlonglong>(debug_node.index))));
-    node_table_->setItem(
-      row, 1, new QTableWidgetItem(QString::number(debug_node.g_cost, 'f', 2)));
-    node_table_->setItem(
-      row, 2, new QTableWidgetItem(QString::number(debug_node.f_cost, 'f', 2)));
+    node_table_->setItem(row, 1, new QTableWidgetItem(QString::number(debug_node.g_cost, 'f', 2)));
+    node_table_->setItem(row, 2, new QTableWidgetItem(QString::number(debug_node.f_cost, 'f', 2)));
   }
   node_table_->resizeColumnsToContents();
 
-  QString status =
-    QString("%1 / %2: completed %3 of %4 goals; %5 goal(s) have paths; returned %6 path(s) (%7 found by Core)")
-      .arg(transportStateText(result.result_code))
-      .arg(planningStatusText(aggregate.status))
-      .arg(static_cast<qulonglong>(aggregate.completed_goal_count))
-      .arg(static_cast<qulonglong>(aggregate.requested_goal_count))
-      .arg(static_cast<qulonglong>(aggregate.goals_with_paths))
-      .arg(static_cast<qulonglong>(aggregate.returned_path_count))
-      .arg(static_cast<qulonglong>(aggregate.found_path_count));
-  status += QString(
-              "\nRequest satisfied: %1; search complete: %2; path output complete: %3; limits: %4")
-              .arg(aggregate.request_satisfied ? QStringLiteral("yes") : QStringLiteral("no"))
-              .arg(aggregate.search_complete ? QStringLiteral("yes") : QStringLiteral("no"))
-              .arg(aggregate.output_complete ? QStringLiteral("yes") : QStringLiteral("no"))
-              .arg(planningLimitsText(aggregate.limits_reached));
+  QString status = QString(
+                     "%1 / %2: completed %3 of %4 goals; %5 goal(s) have paths; returned %6 "
+                     "path(s) (%7 found by Core)")
+                     .arg(transportStateText(result.result_code))
+                     .arg(planningStatusText(aggregate.status))
+                     .arg(static_cast<qulonglong>(aggregate.completed_goal_count))
+                     .arg(static_cast<qulonglong>(aggregate.requested_goal_count))
+                     .arg(static_cast<qulonglong>(aggregate.goals_with_paths))
+                     .arg(static_cast<qulonglong>(aggregate.returned_path_count))
+                     .arg(static_cast<qulonglong>(aggregate.found_path_count));
+  status +=
+    QString("\nRequest satisfied: %1; search complete: %2; path output complete: %3; limits: %4")
+      .arg(aggregate.request_satisfied ? QStringLiteral("yes") : QStringLiteral("no"))
+      .arg(aggregate.search_complete ? QStringLiteral("yes") : QStringLiteral("no"))
+      .arg(aggregate.output_complete ? QStringLiteral("yes") : QStringLiteral("no"))
+      .arg(planningLimitsText(aggregate.limits_reached));
   if (!response.message.empty()) {
     status += QStringLiteral("\n") + boundedQString(response.message);
   }
   if (!response.success && path_count > 0) {
-    status += QStringLiteral(
-      "\nVisualization markers are not published for partial multi-goal results.");
+    status +=
+      QStringLiteral("\nVisualization markers are not published for partial multi-goal results.");
   }
   if (response.success != aggregate.request_satisfied) {
-    status += QStringLiteral(
-      "\nWarning: aggregate success does not match request_satisfied.");
+    status += QStringLiteral("\nWarning: aggregate success does not match request_satisfied.");
   }
   if (static_cast<std::size_t>(aggregate.returned_goal_count) != goal_count ||
       static_cast<std::size_t>(aggregate.returned_path_count) != path_count) {
     status += QStringLiteral("\nWarning: aggregate returned counts do not match payload sizes.");
   }
-  if (aggregate.found_path_count < aggregate.returned_path_count ||
-      !per_goal_counts_consistent) {
+  if (aggregate.found_path_count < aggregate.returned_path_count || !per_goal_counts_consistent) {
     status += QStringLiteral("\nWarning: one or more per-goal path counts are inconsistent.");
   }
   if (!per_goal_certificates_consistent) {
@@ -1988,11 +1951,12 @@ void RaystarPanel::displayGoalSetResponse(const CallbackState::PendingResponse& 
       : QString("%1%2")
           .arg(static_cast<qulonglong>(debug_count))
           .arg(aggregate.debug_output_complete ? QString() : QStringLiteral(" (truncated)"));
-  timing_label_->setText(QString("Map: %1 ms | Shared-tree search: %2 ms | Expanded: %3 | Debug: %4")
-                           .arg(aggregate.map_time_ms, 0, 'f', 1)
-                           .arg(aggregate.plan_time_ms, 0, 'f', 1)
-                           .arg(static_cast<qulonglong>(aggregate.expanded_nodes))
-                           .arg(debug_summary));
+  timing_label_->setText(
+    QString("Map: %1 ms | Shared-tree search: %2 ms | Expanded: %3 | Debug: %4")
+      .arg(aggregate.map_time_ms, 0, 'f', 1)
+      .arg(aggregate.plan_time_ms, 0, 'f', 1)
+      .arg(static_cast<qulonglong>(aggregate.expanded_nodes))
+      .arg(debug_summary));
 }
 
 void RaystarPanel::save(rviz_common::Config config) const {
@@ -2007,8 +1971,8 @@ void RaystarPanel::save(rviz_common::Config config) const {
   config.mapSetValue("goal_y", goal_y_edit_->text());
   config.mapSetValue("k", k_spinbox_->value());
   config.mapSetValue("search_mode", search_mode_combo_->currentIndex());
-  config.mapSetValue(
-    "max_path_length", QString::number(max_path_length_spinbox_->value(), 'g', 17));
+  config.mapSetValue("max_path_length",
+                     QString::number(max_path_length_spinbox_->value(), 'g', 17));
   config.mapSetValue("allow_self_crossing", allow_self_crossing_cb_->isChecked());
   config.mapSetValue("allow_unknown", allow_unknown_cb_->isChecked());
   config.mapSetValue("request_debug", request_debug_cb_->isChecked());
@@ -2020,8 +1984,8 @@ void RaystarPanel::save(rviz_common::Config config) const {
     const auto* bound_item = multi_goal_table_->item(row, 2);
     goal_config.mapSetValue("x", x_item ? x_item->text() : QStringLiteral("0"));
     goal_config.mapSetValue("y", y_item ? y_item->text() : QStringLiteral("0"));
-    goal_config.mapSetValue(
-      "max_path_length", bound_item ? bound_item->text() : QStringLiteral("0"));
+    goal_config.mapSetValue("max_path_length",
+                            bound_item ? bound_item->text() : QStringLiteral("0"));
   }
 }
 
@@ -2062,9 +2026,8 @@ void RaystarPanel::load(const rviz_common::Config& config) {
   int search_mode = 0;
   if (config.mapGetInt("search_mode", &search_mode))
     search_mode_combo_->setCurrentIndex(
-      search_mode >= kTopKMode && search_mode <= kMultiGoalWithinLengthsMode
-        ? search_mode
-        : kTopKMode);
+      search_mode >= kTopKMode && search_mode <= kMultiGoalWithinLengthsMode ? search_mode
+                                                                             : kTopKMode);
   if (config.mapGetString("max_path_length", &val)) {
     bool length_ok = false;
     const double length = val.toDouble(&length_ok);
@@ -2085,8 +2048,7 @@ void RaystarPanel::load(const rviz_common::Config& config) {
   const bool has_multi_goal_config = goals_config.isValid();
   if (has_multi_goal_config) {
     multi_goal_table_->setRowCount(0);
-    const int goal_count = std::min(
-      goals_config.listLength(), static_cast<int>(kMaxUiGoals));
+    const int goal_count = std::min(goals_config.listLength(), static_cast<int>(kMaxUiGoals));
     for (int row = 0; row < goal_count; ++row) {
       const auto goal_config = goals_config.listChildAt(row);
       QString x_text;
@@ -2095,8 +2057,7 @@ void RaystarPanel::load(const rviz_common::Config& config) {
       bool x_ok = false;
       bool y_ok = false;
       bool bound_ok = false;
-      if (!goal_config.mapGetString("x", &x_text) ||
-          !goal_config.mapGetString("y", &y_text) ||
+      if (!goal_config.mapGetString("x", &x_text) || !goal_config.mapGetString("y", &y_text) ||
           !goal_config.mapGetString("max_path_length", &bound_text)) {
         continue;
       }

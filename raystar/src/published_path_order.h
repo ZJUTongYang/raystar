@@ -15,17 +15,15 @@ namespace raystar {
 // restore the public nondecreasing-cost contract after finalization.  Move the
 // parallel source identifiers through the same stable permutation to preserve
 // the response/visualization association and Core tie order.
-template<typename SourceIdentifier>
-bool stableSortPublishedPathsWithSources(
-  std::vector<raystar_interfaces::msg::PathResult>& paths,
-  std::vector<SourceIdentifier>& sources) {
+template <typename SourceIdentifier>
+bool stableSortPublishedPathsWithSources(std::vector<raystar_interfaces::msg::PathResult>& paths,
+                                         std::vector<SourceIdentifier>& sources) {
   if (paths.size() != sources.size())
     return false;
 
   std::vector<std::size_t> order;
   order.reserve(paths.size());
-  for (std::size_t index = 0; index < paths.size(); ++index)
-    order.emplace_back(index);
+  for (std::size_t index = 0; index < paths.size(); ++index) order.emplace_back(index);
   std::stable_sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
     return paths[lhs].cost < paths[rhs].cost;
   });

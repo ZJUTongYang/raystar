@@ -115,9 +115,7 @@ double polylineLength(const std::vector<Point2d>& path) {
   return length;
 }
 
-bool pointInPolygon(const std::vector<std::pair<int, int>>& polygon,
-                    long double x,
-                    long double y) {
+bool pointInPolygon(const std::vector<std::pair<int, int>>& polygon, long double x, long double y) {
   if (polygon.size() < 3)
     return false;
   bool inside = false;
@@ -149,10 +147,8 @@ bool pointInTriangleClosed(const std::array<Point2d, 3>& vertices, const Point2d
                        std::abs(static_cast<long double>(vertex.second)));
   }
   const long double tolerance = 1.0e-14L * scale * scale;
-  const bool has_negative =
-    first < -tolerance || second < -tolerance || third < -tolerance;
-  const bool has_positive =
-    first > tolerance || second > tolerance || third > tolerance;
+  const bool has_negative = first < -tolerance || second < -tolerance || third < -tolerance;
+  const bool has_positive = first > tolerance || second > tolerance || third > tolerance;
   return !(has_negative && has_positive);
 }
 
@@ -168,8 +164,8 @@ void appendSegmentEdgeEvents(const Point2d& start,
   const long double offset_x = static_cast<long double>(edge_start.first) - start.first;
   const long double offset_y = static_cast<long double>(edge_start.second) - start.second;
   const long double denominator = cross2(dx, dy, ex, ey);
-  const long double scale = std::max<long double>(
-    1.0L, std::max(std::abs(dx) + std::abs(dy), std::abs(ex) + std::abs(ey)));
+  const long double scale =
+    std::max<long double>(1.0L, std::max(std::abs(dx) + std::abs(dy), std::abs(ex) + std::abs(ey)));
   const long double tolerance = 1.0e-18L * scale * scale;
 
   const auto append_if_in_segment = [&events](long double parameter) {
@@ -183,8 +179,7 @@ void appendSegmentEdgeEvents(const Point2d& start,
     const long double parameter = cross2(offset_x, offset_y, ex, ey) / denominator;
     const long double edge_parameter = cross2(offset_x, offset_y, dx, dy) / denominator;
     constexpr long double parameter_tolerance = 1.0e-14L;
-    if (edge_parameter >= -parameter_tolerance &&
-        edge_parameter <= 1.0L + parameter_tolerance) {
+    if (edge_parameter >= -parameter_tolerance && edge_parameter <= 1.0L + parameter_tolerance) {
       append_if_in_segment(parameter);
     }
     return;
@@ -222,8 +217,7 @@ std::vector<Point2d> runFunnel(const Point2d& start,
   std::vector<FunnelPortal> portals;
   portals.reserve(corridor_portals.size() + 2);
   portals.push_back({start, start});
-  for (const auto& portal : corridor_portals)
-    portals.push_back({portal.left, portal.right});
+  for (const auto& portal : corridor_portals) portals.push_back({portal.left, portal.right});
   portals.push_back({goal, goal});
 
   std::vector<Point2d> output;
@@ -479,8 +473,7 @@ bool hasClockwiseOuterContour(const std::vector<Obs>& obstacles, const StopToken
 
 }  // namespace
 
-bool validateReducedDirectedPortalWitness(const TriangleCorridor& corridor,
-                                          std::string* error) {
+bool validateReducedDirectedPortalWitness(const TriangleCorridor& corridor, std::string* error) {
   if (error)
     error->clear();
   const auto fail = [&](const std::string& message) {
@@ -504,17 +497,14 @@ bool validateReducedDirectedPortalWitness(const TriangleCorridor& corridor,
                   " does not bind its adjacent triangle occurrences");
     }
     if (portal.from_triangle == portal.to_triangle) {
-      return fail("Directed portal " + std::to_string(index) +
-                  " is a triangle self-transition");
+      return fail("Directed portal " + std::to_string(index) + " is a triangle self-transition");
     }
     if (!std::isfinite(portal.left.first) || !std::isfinite(portal.left.second) ||
         !std::isfinite(portal.right.first) || !std::isfinite(portal.right.second)) {
-      return fail("Directed portal " + std::to_string(index) +
-                  " contains a non-finite endpoint");
+      return fail("Directed portal " + std::to_string(index) + " contains a non-finite endpoint");
     }
     if (portal.left == portal.right) {
-      return fail("Directed portal " + std::to_string(index) +
-                  " has zero geometric width");
+      return fail("Directed portal " + std::to_string(index) + " has zero geometric width");
     }
   }
 
@@ -522,8 +512,7 @@ bool validateReducedDirectedPortalWitness(const TriangleCorridor& corridor,
   // repeated occurrences (which encode winding), but reject an adjacent
   // portal followed immediately by its inverse A->B->A.
   for (size_t index = 2; index < corridor.triangle_occurrences.size(); ++index) {
-    if (corridor.triangle_occurrences[index] ==
-        corridor.triangle_occurrences[index - 2]) {
+    if (corridor.triangle_occurrences[index] == corridor.triangle_occurrences[index - 2]) {
       return fail("Lifted-sleeve witness contains an unreduced immediate portal reversal at " +
                   std::to_string(index - 2));
     }
@@ -548,15 +537,12 @@ bool sameReducedDirectedPortalWitness(const TriangleCorridor& reference,
   if (!validateReducedDirectedPortalWitness(candidate, &validation_error))
     return fail("Candidate lifted-sleeve witness is invalid: " + validation_error);
 
-  if (reference.triangle_occurrences.size() !=
-      candidate.triangle_occurrences.size()) {
+  if (reference.triangle_occurrences.size() != candidate.triangle_occurrences.size()) {
     return fail("Lifted-sleeve triangle-occurrence counts differ");
   }
   for (size_t index = 0; index < reference.triangle_occurrences.size(); ++index) {
-    if (reference.triangle_occurrences[index] !=
-        candidate.triangle_occurrences[index]) {
-      return fail("Lifted-sleeve triangle occurrence differs at ordinal " +
-                  std::to_string(index));
+    if (reference.triangle_occurrences[index] != candidate.triangle_occurrences[index]) {
+      return fail("Lifted-sleeve triangle occurrence differs at ordinal " + std::to_string(index));
     }
   }
 
@@ -568,12 +554,10 @@ bool sameReducedDirectedPortalWitness(const TriangleCorridor& reference,
     const auto& actual = candidate.portals[index];
     if (expected.from_triangle != actual.from_triangle ||
         expected.to_triangle != actual.to_triangle) {
-      return fail("Directed portal identity differs at occurrence " +
-                  std::to_string(index));
+      return fail("Directed portal identity differs at occurrence " + std::to_string(index));
     }
     if (expected.left != actual.left || expected.right != actual.right) {
-      return fail("Directed portal geometry differs at occurrence " +
-                  std::to_string(index));
+      return fail("Directed portal geometry differs at occurrence " + std::to_string(index));
     }
   }
   return true;
@@ -1832,20 +1816,18 @@ bool Polymap::getPolyObstacles(int start_x, int start_y, int goal_x, int goal_y)
 
 OperationStatus Polymap::getPolyObstacles(
   int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token) {
-  return getPolyObstacles(start_x,
-                          start_y,
-                          std::vector<PolymapEndpoint>{{goal_x,
-                                                        goal_y,
-                                                        {static_cast<double>(goal_x),
-                                                         static_cast<double>(goal_y)}}},
-                          stop_token);
+  return getPolyObstacles(
+    start_x,
+    start_y,
+    std::vector<PolymapEndpoint>{
+      {goal_x, goal_y, {static_cast<double>(goal_x), static_cast<double>(goal_y)}}},
+    stop_token);
 }
 
-OperationStatus Polymap::getPolyObstacles(
-  int start_x,
-  int start_y,
-  const std::vector<PolymapEndpoint>& goals,
-  const StopToken& stop_token) {
+OperationStatus Polymap::getPolyObstacles(int start_x,
+                                          int start_y,
+                                          const std::vector<PolymapEndpoint>& goals,
+                                          const StopToken& stop_token) {
   if (stop_token.poll())
     return OperationStatus::stopped;
   if (getPolyObstaclesImpl(start_x, start_y, goals, stop_token)) {
@@ -1878,13 +1860,12 @@ OperationStatus Polymap::getPolyObstacles(
 
 bool Polymap::getPolyObstaclesImpl(
   int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token) {
-  return getPolyObstaclesImpl(start_x,
-                              start_y,
-                              std::vector<PolymapEndpoint>{{goal_x,
-                                                            goal_y,
-                                                            {static_cast<double>(goal_x),
-                                                             static_cast<double>(goal_y)}}},
-                              stop_token);
+  return getPolyObstaclesImpl(
+    start_x,
+    start_y,
+    std::vector<PolymapEndpoint>{
+      {goal_x, goal_y, {static_cast<double>(goal_x), static_cast<double>(goal_y)}}},
+    stop_token);
 }
 
 bool Polymap::getPolyObstaclesImpl(int start_x,
@@ -3113,8 +3094,7 @@ Polymap::Polymap(const GridMap& grid_map,
   std::vector<Point2d> protected_points;
   protected_points.reserve(goals.size() + 1);
   protected_points.emplace_back(start_position);
-  for (const auto& goal : goals)
-    protected_points.emplace_back(goal.position);
+  for (const auto& goal : goals) protected_points.emplace_back(goal.position);
   status = simplifyPolyObstaclesImpl(protected_points, stop_token)
              ? OperationStatus::success
              : (stop_token.poll() ? OperationStatus::stopped : OperationStatus::failure);
@@ -3427,9 +3407,9 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
     for (size_t index = 0; index < vertices.size(); ++index) {
       const auto& first = vertices[index];
       const auto& second = vertices[(index + 1) % vertices.size()];
-      constrained_edges.insert(canonical_edge(
-        {static_cast<double>(first.first), static_cast<double>(first.second)},
-        {static_cast<double>(second.first), static_cast<double>(second.second)}));
+      constrained_edges.insert(
+        canonical_edge({static_cast<double>(first.first), static_cast<double>(first.second)},
+                       {static_cast<double>(second.first), static_cast<double>(second.second)}));
     }
   }
 
@@ -3469,16 +3449,14 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
     long double centroid_x = 0.0L;
     long double centroid_y = 0.0L;
     for (size_t vertex_index = 0; vertex_index < 3; ++vertex_index) {
-      face.vertices[vertex_index] = {
-        static_cast<double>(facet[vertex_index].first),
-        static_cast<double>(facet[vertex_index].second)};
+      face.vertices[vertex_index] = {static_cast<double>(facet[vertex_index].first),
+                                     static_cast<double>(facet[vertex_index].second)};
       centroid_x += facet[vertex_index].first;
       centroid_y += facet[vertex_index].second;
     }
     centroid_x /= 3.0L;
     centroid_y /= 3.0L;
-    face.is_free =
-      pointInPolygon(obs_[outer_index].ordered_vertices_, centroid_x, centroid_y);
+    face.is_free = pointInPolygon(obs_[outer_index].ordered_vertices_, centroid_x, centroid_y);
     for (size_t obstacle_index = 0; obstacle_index < obs_.size() && face.is_free;
          ++obstacle_index) {
       if (obstacle_index == outer_index)
@@ -3488,11 +3466,10 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
     }
 
     for (size_t edge_index = 0; edge_index < 3; ++edge_index) {
-      const EdgeKey key = canonical_edge(face.vertices[edge_index],
-                                         face.vertices[(edge_index + 1) % 3]);
+      const EdgeKey key =
+        canonical_edge(face.vertices[edge_index], face.vertices[(edge_index + 1) % 3]);
       auto& accumulator = edges[key];
-      accumulator.uses.push_back(
-        {static_cast<int>(face_index), static_cast<int>(edge_index)});
+      accumulator.uses.push_back({static_cast<int>(face_index), static_cast<int>(edge_index)});
       accumulator.constrained = constrained_edges.find(key) != constrained_edges.end();
     }
   }
@@ -3551,10 +3528,8 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
 }
 
 size_t Polymap::freeTriangleCount() const noexcept {
-  return static_cast<size_t>(
-    std::count_if(triangle_faces_.begin(), triangle_faces_.end(), [](const auto& face) {
-      return face.is_free;
-    }));
+  return static_cast<size_t>(std::count_if(
+    triangle_faces_.begin(), triangle_faces_.end(), [](const auto& face) { return face.is_free; }));
 }
 
 OperationStatus Polymap::traceFreeSpacePath(const std::vector<Point2d>& path,
@@ -3603,10 +3578,10 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
     using CDT = constrained_delaunay_triangulation::CDT;
     CDT::Locate_type locate_type;
     int local_index = -1;
-    const auto face = cdt_.locate(
-      constrained_delaunay_triangulation::Point(point.first, point.second),
-      locate_type,
-      local_index);
+    const auto face =
+      cdt_.locate(constrained_delaunay_triangulation::Point(point.first, point.second),
+                  locate_type,
+                  local_index);
     const auto add_face = [&](const CDT::Face_handle& candidate) {
       if (candidate == CDT::Face_handle() || cdt_.is_infinite(candidate))
         return;
@@ -3670,8 +3645,8 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
       neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
       for (const int neighbor : neighbors) {
         if (parent[static_cast<size_t>(neighbor)] != -2 ||
-            !pointInTriangleClosed(
-              triangle_faces_[static_cast<size_t>(neighbor)].vertices, point)) {
+            !pointInTriangleClosed(triangle_faces_[static_cast<size_t>(neighbor)].vertices,
+                                   point)) {
           continue;
         }
         parent[static_cast<size_t>(neighbor)] = current;
@@ -3741,9 +3716,8 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
         size_t best_size = std::numeric_limits<size_t>::max();
         for (const int candidate : candidates) {
           auto connection = connect_at_point(faces.back(), candidate, event_point);
-          if (!connection.empty() &&
-              (connection.size() < best_size ||
-               (connection.size() == best_size && candidate < selected))) {
+          if (!connection.empty() && (connection.size() < best_size ||
+                                      (connection.size() == best_size && candidate < selected))) {
             selected = candidate;
             best_size = connection.size();
             selected_connection = std::move(connection);
@@ -3776,13 +3750,12 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
       return stopped();
     if (current_faces.empty()) {
       return fail("Reference segment " + std::to_string(segment_index - 1) + "->" +
-                  std::to_string(segment_index) +
-                  " leaves the free-triangle environment" +
+                  std::to_string(segment_index) + " leaves the free-triangle environment" +
                   (segment_failure.empty() ? std::string{} : ": " + segment_failure));
     }
     if (!raw_faces.empty()) {
-      auto connection = connect_at_point(
-        raw_faces.back(), current_faces.front(), path[segment_index - 1]);
+      auto connection =
+        connect_at_point(raw_faces.back(), current_faces.front(), path[segment_index - 1]);
       if (stop_token.poll())
         return stopped();
       if (connection.empty())
@@ -3829,8 +3802,7 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
     if (shared_edge < 0)
       return fail("Reduced triangle corridor contains non-adjacent faces");
     const Point2d first = from_face.vertices[static_cast<size_t>(shared_edge)];
-    const Point2d second =
-      from_face.vertices[(static_cast<size_t>(shared_edge) + 1) % 3];
+    const Point2d second = from_face.vertices[(static_cast<size_t>(shared_edge) + 1) % 3];
     DirectedPortal portal;
     portal.from_triangle = static_cast<uint32_t>(from);
     portal.to_triangle = static_cast<uint32_t>(to);
@@ -3841,8 +3813,8 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
     // source interior is left of first->second, so crossing to the neighbor
     // makes second the portal's geometric left endpoint and first its right.
     // Reversing the traversal therefore swaps the endpoints exactly.
-    const int face_orientation = exactOrientation(
-      from_face.vertices[0], from_face.vertices[1], from_face.vertices[2]);
+    const int face_orientation =
+      exactOrientation(from_face.vertices[0], from_face.vertices[1], from_face.vertices[2]);
     if (face_orientation > 0) {
       portal.left = second;
       portal.right = first;
@@ -3855,8 +3827,8 @@ OperationStatus Polymap::traceFreeSpacePathImpl(const std::vector<Point2d>& inpu
   return OperationStatus::success;
 }
 
-HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(
-  const std::vector<Point2d>& reference, const StopToken& stop_token) const {
+HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(const std::vector<Point2d>& reference,
+                                                            const StopToken& stop_token) const {
   HomotopyShorteningResult result;
   const auto clear_uncertified_output = [&result]() {
     result.path.clear();
@@ -3887,8 +3859,7 @@ HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(
   std::string witness_error;
   if (!validateReducedDirectedPortalWitness(result.corridor, &witness_error)) {
     result.status = HomotopyShorteningStatus::failure;
-    result.message = "Reference trace produced an invalid lifted-sleeve witness: " +
-                     witness_error;
+    result.message = "Reference trace produced an invalid lifted-sleeve witness: " + witness_error;
     return result;
   }
   if (stop_token.poll()) {
@@ -3907,8 +3878,7 @@ HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(
   }
   result.path_cost = polylineLength(result.path);
   const double reference_cost = polylineLength(reference);
-  const double cost_tolerance =
-    1.0e-10 * std::max({1.0, reference_cost, result.path_cost});
+  const double cost_tolerance = 1.0e-10 * std::max({1.0, reference_cost, result.path_cost});
   if (result.path_cost > reference_cost + cost_tolerance) {
     std::ostringstream diagnostic;
     diagnostic << "Funnel result cost " << result.path_cost << " exceeds reference cost "
@@ -3918,8 +3888,8 @@ HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(
     diagnostic << "; portals=";
     for (const auto& portal : result.corridor.portals) {
       diagnostic << "[" << portal.from_triangle << "->" << portal.to_triangle << " L("
-                 << portal.left.first << "," << portal.left.second << ") R("
-                 << portal.right.first << "," << portal.right.second << ")]";
+                 << portal.left.first << "," << portal.left.second << ") R(" << portal.right.first
+                 << "," << portal.right.second << ")]";
     }
     clear_uncertified_output();
     result.status = HomotopyShorteningStatus::failure;
@@ -3959,12 +3929,10 @@ HomotopyShorteningResult Polymap::shortenPathWithinHomotopy(
   // relative-endpoint homotopy certificate, including repeated winding
   // cycles.  Re-tracing the emitted geometry makes this proof independent of
   // the funnel implementation itself.
-  if (!sameReducedDirectedPortalWitness(
-        result.corridor, result.output_corridor, &witness_error)) {
+  if (!sameReducedDirectedPortalWitness(result.corridor, result.output_corridor, &witness_error)) {
     clear_uncertified_output();
     result.status = HomotopyShorteningStatus::failure;
-    result.message = "Funnel result changed the reduced lifted-sleeve witness: " +
-                     witness_error;
+    result.message = "Funnel result changed the reduced lifted-sleeve witness: " + witness_error;
     return result;
   }
   if (stop_token.poll()) {

@@ -86,9 +86,9 @@ typedef CGAL::Triangulation_vertex_base_2<K> VertexBase;
 typedef CGAL::Constrained_triangulation_face_base_2<K> ConstrainedFaceBase;
 typedef CGAL::Triangulation_face_base_with_info_2<FaceInfo, K, ConstrainedFaceBase> FaceBase;
 typedef CGAL::Triangulation_data_structure_2<VertexBase, FaceBase> DataStructure;
-typedef CGAL::Constrained_Delaunay_triangulation_2<
-  K, DataStructure, CGAL::No_constraint_intersection_tag>
-  CDT;
+typedef CGAL::
+  Constrained_Delaunay_triangulation_2<K, DataStructure, CGAL::No_constraint_intersection_tag>
+    CDT;
 typedef CDT::Point Point;
 
 struct BungiuEdge {
@@ -143,26 +143,19 @@ struct TriangleCorridor {
 // vector position: repeated triangle IDs and repeated directed portals are
 // deliberately retained, because their multiplicity/order encodes winding.
 // A plain set (or a deduplicated face list) is not a homotopy witness.
-[[nodiscard]] bool validateReducedDirectedPortalWitness(
-  const TriangleCorridor& corridor, std::string* error = nullptr);
+[[nodiscard]] bool validateReducedDirectedPortalWitness(const TriangleCorridor& corridor,
+                                                        std::string* error = nullptr);
 
 // Sufficient, fail-closed homotopy certificate for two paths traced in the
 // same immutable triangle environment.  Both witnesses must be structurally
 // valid and have exactly the same ordered directed-portal occurrences,
 // including portal geometry.  This may reject an ambiguously traced but
 // homotopic boundary case; it must never accept a different lifted sleeve.
-[[nodiscard]] bool sameReducedDirectedPortalWitness(
-  const TriangleCorridor& reference,
-  const TriangleCorridor& candidate,
-  std::string* error = nullptr);
+[[nodiscard]] bool sameReducedDirectedPortalWitness(const TriangleCorridor& reference,
+                                                    const TriangleCorridor& candidate,
+                                                    std::string* error = nullptr);
 
-enum class HomotopyShorteningStatus {
-  success,
-  invalid_reference,
-  no_corridor,
-  stopped,
-  failure
-};
+enum class HomotopyShorteningStatus { success, invalid_reference, no_corridor, stopped, failure };
 
 struct HomotopyShorteningResult {
   HomotopyShorteningStatus status = HomotopyShorteningStatus::failure;
@@ -206,14 +199,13 @@ public:
                                                   int goal_y,
                                                   const StopToken& stop_token,
                                                   const PlanningLimits& limits = PlanningLimits{});
-  [[nodiscard]] static PolymapCreateResult create(
-    const GridMap& grid_map,
-    int start_x,
-    int start_y,
-    const Point2d& start_position,
-    const std::vector<PolymapEndpoint>& goals,
-    const StopToken& stop_token,
-    const PlanningLimits& limits = PlanningLimits{});
+  [[nodiscard]] static PolymapCreateResult create(const GridMap& grid_map,
+                                                  int start_x,
+                                                  int start_y,
+                                                  const Point2d& start_position,
+                                                  const std::vector<PolymapEndpoint>& goals,
+                                                  const StopToken& stop_token,
+                                                  const PlanningLimits& limits = PlanningLimits{});
   [[nodiscard]] static PolymapCreateResult create(const GridMap& grid_map,
                                                   int start_x,
                                                   int start_y,
@@ -415,17 +407,15 @@ public:
 
   // Trace a collision-free polyline through the reusable free-triangle mesh.
   // The returned corridor is reduced by cancelling immediate portal reversals.
-  [[nodiscard]] OperationStatus traceFreeSpacePath(
-    const std::vector<Point2d>& path,
-    TriangleCorridor& corridor,
-    const StopToken& stop_token = StopToken{},
-    std::string* error = nullptr) const;
+  [[nodiscard]] OperationStatus traceFreeSpacePath(const std::vector<Point2d>& path,
+                                                   TriangleCorridor& corridor,
+                                                   const StopToken& stop_token = StopToken{},
+                                                   std::string* error = nullptr) const;
 
   // Compute the Euclidean shortest polyline inside the lifted triangle sleeve
   // selected by reference. Output segments may cross triangle interiors.
   [[nodiscard]] HomotopyShorteningResult shortenPathWithinHomotopy(
-    const std::vector<Point2d>& reference,
-    const StopToken& stop_token = StopToken{}) const;
+    const std::vector<Point2d>& reference, const StopToken& stop_token = StopToken{}) const;
 
 #ifdef RAYSTAR_TESTING
 public:  // Legacy white-box tests; production builds keep internals private.
@@ -464,11 +454,10 @@ private:
   bool getPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   [[nodiscard]] OperationStatus getPolyObstacles(
     int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token);
-  [[nodiscard]] OperationStatus getPolyObstacles(
-    int start_x,
-    int start_y,
-    const std::vector<PolymapEndpoint>& goals,
-    const StopToken& stop_token);
+  [[nodiscard]] OperationStatus getPolyObstacles(int start_x,
+                                                 int start_y,
+                                                 const std::vector<PolymapEndpoint>& goals,
+                                                 const StopToken& stop_token);
 
   void simplifyPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   void simplifyPolyObstacles(const Point2d& start, const Point2d& goal);
@@ -596,11 +585,10 @@ private:
   };
 
   [[nodiscard]] bool buildTriangleEnvironment(std::string& error);
-  [[nodiscard]] OperationStatus traceFreeSpacePathImpl(
-    const std::vector<Point2d>& path,
-    TriangleCorridor& corridor,
-    const StopToken& stop_token,
-    std::string* error) const;
+  [[nodiscard]] OperationStatus traceFreeSpacePathImpl(const std::vector<Point2d>& path,
+                                                       TriangleCorridor& corridor,
+                                                       const StopToken& stop_token,
+                                                       std::string* error) const;
 
   int xsize_ = 0;
   int ysize_ = 0;

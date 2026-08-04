@@ -137,24 +137,19 @@ private:
   void executeAction(const std::shared_ptr<PlanGoalHandle> goal_handle,
                      const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
   rclcpp_action::GoalResponse handleGoalSetActionGoal(
-    const rclcpp_action::GoalUUID& uuid,
-    std::shared_ptr<const GoalSetAction::Goal> goal);
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const GoalSetAction::Goal> goal);
   rclcpp_action::CancelResponse handleGoalSetActionCancel(
     const std::shared_ptr<GoalSetGoalHandle> goal_handle);
   void handleGoalSetActionAccepted(const std::shared_ptr<GoalSetGoalHandle> goal_handle);
-  void executeGoalSetAction(
-    const std::shared_ptr<GoalSetGoalHandle> goal_handle,
-    const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
+  void executeGoalSetAction(const std::shared_ptr<GoalSetGoalHandle> goal_handle,
+                            const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
   rclcpp_action::GoalResponse handleTransitionActionGoal(
-    const rclcpp_action::GoalUUID& uuid,
-    std::shared_ptr<const TransitionAction::Goal> goal);
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const TransitionAction::Goal> goal);
   rclcpp_action::CancelResponse handleTransitionActionCancel(
     const std::shared_ptr<TransitionGoalHandle> goal_handle);
-  void handleTransitionActionAccepted(
-    const std::shared_ptr<TransitionGoalHandle> goal_handle);
-  void executeTransitionAction(
-    const std::shared_ptr<TransitionGoalHandle> goal_handle,
-    const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
+  void handleTransitionActionAccepted(const std::shared_ptr<TransitionGoalHandle> goal_handle);
+  void executeTransitionAction(const std::shared_ptr<TransitionGoalHandle> goal_handle,
+                               const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
   void actionWorkerLoop() noexcept;
 
   template <typename RequestT, typename ResponseT>
@@ -189,14 +184,13 @@ private:
     const RequestConfiguration& configuration,
     const PolymapEndpoint& base,
     const std::vector<PolymapEndpoint>& goals);
-  void cacheCompletedTransitionEnvironment(
-    const nav_msgs::msg::OccupancyGrid& grid,
-    const raystar_interfaces::MapId& map_id,
-    bool allow_unknown,
-    const RequestConfiguration& configuration,
-    const PolymapEndpoint& base,
-    const std::vector<PolymapEndpoint>& goals,
-    std::shared_ptr<const Polymap> environment);
+  void cacheCompletedTransitionEnvironment(const nav_msgs::msg::OccupancyGrid& grid,
+                                           const raystar_interfaces::MapId& map_id,
+                                           bool allow_unknown,
+                                           const RequestConfiguration& configuration,
+                                           const PolymapEndpoint& base,
+                                           const std::vector<PolymapEndpoint>& goals,
+                                           std::shared_ptr<const Polymap> environment);
 
   bool occupancyGridToBinaryMap(const nav_msgs::msg::OccupancyGrid& grid,
                                 bool allow_unknown,

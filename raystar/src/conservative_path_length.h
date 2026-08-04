@@ -28,14 +28,13 @@ class ConservativeBinary64PathLength {
 public:
   enum class Comparison { less, equal, greater };
 
-  explicit ConservativeBinary64PathLength(
-    unsigned int maximum_refinement_precision = 16384)
+  explicit ConservativeBinary64PathLength(unsigned int maximum_refinement_precision = 16384)
     : maximum_refinement_precision_(
         std::min(maximum_refinement_precision, kMaximumSupportedRefinementPrecision)) {}
 
   bool addSegment(double first_x, double first_y, double second_x, double second_y) {
-    if (!valid_ || !std::isfinite(first_x) || !std::isfinite(first_y) ||
-        !std::isfinite(second_x) || !std::isfinite(second_y)) {
+    if (!valid_ || !std::isfinite(first_x) || !std::isfinite(first_y) || !std::isfinite(second_x) ||
+        !std::isfinite(second_y)) {
       valid_ = false;
       return false;
     }
@@ -62,14 +61,12 @@ public:
     constexpr unsigned int kNearbyCandidateAttempts = 8;
     if (candidateSquareCovers(candidate, squared_length)) {
       for (unsigned int attempt = 0; attempt < kNearbyCandidateAttempts; ++attempt) {
-        const double previous =
-          std::nextafter(candidate, -std::numeric_limits<double>::infinity());
+        const double previous = std::nextafter(candidate, -std::numeric_limits<double>::infinity());
         if (previous < 0.0 || !candidateSquareCovers(previous, squared_length))
           break;
         candidate = previous;
       }
-      const double previous =
-        std::nextafter(candidate, -std::numeric_limits<double>::infinity());
+      const double previous = std::nextafter(candidate, -std::numeric_limits<double>::infinity());
       if (previous >= 0.0 && candidateSquareCovers(previous, squared_length) &&
           !smallestSegmentUpperBound(squared_length, candidate)) {
         valid_ = false;
@@ -92,8 +89,7 @@ public:
 
     const ExactDyadic segment_upper = exactDyadic(candidate);
     accumulated_upper_bound_ = add(accumulated_upper_bound_, segment_upper);
-    const double previous =
-      std::nextafter(candidate, -std::numeric_limits<double>::infinity());
+    const double previous = std::nextafter(candidate, -std::numeric_limits<double>::infinity());
     if (previous < 0.0 || candidateSquareCovers(previous, squared_length)) {
       valid_ = false;
       return false;
@@ -101,9 +97,9 @@ public:
     ExactDyadic exact_root;
     if (exactDyadicSquareRoot(squared_length, exact_root)) {
       accumulated_exact_length_ = add(accumulated_exact_length_, exact_root);
-      accumulated_lower_bound_ = add(
-        accumulated_lower_bound_,
-        compare(segment_upper, exact_root) == 0 ? segment_upper : exactDyadic(previous));
+      accumulated_lower_bound_ =
+        add(accumulated_lower_bound_,
+            compare(segment_upper, exact_root) == 0 ? segment_upper : exactDyadic(previous));
     } else {
       accumulated_lower_bound_ = add(accumulated_lower_bound_, exactDyadic(previous));
       irrational_squared_lengths_.emplace_back(squared_length);
@@ -128,8 +124,7 @@ public:
     return floorPositiveDyadic(accumulated_lower_bound_, value);
   }
 
-  bool upperBound(double& value,
-                  const std::function<bool()>& stop_requested = {}) const {
+  bool upperBound(double& value, const std::function<bool()>& stop_requested = {}) const {
     value = std::numeric_limits<double>::quiet_NaN();
     if (!valid_)
       return false;
@@ -196,8 +191,8 @@ public:
     const ExactDyadic exact_bound = exactDyadic(bound);
     if (irrational_squared_lengths_.empty()) {
       const int order = compare(accumulated_exact_length_, exact_bound);
-      comparison = order < 0 ? Comparison::less
-                             : (order > 0 ? Comparison::greater : Comparison::equal);
+      comparison =
+        order < 0 ? Comparison::less : (order > 0 ? Comparison::greater : Comparison::equal);
       return true;
     }
 
@@ -214,8 +209,7 @@ public:
         return false;
       ExactDyadic interval_lower;
       ExactDyadic interval_upper;
-      if (!fixedPointInterval(
-            precision, interval_lower, interval_upper, stop_requested))
+      if (!fixedPointInterval(precision, interval_lower, interval_upper, stop_requested))
         return false;
       if (compare(interval_upper, exact_bound) <= 0) {
         comparison = Comparison::less;
@@ -240,13 +234,11 @@ private:
   // keeps every fixed-point exponent calculation within signed int.
   static constexpr unsigned int kMaximumSupportedRefinementPrecision = 16384;
   static constexpr int kMaximumBinary64SquaredDyadicExponent =
-    2 * (std::numeric_limits<double>::max_exponent -
-         std::numeric_limits<double>::digits);
-  static_assert(
-    kMaximumSupportedRefinementPrecision <=
-      static_cast<unsigned int>(
-        (std::numeric_limits<int>::max() - kMaximumBinary64SquaredDyadicExponent) / 2),
-    "refinement precision must keep squared dyadic exponents in signed-int range");
+    2 * (std::numeric_limits<double>::max_exponent - std::numeric_limits<double>::digits);
+  static_assert(kMaximumSupportedRefinementPrecision <=
+                  static_cast<unsigned int>(
+                    (std::numeric_limits<int>::max() - kMaximumBinary64SquaredDyadicExponent) / 2),
+                "refinement precision must keep squared dyadic exponents in signed-int range");
 
   struct ExactDyadic {
     boost::multiprecision::cpp_int significand{0};
@@ -260,8 +252,8 @@ private:
     const double fraction = std::frexp(value, &exponent);
     constexpr int digits = std::numeric_limits<double>::digits;
     const double scaled = std::ldexp(fraction, digits);
-    return ExactDyadic{
-      boost::multiprecision::cpp_int(static_cast<std::int64_t>(scaled)), exponent - digits};
+    return ExactDyadic{boost::multiprecision::cpp_int(static_cast<std::int64_t>(scaled)),
+                       exponent - digits};
   }
 
   static ExactDyadic add(const ExactDyadic& lhs, const ExactDyadic& rhs) {
@@ -270,10 +262,9 @@ private:
     if (rhs.significand == 0)
       return lhs;
     const int exponent = std::min(lhs.exponent, rhs.exponent);
-    return ExactDyadic{
-      (lhs.significand << (lhs.exponent - exponent)) +
-        (rhs.significand << (rhs.exponent - exponent)),
-      exponent};
+    return ExactDyadic{(lhs.significand << (lhs.exponent - exponent)) +
+                         (rhs.significand << (rhs.exponent - exponent)),
+                       exponent};
   }
 
   static ExactDyadic subtract(const ExactDyadic& lhs, const ExactDyadic& rhs) {
@@ -282,10 +273,9 @@ private:
     if (rhs.significand == 0)
       return lhs;
     const int exponent = std::min(lhs.exponent, rhs.exponent);
-    return ExactDyadic{
-      (lhs.significand << (lhs.exponent - exponent)) -
-        (rhs.significand << (rhs.exponent - exponent)),
-      exponent};
+    return ExactDyadic{(lhs.significand << (lhs.exponent - exponent)) -
+                         (rhs.significand << (rhs.exponent - exponent)),
+                       exponent};
   }
 
   static ExactDyadic multiply(const ExactDyadic& lhs, const ExactDyadic& rhs) {
@@ -294,8 +284,7 @@ private:
     return ExactDyadic{lhs.significand * rhs.significand, lhs.exponent + rhs.exponent};
   }
 
-  static bool exactDyadicSquareRoot(const ExactDyadic& squared_length,
-                                    ExactDyadic& root) {
+  static bool exactDyadicSquareRoot(const ExactDyadic& squared_length, ExactDyadic& root) {
     root = {};
     if (squared_length.significand < 0)
       return false;
@@ -319,10 +308,8 @@ private:
     if (lhs.significand == 0 && rhs.significand == 0)
       return 0;
     const int exponent = std::min(lhs.exponent, rhs.exponent);
-    const boost::multiprecision::cpp_int lhs_aligned =
-      lhs.significand << (lhs.exponent - exponent);
-    const boost::multiprecision::cpp_int rhs_aligned =
-      rhs.significand << (rhs.exponent - exponent);
+    const boost::multiprecision::cpp_int lhs_aligned = lhs.significand << (lhs.exponent - exponent);
+    const boost::multiprecision::cpp_int rhs_aligned = rhs.significand << (rhs.exponent - exponent);
     if (lhs_aligned < rhs_aligned)
       return -1;
     if (lhs_aligned > rhs_aligned)
@@ -384,7 +371,7 @@ private:
   }
 
   static boost::multiprecision::cpp_int floorScaledDyadic(const ExactDyadic& value,
-                                                           unsigned int precision) {
+                                                          unsigned int precision) {
     const int scaled_exponent = value.exponent + static_cast<int>(precision);
     if (scaled_exponent >= 0)
       return value.significand << scaled_exponent;
@@ -392,18 +379,16 @@ private:
   }
 
   static boost::multiprecision::cpp_int ceilScaledDyadic(const ExactDyadic& value,
-                                                          unsigned int precision) {
+                                                         unsigned int precision) {
     const int scaled_exponent = value.exponent + static_cast<int>(precision);
     if (scaled_exponent >= 0)
       return value.significand << scaled_exponent;
-    return ceilDivideByPowerOfTwo(
-      value.significand, static_cast<unsigned int>(-scaled_exponent));
+    return ceilDivideByPowerOfTwo(value.significand, static_cast<unsigned int>(-scaled_exponent));
   }
 
-  static boost::multiprecision::cpp_int scaledSquareRootFloor(
-    const ExactDyadic& squared_length, unsigned int precision) {
-    const int scaled_exponent =
-      squared_length.exponent + 2 * static_cast<int>(precision);
+  static boost::multiprecision::cpp_int scaledSquareRootFloor(const ExactDyadic& squared_length,
+                                                              unsigned int precision) {
+    const int scaled_exponent = squared_length.exponent + 2 * static_cast<int>(precision);
     boost::multiprecision::cpp_int scaled_radicand = squared_length.significand;
     if (scaled_exponent >= 0)
       scaled_radicand <<= scaled_exponent;
@@ -418,10 +403,8 @@ private:
                           const std::function<bool()>& stop_requested) const {
     if (!valid_ || precision > static_cast<unsigned int>(std::numeric_limits<int>::max()))
       return false;
-    boost::multiprecision::cpp_int lower =
-      floorScaledDyadic(accumulated_exact_length_, precision);
-    boost::multiprecision::cpp_int upper =
-      ceilScaledDyadic(accumulated_exact_length_, precision);
+    boost::multiprecision::cpp_int lower = floorScaledDyadic(accumulated_exact_length_, precision);
+    boost::multiprecision::cpp_int upper = ceilScaledDyadic(accumulated_exact_length_, precision);
     for (const auto& squared_length : irrational_squared_lengths_) {
       if (stop_requested && stop_requested())
         return false;
@@ -450,19 +433,17 @@ private:
     constexpr int kMinimumNormalExponent = std::numeric_limits<double>::min_exponent - 1;
     constexpr int kSubnormalQuantumExponent =
       std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
-    const int quantum_exponent =
-      binary_exponent >= kMinimumNormalExponent
-        ? binary_exponent - (std::numeric_limits<double>::digits - 1)
-        : kSubnormalQuantumExponent;
+    const int quantum_exponent = binary_exponent >= kMinimumNormalExponent
+                                   ? binary_exponent - (std::numeric_limits<double>::digits - 1)
+                                   : kSubnormalQuantumExponent;
 
     boost::multiprecision::cpp_int rounded_significand;
     if (exact_value.exponent >= quantum_exponent) {
-      rounded_significand =
-        exact_value.significand << (exact_value.exponent - quantum_exponent);
+      rounded_significand = exact_value.significand << (exact_value.exponent - quantum_exponent);
     } else {
-      rounded_significand = ceilDivideByPowerOfTwo(
-        exact_value.significand,
-        static_cast<unsigned int>(quantum_exponent - exact_value.exponent));
+      rounded_significand =
+        ceilDivideByPowerOfTwo(exact_value.significand,
+                               static_cast<unsigned int>(quantum_exponent - exact_value.exponent));
     }
 
     const boost::multiprecision::cpp_int maximum_rounded_significand =
@@ -497,18 +478,15 @@ private:
     constexpr int kMinimumNormalExponent = std::numeric_limits<double>::min_exponent - 1;
     constexpr int kSubnormalQuantumExponent =
       std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits;
-    const int quantum_exponent =
-      binary_exponent >= kMinimumNormalExponent
-        ? binary_exponent - (std::numeric_limits<double>::digits - 1)
-        : kSubnormalQuantumExponent;
+    const int quantum_exponent = binary_exponent >= kMinimumNormalExponent
+                                   ? binary_exponent - (std::numeric_limits<double>::digits - 1)
+                                   : kSubnormalQuantumExponent;
 
     boost::multiprecision::cpp_int rounded_significand;
     if (exact_value.exponent >= quantum_exponent) {
-      rounded_significand =
-        exact_value.significand << (exact_value.exponent - quantum_exponent);
+      rounded_significand = exact_value.significand << (exact_value.exponent - quantum_exponent);
     } else {
-      rounded_significand =
-        exact_value.significand >> (quantum_exponent - exact_value.exponent);
+      rounded_significand = exact_value.significand >> (quantum_exponent - exact_value.exponent);
     }
     if (rounded_significand == 0) {
       result = 0.0;

@@ -15,10 +15,8 @@ namespace raystar {
 inline double binary64SpacingForSearchPadding(double value) {
   if (!std::isfinite(value))
     return std::numeric_limits<double>::infinity();
-  const double upward =
-    std::nextafter(value, std::numeric_limits<double>::infinity()) - value;
-  const double downward =
-    value - std::nextafter(value, -std::numeric_limits<double>::infinity());
+  const double upward = std::nextafter(value, std::numeric_limits<double>::infinity()) - value;
+  const double downward = value - std::nextafter(value, -std::numeric_limits<double>::infinity());
   return std::max(upward, downward);
 }
 
@@ -26,8 +24,7 @@ inline double saturatedUpwardPositiveProduct(double first, double second) {
   const double rounded = first * second;
   if (!std::isfinite(rounded))
     return std::numeric_limits<double>::max();
-  const double successor =
-    std::nextafter(rounded, std::numeric_limits<double>::infinity());
+  const double successor = std::nextafter(rounded, std::numeric_limits<double>::infinity());
   // FE_DOWNWARD and FE_TOWARDZERO can round a positive overflowing product
   // to DBL_MAX. There is no finite successor in that case, but DBL_MAX is
   // still the correct search-superset saturation because every Core path
@@ -39,8 +36,7 @@ inline double saturatedUpwardPositiveSum(double first, double second) {
   const double rounded = first + second;
   if (!std::isfinite(rounded))
     return std::numeric_limits<double>::max();
-  const double successor =
-    std::nextafter(rounded, std::numeric_limits<double>::infinity());
+  const double successor = std::nextafter(rounded, std::numeric_limits<double>::infinity());
   // As above, saturate instead of turning a finite request into an invalid
   // infinite padded bound under a directed process rounding mode.
   return std::isfinite(successor) ? successor : std::numeric_limits<double>::max();
@@ -65,8 +61,7 @@ inline bool paddedMetricBoundForGridSearch(const GridMap& map,
   for (const double value : operation_values) {
     if (!std::isfinite(value))
       return false;
-    operation_spacing =
-      std::max(operation_spacing, binary64SpacingForSearchPadding(value));
+    operation_spacing = std::max(operation_spacing, binary64SpacingForSearchPadding(value));
   }
   if (!std::isfinite(operation_spacing))
     return false;
@@ -78,8 +73,7 @@ inline bool paddedMetricBoundForGridSearch(const GridMap& map,
   // 2 endpoints * sqrt(2) * spacing.
   constexpr double kSquareRootTwoUpper = 0x1.6a09e667f3bcdp+0;
   double segment_contraction = saturatedUpwardPositiveProduct(operation_spacing, 2.0);
-  segment_contraction =
-    saturatedUpwardPositiveProduct(segment_contraction, kSquareRootTwoUpper);
+  segment_contraction = saturatedUpwardPositiveProduct(segment_contraction, kSquareRootTwoUpper);
 
   // The root node can connect a one-segment path; every later search node can
   // add one turning point and hence one segment. When max_nodes=N nodes have
@@ -89,19 +83,16 @@ inline bool paddedMetricBoundForGridSearch(const GridMap& map,
   // reports LIMIT_MAX_NODES instead of incorrectly claiming bound exhaustion.
   // max_path_points is only an output/retention budget and cannot bound such
   // an undiscovered frontier path.
-  const size_t maximum_segment_count =
-    maximum_search_nodes == std::numeric_limits<size_t>::max()
-      ? maximum_search_nodes
-      : maximum_search_nodes + 1u;
+  const size_t maximum_segment_count = maximum_search_nodes == std::numeric_limits<size_t>::max()
+                                         ? maximum_search_nodes
+                                         : maximum_search_nodes + 1u;
   double segment_count_upper = static_cast<double>(maximum_segment_count);
   if (!std::isfinite(segment_count_upper)) {
     segment_count_upper = std::numeric_limits<double>::max();
   } else {
     const double successor =
       std::nextafter(segment_count_upper, std::numeric_limits<double>::infinity());
-    segment_count_upper = std::isfinite(successor)
-                            ? successor
-                            : std::numeric_limits<double>::max();
+    segment_count_upper = std::isfinite(successor) ? successor : std::numeric_limits<double>::max();
   }
   const double path_contraction =
     saturatedUpwardPositiveProduct(segment_contraction, segment_count_upper);
