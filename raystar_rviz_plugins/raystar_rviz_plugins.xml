@@ -2,6 +2,6 @@
   <class name="raystar_rviz_plugins/RaystarPanel"
          type="raystar_rviz_plugins::RaystarPanel"
          base_class_type="rviz_common::Panel">
-    <description>Panel for the Ray* non-homotopic path planning Action, including cooperative cancellation.</description>
+    <description>Panel for Ray* single-goal and shared-tree multi-goal non-homotopic path planning Actions, including independent length budgets and cooperative cancellation.</description>
   </class>
 </library>

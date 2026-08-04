@@ -3,14 +3,16 @@
 The launch file is deliberately useful both as a one-command demo and as a
 small bringup template.  It starts a lifecycle-managed Nav2 map server, the
 Raystar node, and (optionally) RViz.  All large planner/resource settings are
-forwarded as node parameters, while ``map_topic`` and ``action_name`` are
-normal ROS remappings so a namespaced deployment can choose its own endpoints.
+forwarded as node parameters, while ``map_topic``, ``action_name``, and
+``goal_set_action_name`` are normal ROS remappings so a namespaced deployment
+can choose its own endpoints.
 
 For a headless server, use ``start_rviz:=false``.  For a deployment that
 already owns a map server, use ``start_map_server:=false`` and point
 ``map_topic`` at that server's OccupancyGrid topic.  The default RViz config
-uses ``/raystar/plan_paths``; when a namespace or custom action endpoint is
-selected, update the panel's persisted Action field accordingly.
+uses ``/raystar/plan_paths`` and ``/raystar/plan_goal_set``; when a namespace
+or custom action endpoint is selected, update the Panel's corresponding
+persisted Action fields.
 """
 
 from launch import LaunchDescription
@@ -36,6 +38,8 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     map_topic = LaunchConfiguration("map_topic")
     action_name = LaunchConfiguration("action_name")
+    goal_set_action_name = LaunchConfiguration("goal_set_action_name")
+    transition_action_name = LaunchConfiguration("transition_action_name")
     use_sim_time = _bool_parameter("use_sim_time")
 
     default_map = PathJoinSubstitution(
@@ -70,6 +74,21 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
+            "goal_set_action_name",
+            default_value="~/plan_goal_set",
+            description=(
+                "Action endpoint remapped from Raystar's private ~/plan_goal_set name."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "transition_action_name",
+            default_value="~/build_transition_graph",
+            description=(
+                "Action endpoint remapped from Raystar's private "
+                "~/build_transition_graph name."
+            ),
+        ),
+        DeclareLaunchArgument(
             "rviz_config",
             default_value=default_rviz,
             description="RViz2 configuration file.",
@@ -96,8 +115,32 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("occupied_threshold", default_value="99"),
         DeclareLaunchArgument("max_k", default_value="100"),
+        DeclareLaunchArgument(
+            "max_cost_bounded_paths",
+            default_value="1000",
+            description="Per-goal path cap for exhaustive bounded enumeration.",
+        ),
+        DeclareLaunchArgument(
+            "max_multi_goal_count",
+            default_value="128",
+            description="Goal-array admission limit for one shared-tree request.",
+        ),
+        DeclareLaunchArgument(
+            "max_transition_configurations",
+            default_value="4096",
+            description="Tether-configuration admission limit for one UPS batch.",
+        ),
+        DeclareLaunchArgument(
+            "max_transition_pairs",
+            default_value="1000",
+            description="Directed-pair admission limit for one UPS batch.",
+        ),
         DeclareLaunchArgument("max_nodes", default_value="10000"),
-        DeclareLaunchArgument("planning_timeout_ms", default_value="5000"),
+        DeclareLaunchArgument(
+            "planning_timeout_ms",
+            default_value="5000",
+            description="Cooperative deadline for each planning or UPS request.",
+        ),
         DeclareLaunchArgument("max_map_cells", default_value="8388608"),
         DeclareLaunchArgument("max_map_bytes", default_value="536870912"),
         DeclareLaunchArgument("max_path_points", default_value="100000"),
@@ -156,6 +199,14 @@ def generate_launch_description():
                 ),
                 "occupied_threshold": _int_parameter("occupied_threshold"),
                 "max_k": _int_parameter("max_k"),
+                "max_cost_bounded_paths": _int_parameter(
+                    "max_cost_bounded_paths"
+                ),
+                "max_multi_goal_count": _int_parameter("max_multi_goal_count"),
+                "max_transition_configurations": _int_parameter(
+                    "max_transition_configurations"
+                ),
+                "max_transition_pairs": _int_parameter("max_transition_pairs"),
                 "max_nodes": _int_parameter("max_nodes"),
                 "planning_timeout_ms": _int_parameter("planning_timeout_ms"),
                 "max_map_cells": _int_parameter("max_map_cells"),
@@ -168,7 +219,11 @@ def generate_launch_description():
                 ),
             }
         ],
-        remappings=[("~/plan_paths", action_name)],
+        remappings=[
+            ("~/plan_paths", action_name),
+            ("~/plan_goal_set", goal_set_action_name),
+            ("~/build_transition_graph", transition_action_name),
+        ],
     )
 
     rviz = Node(

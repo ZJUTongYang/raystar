@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <string>
@@ -408,7 +410,73 @@ struct PathSolution {
   }
 };
 
-enum class PlanningLimitReached { none, max_nodes, timeout, cancelled, max_path_points };
+enum class SearchMode { top_k, all_within_cost };
+
+struct BoundedPathView {
+  // These references are borrowed from the active synchronous search and are
+  // valid only for the duration of the admission callback invocation.
+  const Point2d& start;
+  const std::vector<std::pair<int, int>>& turning_points;
+  const Point2d& goal;
+  double path_cost = 0.0;
+};
+
+// A bounded adapter may search with a conservative superset cost and apply a
+// stronger representation-specific certificate before Core retains a found
+// solution. Rejected candidates still participate in tree expansion and
+// frontier exhaustion, but do not consume path-count or path-point budgets.
+// `failure_or_stop` is fail-closed; Core distinguishes cooperative stop from
+// certificate failure through its existing StopToken. Callbacks must not
+// retain the borrowed view/token, dispatch asynchronous work that uses them,
+// or recursively invoke planning on the same RaystarCore instance.
+enum class BoundedPathAdmission { accept, reject, failure_or_stop };
+using BoundedPathAdmissionCallback =
+  std::function<BoundedPathAdmission(const BoundedPathView&, const StopToken&)>;
+
+struct SearchObjective {
+  SearchMode mode = SearchMode::top_k;
+  int k = 1;
+  // Core costs are expressed in grid-coordinate units. ROS adapters convert
+  // their public metre value before calling Core.
+  double max_path_cost = 0.0;
+  BoundedPathAdmissionCallback path_admission;
+
+  SearchObjective() = default;
+  SearchObjective(SearchMode requested_mode,
+                  int requested_k,
+                  double maximum_cost,
+                  BoundedPathAdmissionCallback admission = {})
+    : mode(requested_mode)
+    , k(requested_k)
+    , max_path_cost(maximum_cost)
+    , path_admission(std::move(admission)) {}
+
+  [[nodiscard]] static SearchObjective topK(int requested_k) {
+    return SearchObjective{SearchMode::top_k, requested_k, 0.0, {}};
+  }
+
+  [[nodiscard]] static SearchObjective allWithinCost(
+    double maximum_cost, BoundedPathAdmissionCallback admission = {}) {
+    return SearchObjective{
+      SearchMode::all_within_cost, 0, maximum_cost, std::move(admission)};
+  }
+};
+
+enum class PlanningLimitReached {
+  none,
+  max_nodes,
+  timeout,
+  cancelled,
+  max_path_points,
+  max_paths
+};
+
+enum class PlanningCompletion {
+  none,
+  requested_k_reached,
+  frontier_exhausted,
+  cost_bound_exhausted
+};
 
 // Describes how Core reached its terminal result without requiring ROS or
 // direct callers to parse the diagnostic message. `complete` means either K
@@ -422,15 +490,80 @@ struct PlanResult {
   std::vector<PathSolution> path_solutions;
   PlanningOutcome outcome = PlanningOutcome::failed;
   PlanningLimitReached limit_reached = PlanningLimitReached::none;
+  PlanningCompletion completion = PlanningCompletion::none;
   size_t expanded_nodes = 0;
   double map_time_ms = 0.0;
   double plan_time_ms = 0.0;
   std::shared_ptr<const Polymap> polymap;  // owns the Polymap; safe to use after plan() returns
 };
 
+struct CostBoundedGoal {
+  PlanEndpoint endpoint;
+  // Core/grid-coordinate units. Each goal may use a different inclusive
+  // bound; TMV normally supplies the same tether length for every goal.
+  double max_path_cost = 0.0;
+  BoundedPathAdmissionCallback path_admission;
+
+  CostBoundedGoal() = default;
+  CostBoundedGoal(PlanEndpoint requested_endpoint,
+                  double maximum_cost,
+                  BoundedPathAdmissionCallback admission = {})
+    : endpoint(std::move(requested_endpoint))
+    , max_path_cost(maximum_cost)
+    , path_admission(std::move(admission)) {}
+};
+
+struct CostBoundedGoalResult {
+  PlanEndpoint endpoint;
+  double requested_max_path_cost = 0.0;
+  bool success = false;
+  std::string message;
+  std::vector<PathSolution> path_solutions;
+  PlanningOutcome outcome = PlanningOutcome::failed;
+  PlanningLimitReached limit_reached = PlanningLimitReached::none;
+  PlanningCompletion completion = PlanningCompletion::none;
+};
+
+struct MultiGoalPlanResult {
+  std::vector<CostBoundedGoalResult> goal_results;
+  PlanningOutcome outcome = PlanningOutcome::failed;
+  PlanningLimitReached limit_reached = PlanningLimitReached::none;
+  size_t expanded_nodes = 0;
+  double map_time_ms = 0.0;
+  double plan_time_ms = 0.0;
+  std::string message;
+  std::shared_ptr<const Polymap> polymap;
+};
+
+// One directed UPS request between two base-to-robot tether configurations.
+// Indices refer to the configuration vector supplied to
+// shortenConfigurationTransitions().
+struct ConfigurationTransitionPair {
+  uint32_t from_configuration = 0;
+  uint32_t to_configuration = 0;
+};
+
+struct ConfigurationTransitionResult {
+  ConfigurationTransitionPair pair;
+  HomotopyShorteningResult shortening;
+};
+
+enum class TransitionBatchStatus { success, invalid_request, stopped, failure };
+
+struct TransitionBatchResult {
+  TransitionBatchStatus status = TransitionBatchStatus::failure;
+  std::vector<ConfigurationTransitionResult> transitions;
+  std::string message;
+
+  [[nodiscard]] explicit operator bool() const noexcept {
+    return status == TransitionBatchStatus::success;
+  }
+};
+
 class RaystarCore {
 public:
-  RaystarCore() = default;
+  explicit RaystarCore(unsigned int maximum_length_refinement_precision = 16384)
+    : maximum_length_refinement_precision_(maximum_length_refinement_precision) {}
 
   PlanResult plan(const GridMap& grid_map,
                   int start_x,
@@ -438,6 +571,54 @@ public:
                   int goal_x,
                   int goal_y,
                   int K,
+                  bool allow_self_crossing,
+                  const PlanningLimits& limits = PlanningLimits{});
+
+  // Expand one topology tree from `start` and attach every requested goal to
+  // each expanded visibility region. Goal-set lower bounds drive one shared
+  // priority queue; results remain separated and carry per-goal completion.
+  MultiGoalPlanResult planToGoalsWithinCosts(
+    const GridMap& grid_map,
+    const PlanEndpoint& start,
+    const std::vector<CostBoundedGoal>& goals,
+    bool allow_self_crossing,
+    const PlanningLimits& limits = PlanningLimits{});
+
+  // Construct alpha_a^{-1} * alpha_b after removing their exact common
+  // prefix, then run portal tracing and funnel shortening in the Polymap's
+  // immutable free-triangle environment. The output travels from alpha_a's
+  // robot endpoint to alpha_b's robot endpoint and may cross triangle
+  // interiors. Success additionally requires an independent output trace to
+  // reproduce the complete reduced directed-portal occurrence sequence;
+  // repeated occurrences are retained as the lifted winding witness.
+  [[nodiscard]] static HomotopyShorteningResult shortenWithinHomotopy(
+    const Polymap& polymap,
+    const PathSolution& alpha_a,
+    const PathSolution& alpha_b,
+    const StopToken& stop_token = StopToken{});
+
+  [[nodiscard]] static HomotopyShorteningResult shortenWithinHomotopy(
+    const Polymap& polymap,
+    const std::vector<Point2d>& alpha_a,
+    const std::vector<Point2d>& alpha_b,
+    const StopToken& stop_token = StopToken{});
+
+  // Evaluate an explicit set of directed configuration pairs without
+  // rebuilding the triangle environment. Pair indices are validated
+  // atomically before any shortening is performed; individual geometric
+  // failures remain attached to their corresponding transition.
+  [[nodiscard]] static TransitionBatchResult shortenConfigurationTransitions(
+    const Polymap& polymap,
+    const std::vector<PathSolution>& configurations,
+    const std::vector<ConfigurationTransitionPair>& pairs,
+    const StopToken& stop_token = StopToken{});
+
+  PlanResult plan(const GridMap& grid_map,
+                  int start_x,
+                  int start_y,
+                  int goal_x,
+                  int goal_y,
+                  const SearchObjective& objective,
                   bool allow_self_crossing,
                   const PlanningLimits& limits = PlanningLimits{});
 
@@ -449,9 +630,23 @@ public:
                   const PlanningLimits& limits = PlanningLimits{});
 
   PlanResult plan(const GridMap& grid_map,
+                  const Point2d& start,
+                  const Point2d& goal,
+                  const SearchObjective& objective,
+                  bool allow_self_crossing,
+                  const PlanningLimits& limits = PlanningLimits{});
+
+  PlanResult plan(const GridMap& grid_map,
                   const PlanEndpoint& start,
                   const PlanEndpoint& goal,
                   int K,
+                  bool allow_self_crossing,
+                  const PlanningLimits& limits = PlanningLimits{});
+
+  PlanResult plan(const GridMap& grid_map,
+                  const PlanEndpoint& start,
+                  const PlanEndpoint& goal,
+                  const SearchObjective& objective,
                   bool allow_self_crossing,
                   const PlanningLimits& limits = PlanningLimits{});
 
@@ -481,6 +676,7 @@ private:
                                                           std::string& error);
 
   std::vector<Node> N_;
+  unsigned int maximum_length_refinement_precision_;
 };
 
 }  // namespace raystar

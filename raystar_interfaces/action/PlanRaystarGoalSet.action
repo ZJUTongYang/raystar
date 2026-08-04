@@ -1,0 +1,31 @@
+# Enumerate all non-homotopic paths from one start to several goals while
+# expanding one shared Raystar topology tree. Bounds are inclusive and in
+# metres; goals and max_path_lengths must have identical non-zero lengths.
+# Request-wide node/timeout/cancellation/path-point limits conservatively stop
+# every goal not already retired by an explicit per-goal/shared-frontier proof.
+unique_identifier_msgs/UUID map_id
+geometry_msgs/PoseStamped start
+geometry_msgs/PoseStamped[] goals
+float64[] max_path_lengths
+bool allow_self_crossing
+bool allow_unknown
+bool include_debug
+---
+# Aggregate operation success: every goal search completed and all paths
+# certified eligible under the original metric bounds were returned. Padded
+# Core search-superset candidates certified outside those original bounds are
+# not omissions. This remains true for a certified empty result, including an
+# unreachable goal or a goal with no path inside its bound. Inspect each
+# GoalPathResult.success/path_results to determine whether that goal has paths.
+bool success
+# Exact request semantics echoed by the producer. Consumers must compare these
+# even for a certified empty result, where no PathResult can bind the start or
+# prove which topology/occupancy policy was searched.
+geometry_msgs/PoseStamped requested_start
+bool requested_allow_self_crossing
+bool requested_allow_unknown
+raystar_interfaces/MultiGoalPlanningResultInfo result_info
+string message
+raystar_interfaces/GoalPathResult[] goal_results
+raystar_interfaces/DebugNode[] debug_nodes
+---

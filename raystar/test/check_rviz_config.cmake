@@ -30,6 +30,12 @@ endif()
 
 foreach(required_setting
     "action_name:[ \t]+/raystar/plan_paths"
+    "goal_set_action_name:[ \t]+/raystar/plan_goal_set"
+    "clicked_point_topic:[ \t]+/clicked_point"
+    "search_mode:[ \t]+2"
+    "start_x:[ \t]+2\\.3"
+    "start_y:[ \t]+3\\.3"
+    "max_path_length:[ \t]+7"
     "allow_self_crossing:[ \t]+false"
     "allow_unknown:[ \t]+false")
   if(NOT content MATCHES "${required_setting}")
@@ -37,3 +43,15 @@ foreach(required_setting
       "Bundled RViz config is missing required setting: ${required_setting}")
   endif()
 endforeach()
+
+if(NOT content MATCHES
+    "multi_goals:[\r\n \t]+-[ \t]+max_path_length:[ \t]+7[\r\n \t]+x:[ \t]+6\\.7[\r\n \t]+y:[ \t]+7\\.7[\r\n \t]+-[ \t]+max_path_length:[ \t]+6[\r\n \t]+x:[ \t]+6\\.7[\r\n \t]+y:[ \t]+3\\.3")
+  message(FATAL_ERROR
+    "Bundled RViz config must preserve the certified two-goal demonstration")
+endif()
+
+if(NOT content MATCHES
+    "Class:[ \t]+rviz_default_plugins/PublishPoint[\r\n \t]+Single click:[ \t]+false[\r\n \t]+Topic:[ \t]+/clicked_point")
+  message(FATAL_ERROR
+    "Bundled RViz config must provide the continuous /clicked_point Publish Point tool")
+endif()

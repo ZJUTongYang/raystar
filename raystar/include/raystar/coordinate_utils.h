@@ -1,8 +1,11 @@
 #pragma once
 
+#include <boost/multiprecision/cpp_int.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -61,6 +64,116 @@ inline bool hasValidWorldTransform(const GridMap& map) {
          std::isfinite(map.origin_x) && std::isfinite(map.origin_y);
 }
 
+/// Convert a Core grid-space cost to the exact binary64 operation used by the
+/// ROS result contract. std::fma(x, r, 0) makes the single final rounding
+/// explicit and is used by both bound admission and result publication.
+inline double gridCostToMetric(double grid_cost, float resolution) {
+  return std::fma(grid_cost, static_cast<double>(resolution), 0.0);
+}
+
+namespace detail {
+
+struct NonnegativeExactDyadic {
+  boost::multiprecision::cpp_int significand{0};
+  int exponent = 0;
+};
+
+inline NonnegativeExactDyadic nonnegativeExactDyadic(double value) {
+  if (value == 0.0)
+    return {};
+  int exponent = 0;
+  const double fraction = std::frexp(value, &exponent);
+  constexpr int digits = std::numeric_limits<double>::digits;
+  const double scaled = std::ldexp(fraction, digits);
+  return {boost::multiprecision::cpp_int(static_cast<int64_t>(scaled)), exponent - digits};
+}
+
+inline int compareNonnegativeDyadics(const NonnegativeExactDyadic& lhs,
+                                     const NonnegativeExactDyadic& rhs) {
+  const int exponent = std::min(lhs.exponent, rhs.exponent);
+  const boost::multiprecision::cpp_int lhs_aligned =
+    lhs.significand << (lhs.exponent - exponent);
+  const boost::multiprecision::cpp_int rhs_aligned =
+    rhs.significand << (rhs.exponent - exponent);
+  if (lhs_aligned < rhs_aligned)
+    return -1;
+  if (lhs_aligned > rhs_aligned)
+    return 1;
+  return 0;
+}
+
+inline int compareExactMetricProduct(double grid_cost,
+                                     float resolution,
+                                     double metric_bound) {
+  const auto grid = nonnegativeExactDyadic(grid_cost);
+  const auto scale = nonnegativeExactDyadic(static_cast<double>(resolution));
+  const NonnegativeExactDyadic product{
+    grid.significand * scale.significand, grid.exponent + scale.exponent};
+  return compareNonnegativeDyadics(product, nonnegativeExactDyadic(metric_bound));
+}
+
+inline uint64_t nonnegativeDoubleBits(double value) {
+  static_assert(sizeof(double) == sizeof(uint64_t), "binary64 storage is required");
+  static_assert(std::numeric_limits<double>::is_iec559,
+                "IEEE-754 binary64 ordering is required");
+  static_assert(std::numeric_limits<double>::radix == 2 &&
+                  std::numeric_limits<double>::digits == 53,
+                "IEEE-754 binary64 precision is required");
+  uint64_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return bits;
+}
+
+inline double nonnegativeDoubleFromBits(uint64_t bits) {
+  double value = 0.0;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+}  // namespace detail
+
+/// Find the smallest finite non-negative binary64 grid cost which is no less
+/// than the exact quotient `metric_bound / resolution`.
+///
+/// This is a search-superset conversion, not a publication certificate. Core
+/// must see every mathematical grid polyline whose scaled length can fit the
+/// metric request; the ROS adapter subsequently applies the authoritative
+/// exact serialized-world-polyline certificate. Comparing exact dyadic
+/// products in bit space avoids the double-rounding false negative produced
+/// by requiring `fma(grid_cost, resolution, 0) <= metric_bound`.
+///
+/// If the exact quotient exceeds DBL_MAX, saturating at DBL_MAX still admits
+/// every finite Core cost. Invalid inputs return false and set grid_bound to
+/// NaN.
+inline bool gridCostSearchUpperBoundForMetricBound(double metric_bound,
+                                                   float resolution,
+                                                   double& grid_bound) {
+  grid_bound = std::numeric_limits<double>::quiet_NaN();
+  if (!std::isfinite(metric_bound) || metric_bound <= 0.0 ||
+      !std::isfinite(static_cast<double>(resolution)) || resolution <= 0.0f) {
+    return false;
+  }
+
+  const double maximum = std::numeric_limits<double>::max();
+  if (detail::compareExactMetricProduct(maximum, resolution, metric_bound) < 0) {
+    grid_bound = maximum;
+    return true;
+  }
+
+  uint64_t lower_bits = detail::nonnegativeDoubleBits(0.0);
+  uint64_t upper_bits = detail::nonnegativeDoubleBits(maximum);
+  while (lower_bits < upper_bits) {
+    const uint64_t midpoint_bits = lower_bits + (upper_bits - lower_bits) / 2u;
+    const double candidate = detail::nonnegativeDoubleFromBits(midpoint_bits);
+    if (detail::compareExactMetricProduct(candidate, resolution, metric_bound) < 0)
+      lower_bits = midpoint_bits + 1u;
+    else
+      upper_bits = midpoint_bits;
+  }
+  grid_bound = detail::nonnegativeDoubleFromBits(lower_bits);
+  return true;
+}
+
 // World/grid conversion can lose a couple of low bits when a caller first
 // computes `origin + integer * resolution` and we subsequently subtract the
 // origin and divide by the (float-stored) resolution.  In that case a point
@@ -79,7 +192,7 @@ inline double canonicalizeWorldGridCoordinate(
     return converted;
   }
 
-  const double reconstructed = origin + nearest * resolution;
+  const double reconstructed = std::fma(nearest, resolution, origin);
   if (!std::isfinite(reconstructed))
     return converted;
 
@@ -189,8 +302,8 @@ inline bool mapToWorld(
   if (!hasValidWorldTransform(map))
     return false;
 
-  wx = map.origin_x + static_cast<double>(mx) * map.resolution;
-  wy = map.origin_y + static_cast<double>(my) * map.resolution;
+  wx = std::fma(static_cast<double>(mx), static_cast<double>(map.resolution), map.origin_x);
+  wy = std::fma(static_cast<double>(my), static_cast<double>(map.resolution), map.origin_y);
   return std::isfinite(wx) && std::isfinite(wy);
 }
 
@@ -204,8 +317,10 @@ inline bool continuousMapToWorld(const GridMap& map, double gx, double gy, doubl
     return false;
   }
 
-  const double converted_x = map.origin_x + gx * static_cast<double>(map.resolution);
-  const double converted_y = map.origin_y + gy * static_cast<double>(map.resolution);
+  const double converted_x =
+    std::fma(gx, static_cast<double>(map.resolution), map.origin_x);
+  const double converted_y =
+    std::fma(gy, static_cast<double>(map.resolution), map.origin_y);
   if (!std::isfinite(converted_x) || !std::isfinite(converted_y))
     return false;
   wx = converted_x;

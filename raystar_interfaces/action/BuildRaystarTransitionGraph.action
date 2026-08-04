@@ -1,0 +1,57 @@
+# Shorten explicit directed pairs of base-to-robot tether configurations on
+# the cached map. Every non-empty input Path must use the map frame, be
+# oriented from one exactly identical tether base to its robot endpoint, and
+# be a complete collision-free, locally shortest (taut), piecewise-linear
+# topology reference. Every reference is traced and shortened in full before
+# exact common prefixes are removed for pairwise shortening. When a
+# configuration comes from PathResult, pass
+# topology_path rather than the densely sampled path.
+# Result paths run from the source robot pose to the destination robot pose
+# and may cross CDT triangle interiors.
+unique_identifier_msgs/UUID map_id
+# Optional compatibility guard. Zero lets Raystar derive the environment from
+# map_id and allow_unknown; non-zero requires an exact match before UPS work.
+unique_identifier_msgs/UUID expected_environment_id
+# Aggregate admission is controlled by max_transition_configurations and
+# max_path_points, independently of multi-goal/path-enumeration limits.
+nav_msgs/Path[] tether_configurations
+# Pairs are directed, retain request order, and index tether_configurations.
+# Aggregate admission is controlled by max_transition_pairs.
+raystar_interfaces/ConfigurationTransitionPair[] transition_pairs
+bool allow_unknown
+---
+# success is true only after every requested pair has been processed and every
+# returned transition is certified. A geometric/certification failure still
+# produces its ordered per-pair record, but makes the aggregate status FAILED.
+uint8 STATUS_UNKNOWN=0
+uint8 STATUS_COMPLETE=1
+uint8 STATUS_INVALID_REQUEST=2
+uint8 STATUS_CANCELLED=3
+uint8 STATUS_FAILED=4
+# Cooperative planning_timeout_ms expiration. This is distinct from an
+# accepted client cancellation and normally terminates the Action as aborted.
+uint8 STATUS_TIMEOUT=5
+bool success
+# Echoes the identity used for the request, including failure results.
+unique_identifier_msgs/UUID map_id
+# Actual content/policy/semantic environment used, including failure results
+# once the cached map and startup configuration have been resolved.
+unique_identifier_msgs/UUID environment_id
+uint8 status
+# requested_transition_count is the admitted goal's pair-array size.
+# completed_transition_count is the number of ordered per-pair records that
+# were fully evaluated and appended; it is not the number that succeeded.
+uint32 requested_transition_count
+uint32 completed_transition_count
+string message
+raystar_interfaces/HomotopyTransitionResult[] transitions
+---
+# Counts are monotonic and stage is diagnostic text, not a machine state enum.
+# The producer emits validation/environment/pair stages, including the first
+# and last pair progress, with at most 100 feedback messages total. Action
+# feedback is a volatile, non-authoritative live stream, not a complete event
+# log: a client may miss an ordered prefix or intermediate samples. Result is
+# authoritative.
+uint32 requested_transition_count
+uint32 completed_transition_count
+string stage

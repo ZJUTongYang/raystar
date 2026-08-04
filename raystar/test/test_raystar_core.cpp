@@ -268,6 +268,7 @@ TEST(RaystarCore, PlanStraightPath) {
 
   EXPECT_TRUE(result.success);
   EXPECT_EQ(result.outcome, PlanningOutcome::complete);
+  EXPECT_EQ(result.completion, PlanningCompletion::requested_k_reached);
   EXPECT_GE(result.path_solutions.size(), 1u);
   EXPECT_EQ(result.expanded_nodes, core.getNodes().size());
   EXPECT_GT(result.path_solutions[0].path_cost_, 0.0);
@@ -275,6 +276,535 @@ TEST(RaystarCore, PlanStraightPath) {
     EXPECT_GE(node.V_.size(), 2u);
     EXPECT_EQ(node.V_.size(), node.topo_V_.size());
   }
+}
+
+TEST(RaystarCore, EnumeratesEveryPathWithinInclusiveCostBound) {
+  const auto map = makeSimpleMap();
+  RaystarCore core;
+  const auto baseline = core.plan(map, 5, 14, 25, 15, 2, false);
+  ASSERT_TRUE(baseline.success) << baseline.message;
+  ASSERT_EQ(baseline.path_solutions.size(), 2u);
+  ASSERT_LT(baseline.path_solutions[0].path_cost_, baseline.path_solutions[1].path_cost_);
+
+  const double between =
+    (baseline.path_solutions[0].path_cost_ + baseline.path_solutions[1].path_cost_) / 2.0;
+  const auto first_only = core.plan(
+    map, 5, 14, 25, 15, SearchObjective::allWithinCost(between), false);
+  ASSERT_TRUE(first_only.success) << first_only.message;
+  ASSERT_EQ(first_only.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(first_only.path_solutions.front().path_cost_,
+                   baseline.path_solutions.front().path_cost_);
+  EXPECT_EQ(first_only.completion, PlanningCompletion::cost_bound_exhausted);
+  EXPECT_EQ(first_only.limit_reached, PlanningLimitReached::none);
+
+  const double inclusive_bound = baseline.path_solutions.back().path_cost_;
+  const auto both = core.plan(
+    map, 5, 14, 25, 15, SearchObjective::allWithinCost(inclusive_bound), false);
+  ASSERT_TRUE(both.success) << both.message;
+  ASSERT_EQ(both.path_solutions.size(), baseline.path_solutions.size());
+  for (size_t i = 0; i < both.path_solutions.size(); ++i) {
+    EXPECT_DOUBLE_EQ(both.path_solutions[i].path_cost_, baseline.path_solutions[i].path_cost_);
+    EXPECT_EQ(both.path_solutions[i].projectedPath(), baseline.path_solutions[i].projectedPath());
+    EXPECT_LE(both.path_solutions[i].path_cost_, inclusive_bound);
+  }
+  EXPECT_TRUE(both.completion == PlanningCompletion::cost_bound_exhausted ||
+              both.completion == PlanningCompletion::frontier_exhausted);
+}
+
+TEST(RaystarCore, CostBoundBelowShortestPathCompletesWithNoResult) {
+  const auto map = makeOpenMap();
+  RaystarCore core;
+  const double direct_cost = std::hypot(15.0, 15.0);
+
+  const auto below = core.plan(
+    map, 2, 2, 17, 17, SearchObjective::allWithinCost(std::nextafter(direct_cost, 0.0)), false);
+  EXPECT_FALSE(below.success);
+  EXPECT_EQ(below.outcome, PlanningOutcome::no_path);
+  // A cheap certified frontier lower bound may overlap this one-ULP request,
+  // requiring expansion of the root before exact solution comparison rejects
+  // the path. Both proof routes are complete.
+  EXPECT_TRUE(below.completion == PlanningCompletion::cost_bound_exhausted ||
+              below.completion == PlanningCompletion::frontier_exhausted);
+  EXPECT_TRUE(below.path_solutions.empty());
+  EXPECT_LE(core.getNodes().size(), 1u);
+
+  const auto equal =
+    core.plan(map, 2, 2, 17, 17, SearchObjective::allWithinCost(direct_cost), false);
+  ASSERT_TRUE(equal.success) << equal.message;
+  ASSERT_EQ(equal.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(equal.path_solutions.front().path_cost_, direct_cost);
+  EXPECT_TRUE(equal.completion == PlanningCompletion::cost_bound_exhausted ||
+              equal.completion == PlanningCompletion::frontier_exhausted);
+}
+
+TEST(RaystarCore, RadicalSumBoundaryIsCompleteForSingleAndSharedTreeSearch) {
+  GridMap map;
+  map.width = 60;
+  map.height = 60;
+  map.resolution = 1.0f;
+  map.data.assign(60U * 60U, 0);
+  map.data[30U * 60U + 20U] = 1;
+
+  const PlanEndpoint start(19, 52, 19.5, 52.5);
+  const PlanEndpoint goal(20, 29, 20.5, 29.0);
+  constexpr double inclusive_bound = 0x1.79fa384f9da53p+4;
+  RaystarCore core;
+
+  const auto single = core.plan(
+    map, start, goal, SearchObjective::allWithinCost(inclusive_bound), false);
+  ASSERT_TRUE(single.success) << single.message;
+  ASSERT_EQ(single.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(single.path_solutions.front().path_cost_, inclusive_bound);
+  ASSERT_EQ(single.path_solutions.front().turning_points_.size(), 1u);
+  EXPECT_EQ(single.path_solutions.front().turning_points_.front(),
+            std::make_pair(20, 30));
+  EXPECT_TRUE(single.completion == PlanningCompletion::cost_bound_exhausted ||
+              single.completion == PlanningCompletion::frontier_exhausted);
+
+  const auto multi = core.planToGoalsWithinCosts(
+    map, start, {{goal, inclusive_bound}}, false);
+  ASSERT_EQ(multi.goal_results.size(), 1u);
+  const auto& goal_result = multi.goal_results.front();
+  ASSERT_TRUE(goal_result.success) << goal_result.message;
+  ASSERT_EQ(goal_result.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(goal_result.path_solutions.front().path_cost_, inclusive_bound);
+  EXPECT_EQ(goal_result.path_solutions.front().projectedPath(),
+            single.path_solutions.front().projectedPath());
+
+  const double excluded_bound = std::nextafter(inclusive_bound, 0.0);
+  const auto excluded = core.plan(
+    map, start, goal, SearchObjective::allWithinCost(excluded_bound), false);
+  EXPECT_FALSE(excluded.success);
+  EXPECT_TRUE(excluded.path_solutions.empty());
+  EXPECT_EQ(excluded.completion, PlanningCompletion::cost_bound_exhausted);
+}
+
+TEST(RaystarCore, UnresolvedInclusiveComparisonFailsWithoutCompletenessClaim) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(5, 5, 5.25, 5.25);
+  const PlanEndpoint goal(6, 5, 6.25, 5.25 + std::ldexp(1.0, -40));
+  RaystarCore restricted_core(64);
+
+  const auto result = restricted_core.plan(
+    map, start, goal, SearchObjective::allWithinCost(1.0), false);
+  EXPECT_FALSE(result.success);
+  EXPECT_EQ(result.outcome, PlanningOutcome::failed);
+  EXPECT_EQ(result.completion, PlanningCompletion::none);
+  EXPECT_EQ(result.limit_reached, PlanningLimitReached::none);
+  EXPECT_TRUE(result.path_solutions.empty());
+  EXPECT_NE(result.message.find("Could not resolve"), std::string::npos);
+}
+
+TEST(RaystarCore, CostBoundedPathCapIsAnIncompleteSearchLimit) {
+  const auto map = makeSimpleMap();
+  RaystarCore core;
+  PlanningLimits limits;
+  limits.max_cost_bounded_paths = 1;
+
+  const auto limited = core.plan(
+    map, 5, 15, 25, 15, SearchObjective::allWithinCost(1000.0), false, limits);
+  EXPECT_TRUE(limited.success) << limited.message;
+  EXPECT_EQ(limited.outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(limited.limit_reached, PlanningLimitReached::max_paths);
+  EXPECT_EQ(limited.completion, PlanningCompletion::none);
+  ASSERT_EQ(limited.path_solutions.size(), 1u);
+  EXPECT_NE(limited.message.find("max_cost_bounded_paths=1"), std::string::npos);
+}
+
+TEST(RaystarCore, RejectedSearchSupersetPathsDoNotConsumeBoundedPathBudgets) {
+  const auto map = makeSimpleMap();
+  RaystarCore core;
+  const auto baseline = core.plan(map, 5, 14, 25, 15, 2, false);
+  ASSERT_TRUE(baseline.success) << baseline.message;
+  ASSERT_EQ(baseline.path_solutions.size(), 2u);
+  ASSERT_LT(baseline.path_solutions[0].path_cost_, baseline.path_solutions[1].path_cost_);
+  const auto& rejected_solution = baseline.path_solutions.front();
+  const auto expected_geometry = baseline.path_solutions.back().projectedPath();
+
+  size_t admission_calls = 0;
+  const auto admission = [&](const BoundedPathView& path, const StopToken&) {
+    ++admission_calls;
+    return path.start == rejected_solution.start_ &&
+                   path.turning_points == rejected_solution.turning_points_ &&
+                   path.goal == rejected_solution.goal_
+             ? BoundedPathAdmission::reject
+             : BoundedPathAdmission::accept;
+  };
+  PlanningLimits limits;
+  limits.max_cost_bounded_paths = 1;
+  // The retained path fits exactly. The rejected shell must not be charged
+  // before the later eligible path is considered.
+  limits.max_path_points = expected_geometry.size();
+  const auto filtered = core.plan(
+    map,
+    5,
+    14,
+    25,
+    15,
+    SearchObjective::allWithinCost(
+      baseline.path_solutions.back().path_cost_, admission),
+    false,
+    limits);
+
+  ASSERT_TRUE(filtered.success) << filtered.message;
+  EXPECT_EQ(filtered.outcome, PlanningOutcome::complete);
+  EXPECT_EQ(filtered.limit_reached, PlanningLimitReached::none);
+  EXPECT_TRUE(filtered.completion == PlanningCompletion::cost_bound_exhausted ||
+              filtered.completion == PlanningCompletion::frontier_exhausted);
+  ASSERT_EQ(filtered.path_solutions.size(), 1u);
+  EXPECT_EQ(filtered.path_solutions.front().projectedPath(), expected_geometry);
+  EXPECT_GE(admission_calls, 2u);
+}
+
+TEST(RaystarCore, BoundedPathAdmissionFailureFailsClosed) {
+  const auto map = makeOpenMap();
+  RaystarCore core;
+  const auto result = core.plan(
+    map,
+    2,
+    2,
+    17,
+    17,
+    SearchObjective::allWithinCost(
+      100.0,
+      [](const BoundedPathView&, const StopToken&) {
+        return BoundedPathAdmission::failure_or_stop;
+      }),
+    false);
+
+  EXPECT_FALSE(result.success);
+  EXPECT_EQ(result.outcome, PlanningOutcome::failed);
+  EXPECT_EQ(result.limit_reached, PlanningLimitReached::none);
+  EXPECT_EQ(result.completion, PlanningCompletion::none);
+  EXPECT_TRUE(result.path_solutions.empty());
+  EXPECT_NE(result.message.find("bounded path admission failed"), std::string::npos);
+}
+
+TEST(RaystarCore, BoundedPathAdmissionStopOutranksResourceLimits) {
+  const auto map = makeOpenMap();
+  RaystarCore core;
+  bool cancel_requested = false;
+  PlanningLimits limits;
+  limits.cancel_requested = [&]() { return cancel_requested; };
+  limits.max_cost_bounded_paths = 1;
+  limits.max_path_points = 2;
+  const auto admission = [&](const BoundedPathView&, const StopToken& stop_token) {
+    cancel_requested = true;
+    EXPECT_TRUE(stop_token.poll());
+    return BoundedPathAdmission::accept;
+  };
+  const auto result = core.plan(map,
+                                2,
+                                2,
+                                17,
+                                17,
+                                SearchObjective::allWithinCost(100.0, admission),
+                                false,
+                                limits);
+
+  EXPECT_FALSE(result.success);
+  EXPECT_EQ(result.outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(result.limit_reached, PlanningLimitReached::cancelled);
+  EXPECT_EQ(result.completion, PlanningCompletion::none);
+  EXPECT_TRUE(result.path_solutions.empty());
+}
+
+TEST(RaystarCore, MultiGoalSingleEntryMatchesSingleGoalBoundedSearch) {
+  const auto map = makeSimpleMap();
+  const PlanEndpoint start(5, 14, 5.0, 14.0);
+  const PlanEndpoint goal(25, 15, 25.0, 15.0);
+  constexpr double bound = 40.0;
+  RaystarCore core;
+
+  const auto single =
+    core.plan(map, start, goal, SearchObjective::allWithinCost(bound), false);
+  const auto multi =
+    core.planToGoalsWithinCosts(map, start, {{goal, bound}}, false);
+
+  ASSERT_EQ(multi.goal_results.size(), 1u);
+  const auto& unwrapped = multi.goal_results.front();
+  EXPECT_EQ(unwrapped.success, single.success);
+  EXPECT_EQ(unwrapped.outcome, single.outcome);
+  EXPECT_EQ(unwrapped.limit_reached, single.limit_reached);
+  EXPECT_EQ(unwrapped.completion, single.completion);
+  ASSERT_EQ(unwrapped.path_solutions.size(), single.path_solutions.size());
+  for (size_t i = 0; i < single.path_solutions.size(); ++i) {
+    EXPECT_DOUBLE_EQ(unwrapped.path_solutions[i].path_cost_, single.path_solutions[i].path_cost_);
+    EXPECT_EQ(unwrapped.path_solutions[i].projectedPath(),
+              single.path_solutions[i].projectedPath());
+  }
+}
+
+TEST(RaystarCore, MultiGoalUsesOneTreeWithIndependentInclusiveBounds) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(2, 2, 2.5, 2.5);
+  const PlanEndpoint near_goal(8, 2, 8.5, 2.5);
+  const PlanEndpoint far_goal(17, 17, 17.5, 17.5);
+  const double near_cost = 6.0;
+  const double far_cost = std::hypot(15.0, 15.0);
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map,
+    start,
+    {{near_goal, near_cost}, {far_goal, std::nextafter(far_cost, 0.0)}},
+    false);
+
+  ASSERT_EQ(result.goal_results.size(), 2u);
+  EXPECT_EQ(result.outcome, PlanningOutcome::complete);
+  ASSERT_EQ(result.goal_results[0].path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(result.goal_results[0].path_solutions.front().path_cost_, near_cost);
+  EXPECT_TRUE(result.goal_results[0].completion == PlanningCompletion::cost_bound_exhausted ||
+              result.goal_results[0].completion == PlanningCompletion::frontier_exhausted);
+  EXPECT_FALSE(result.goal_results[1].success);
+  EXPECT_EQ(result.goal_results[1].outcome, PlanningOutcome::no_path);
+  EXPECT_TRUE(result.goal_results[1].completion == PlanningCompletion::cost_bound_exhausted ||
+              result.goal_results[1].completion == PlanningCompletion::frontier_exhausted);
+  EXPECT_EQ(result.expanded_nodes, core.getNodes().size());
+  EXPECT_EQ(result.expanded_nodes, 1u);
+}
+
+TEST(RaystarCore, MultiGoalPreservesOrderAndDuplicateGoalResults) {
+  const auto map = makeSimpleMap();
+  const PlanEndpoint start(5, 15, 5.5, 15.5);
+  const PlanEndpoint upper_goal(25, 14, 25.5, 14.5);
+  const PlanEndpoint lower_goal(25, 16, 25.5, 16.5);
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map,
+    start,
+    {{upper_goal, 40.0}, {lower_goal, 40.0}, {upper_goal, 40.0}},
+    false);
+
+  ASSERT_EQ(result.goal_results.size(), 3u);
+  EXPECT_EQ(result.goal_results[0].endpoint.position_, upper_goal.position_);
+  EXPECT_EQ(result.goal_results[1].endpoint.position_, lower_goal.position_);
+  EXPECT_EQ(result.goal_results[2].endpoint.position_, upper_goal.position_);
+  ASSERT_EQ(result.goal_results[0].path_solutions.size(),
+            result.goal_results[2].path_solutions.size());
+  for (size_t i = 0; i < result.goal_results[0].path_solutions.size(); ++i) {
+    EXPECT_DOUBLE_EQ(result.goal_results[0].path_solutions[i].path_cost_,
+                     result.goal_results[2].path_solutions[i].path_cost_);
+    EXPECT_EQ(result.goal_results[0].path_solutions[i].projectedPath(),
+              result.goal_results[2].path_solutions[i].projectedPath());
+  }
+}
+
+TEST(RaystarCore, MultiGoalPathSetsMatchIndependentSearchesAndGoalPermutation) {
+  const auto map = makeSimpleMap();
+  const PlanEndpoint start(5, 15, 5.5, 15.5);
+  const PlanEndpoint upper_goal(25, 14, 25.5, 14.5);
+  const PlanEndpoint lower_goal(25, 16, 25.5, 16.5);
+  constexpr double bound = 45.0;
+  RaystarCore core;
+
+  const auto shared = core.planToGoalsWithinCosts(
+    map, start, {{upper_goal, bound}, {lower_goal, bound}}, false);
+  ASSERT_EQ(shared.goal_results.size(), 2u);
+  const auto upper_independent =
+    core.plan(map, start, upper_goal, SearchObjective::allWithinCost(bound), false);
+  const auto lower_independent =
+    core.plan(map, start, lower_goal, SearchObjective::allWithinCost(bound), false);
+
+  const auto expect_same_paths = [](const std::vector<PathSolution>& lhs,
+                                    const std::vector<PathSolution>& rhs) {
+    ASSERT_EQ(lhs.size(), rhs.size());
+    for (size_t i = 0; i < lhs.size(); ++i) {
+      EXPECT_DOUBLE_EQ(lhs[i].path_cost_, rhs[i].path_cost_);
+      EXPECT_EQ(lhs[i].projectedPath(), rhs[i].projectedPath());
+    }
+  };
+  expect_same_paths(shared.goal_results[0].path_solutions, upper_independent.path_solutions);
+  expect_same_paths(shared.goal_results[1].path_solutions, lower_independent.path_solutions);
+
+  const auto permuted = core.planToGoalsWithinCosts(
+    map, start, {{lower_goal, bound}, {upper_goal, bound}}, false);
+  ASSERT_EQ(permuted.goal_results.size(), 2u);
+  expect_same_paths(shared.goal_results[0].path_solutions,
+                    permuted.goal_results[1].path_solutions);
+  expect_same_paths(shared.goal_results[1].path_solutions,
+                    permuted.goal_results[0].path_solutions);
+}
+
+TEST(RaystarCore, MultiGoalSeparatesReachableAndUnreachableGoals) {
+  auto map = makeOpenMap();
+  for (unsigned int y = 0; y < map.height; ++y)
+    map.data[y * map.width + 10] = 1;
+  const PlanEndpoint start(2, 10, 2.5, 10.5);
+  const PlanEndpoint reachable_goal(8, 10, 8.5, 10.5);
+  const PlanEndpoint unreachable_goal(17, 10, 17.5, 10.5);
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map, start, {{reachable_goal, 20.0}, {unreachable_goal, 20.0}}, false);
+
+  ASSERT_EQ(result.goal_results.size(), 2u);
+  EXPECT_EQ(result.outcome, PlanningOutcome::complete);
+  EXPECT_TRUE(result.goal_results[0].success) << result.goal_results[0].message;
+  ASSERT_EQ(result.goal_results[0].path_solutions.size(), 1u);
+  EXPECT_FALSE(result.goal_results[1].success);
+  EXPECT_EQ(result.goal_results[1].outcome, PlanningOutcome::no_path);
+  EXPECT_EQ(result.goal_results[1].completion, PlanningCompletion::frontier_exhausted);
+  EXPECT_NE(result.goal_results[1].message.find("No path exists"), std::string::npos);
+}
+
+TEST(RaystarCore, MultiGoalRejectsInvalidGoalCountAndBound) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(2, 2, 2.5, 2.5);
+  const PlanEndpoint goal(17, 17, 17.5, 17.5);
+  RaystarCore core;
+
+  const auto empty = core.planToGoalsWithinCosts(map, start, {}, false);
+  EXPECT_EQ(empty.outcome, PlanningOutcome::invalid_request);
+  EXPECT_TRUE(core.getNodes().empty());
+
+  const auto invalid_bound =
+    core.planToGoalsWithinCosts(map, start, {{goal, -1.0}}, false);
+  EXPECT_EQ(invalid_bound.outcome, PlanningOutcome::invalid_request);
+  ASSERT_EQ(invalid_bound.goal_results.size(), 1u);
+  EXPECT_EQ(invalid_bound.goal_results.front().outcome, PlanningOutcome::invalid_request);
+
+  PlanningLimits limits;
+  limits.max_multi_goal_count = 1;
+  const auto too_many =
+    core.planToGoalsWithinCosts(map, start, {{goal, 30.0}, {goal, 30.0}}, false, limits);
+  EXPECT_EQ(too_many.outcome, PlanningOutcome::invalid_request);
+  EXPECT_NE(too_many.message.find("max_multi_goal_count=1"), std::string::npos);
+}
+
+TEST(RaystarCore, MultiGoalZeroBoundReturnsOnlyTheIdentityPath) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(2, 2, 2.5, 2.5);
+  const PlanEndpoint other_goal(3, 2, 3.5, 2.5);
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map, start, {{start, 0.0}, {other_goal, 0.0}}, false);
+
+  ASSERT_EQ(result.goal_results.size(), 2u);
+  EXPECT_EQ(result.outcome, PlanningOutcome::complete);
+
+  const auto& identity = result.goal_results[0];
+  EXPECT_TRUE(identity.success) << identity.message;
+  EXPECT_EQ(identity.outcome, PlanningOutcome::complete);
+  ASSERT_EQ(identity.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(identity.path_solutions.front().path_cost_, 0.0);
+  EXPECT_EQ(identity.path_solutions.front().projectedPath(),
+            std::vector<Point2d>({start.position_, start.position_}));
+
+  const auto& unreachable_within_zero = result.goal_results[1];
+  EXPECT_FALSE(unreachable_within_zero.success);
+  EXPECT_EQ(unreachable_within_zero.outcome, PlanningOutcome::no_path);
+  EXPECT_TRUE(unreachable_within_zero.path_solutions.empty());
+}
+
+TEST(RaystarCore, MultiGoalPathCapIsPerGoalAndDoesNotStopOtherGoals) {
+  const auto map = makeSimpleMap();
+  const PlanEndpoint start(5, 15, 5.5, 15.5);
+  const PlanEndpoint obstacle_goal(25, 15, 25.5, 15.5);
+  const PlanEndpoint same_side_goal(6, 15, 6.5, 15.5);
+  PlanningLimits limits;
+  limits.max_cost_bounded_paths = 1;
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map,
+    start,
+    {{obstacle_goal, 1000.0}, {same_side_goal, 2.0}},
+    false,
+    limits);
+
+  ASSERT_EQ(result.goal_results.size(), 2u);
+  EXPECT_EQ(result.outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(result.limit_reached, PlanningLimitReached::max_paths);
+  EXPECT_EQ(result.goal_results[0].outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(result.goal_results[0].limit_reached, PlanningLimitReached::max_paths);
+  ASSERT_EQ(result.goal_results[0].path_solutions.size(), 1u);
+  EXPECT_EQ(result.goal_results[1].outcome, PlanningOutcome::complete);
+  ASSERT_EQ(result.goal_results[1].path_solutions.size(), 1u);
+}
+
+TEST(RaystarCore, MultiGoalGlobalPathPointLimitMarksEveryUnfinishedGoal) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(2, 2, 2.5, 2.5);
+  const PlanEndpoint first_goal(8, 2, 8.5, 2.5);
+  const PlanEndpoint second_goal(2, 8, 2.5, 8.5);
+  PlanningLimits limits;
+  limits.max_path_points = 3;
+  RaystarCore core;
+
+  const auto result = core.planToGoalsWithinCosts(
+    map, start, {{first_goal, 10.0}, {second_goal, 10.0}}, false, limits);
+
+  EXPECT_EQ(result.outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(result.limit_reached, PlanningLimitReached::max_path_points);
+  ASSERT_EQ(result.goal_results.size(), 2u);
+  for (const auto& goal_result : result.goal_results) {
+    EXPECT_EQ(goal_result.outcome, PlanningOutcome::limit_reached);
+    EXPECT_EQ(goal_result.limit_reached, PlanningLimitReached::max_path_points);
+  }
+  EXPECT_EQ(result.goal_results[0].path_solutions.size() +
+              result.goal_results[1].path_solutions.size(),
+            1u);
+}
+
+TEST(RaystarCore, MultiGoalImmediateCancellationIsStructuredAndRecoverable) {
+  const auto map = makeOpenMap();
+  const PlanEndpoint start(2, 2, 2.5, 2.5);
+  const PlanEndpoint goal(17, 17, 17.5, 17.5);
+  PlanningLimits limits;
+  limits.cancel_requested = []() { return true; };
+  RaystarCore core;
+
+  const auto cancelled =
+    core.planToGoalsWithinCosts(map, start, {{goal, 30.0}, {goal, 40.0}}, false, limits);
+  EXPECT_EQ(cancelled.outcome, PlanningOutcome::limit_reached);
+  EXPECT_EQ(cancelled.limit_reached, PlanningLimitReached::cancelled);
+  ASSERT_EQ(cancelled.goal_results.size(), 2u);
+  for (const auto& goal_result : cancelled.goal_results) {
+    EXPECT_EQ(goal_result.outcome, PlanningOutcome::limit_reached);
+    EXPECT_EQ(goal_result.limit_reached, PlanningLimitReached::cancelled);
+  }
+  EXPECT_TRUE(core.getNodes().empty());
+
+  const auto recovered =
+    core.planToGoalsWithinCosts(map, start, {{goal, 30.0}}, false);
+  EXPECT_EQ(recovered.outcome, PlanningOutcome::complete);
+  ASSERT_EQ(recovered.goal_results.size(), 1u);
+  EXPECT_TRUE(recovered.goal_results.front().success);
+}
+
+TEST(RaystarCore, RejectsInvalidSearchObjectivesAndBoundedPathLimit) {
+  const auto map = makeOpenMap();
+  RaystarCore core;
+
+  const std::vector<SearchObjective> invalid_objectives = {
+    SearchObjective{SearchMode::all_within_cost, 1, 10.0},
+    SearchObjective::allWithinCost(-1.0),
+    SearchObjective::allWithinCost(std::numeric_limits<double>::infinity()),
+    SearchObjective::allWithinCost(std::numeric_limits<double>::quiet_NaN()),
+    SearchObjective{SearchMode::top_k, 1, 10.0}};
+  for (const auto& objective : invalid_objectives) {
+    const auto result = core.plan(map, 2, 2, 17, 17, objective, false);
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.outcome, PlanningOutcome::invalid_request);
+    EXPECT_TRUE(result.path_solutions.empty());
+    EXPECT_TRUE(core.getNodes().empty());
+  }
+
+  const auto zero_bound =
+    core.plan(map, 2, 2, 2, 2, SearchObjective::allWithinCost(0.0), false);
+  ASSERT_TRUE(zero_bound.success);
+  ASSERT_EQ(zero_bound.path_solutions.size(), 1u);
+  EXPECT_DOUBLE_EQ(zero_bound.path_solutions.front().path_cost_, 0.0);
+
+  PlanningLimits limits;
+  limits.max_cost_bounded_paths = 0;
+  const auto invalid_limit = core.plan(
+    map, 2, 2, 17, 17, SearchObjective::allWithinCost(100.0), false, limits);
+  EXPECT_FALSE(invalid_limit.success);
+  EXPECT_NE(invalid_limit.message.find("max_cost_bounded_paths"), std::string::npos);
 }
 
 TEST(RaystarCore, ContinuousEndpointsRemainDistinctFromTheirCells) {
@@ -459,6 +989,141 @@ TEST(RaystarCore, PlanAroundObstacle) {
 
   EXPECT_TRUE(result.success);
   EXPECT_GE(result.path_solutions.size(), 1u);
+}
+
+TEST(RaystarCore, UpsRemovesCommonTetherPrefixAndCrossesTriangleInteriors) {
+  RaystarCore core;
+  const Point2d base{5.5, 15.5};
+  const auto plan = core.plan(makeSimpleMap(), base, Point2d{25.5, 15.5}, 1, false);
+  ASSERT_TRUE(plan.success) << plan.message;
+  ASSERT_NE(plan.polymap, nullptr);
+  const PathSolution first(base,
+                           std::vector<std::pair<int, int>>{{10, 10}, {20, 10}},
+                           Point2d{25.5, 15.5},
+                           0.0,
+                           {});
+  const PathSolution second(base,
+                            std::vector<std::pair<int, int>>{{10, 10}, {20, 10}},
+                            Point2d{24.5, 13.5},
+                            0.0,
+                            {});
+
+  const auto transition =
+    RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
+
+  ASSERT_TRUE(transition) << transition.message;
+  ASSERT_EQ(transition.path.size(), 2u);
+  EXPECT_EQ(transition.path.front(), first.goal_);
+  EXPECT_EQ(transition.path.back(), second.goal_);
+  EXPECT_NEAR(transition.path_cost, std::hypot(1.0, 2.0), 1.0e-12);
+}
+
+TEST(RaystarCore, UpsPreservesAConfigurationChangingLoopAtOneRobotPose) {
+  RaystarCore core;
+  const auto plan = core.plan(makeSimpleMap(),
+                              Point2d{5.5, 15.5},
+                              Point2d{25.5, 15.5},
+                              2,
+                              false);
+  ASSERT_TRUE(plan.success) << plan.message;
+  ASSERT_EQ(plan.path_solutions.size(), 2u);
+  ASSERT_NE(plan.polymap, nullptr);
+
+  const auto transition = RaystarCore::shortenWithinHomotopy(
+    *plan.polymap, plan.path_solutions[0], plan.path_solutions[1]);
+
+  ASSERT_TRUE(transition) << transition.message;
+  ASSERT_GE(transition.path.size(), 2u);
+  EXPECT_EQ(transition.path.front(), plan.path_solutions[0].goal_);
+  EXPECT_EQ(transition.path.back(), plan.path_solutions[1].goal_);
+  EXPECT_EQ(transition.path.front(), transition.path.back());
+  EXPECT_GT(transition.path_cost, 0.0);
+  EXPECT_TRUE(transition.homotopy_preserved);
+  std::string witness_error;
+  EXPECT_TRUE(sameReducedDirectedPortalWitness(
+    transition.corridor, transition.output_corridor, &witness_error))
+    << witness_error;
+  EXPECT_EQ(transition.corridor.triangle_occurrences,
+            transition.output_corridor.triangle_occurrences);
+  bool repeats_a_triangle = false;
+  for (size_t first = 0; first < transition.corridor.triangle_occurrences.size(); ++first) {
+    for (size_t second = first + 1; second < transition.corridor.triangle_occurrences.size();
+         ++second) {
+      repeats_a_triangle = repeats_a_triangle ||
+                           transition.corridor.triangle_occurrences[first] ==
+                             transition.corridor.triangle_occurrences[second];
+    }
+  }
+  EXPECT_TRUE(repeats_a_triangle)
+    << "A lifted winding sleeve must retain repeated geometric triangle occurrences";
+}
+
+TEST(RaystarCore, UpsBatchEvaluatesDirectedPairsAndIdentityTransitions) {
+  RaystarCore core;
+  const auto plan = core.plan(makeSimpleMap(),
+                              Point2d{5.5, 15.5},
+                              Point2d{25.5, 15.5},
+                              2,
+                              false);
+  ASSERT_TRUE(plan.success) << plan.message;
+  ASSERT_EQ(plan.path_solutions.size(), 2u);
+  ASSERT_NE(plan.polymap, nullptr);
+  const std::vector<ConfigurationTransitionPair> pairs{{0, 0}, {0, 1}, {1, 0}};
+
+  const auto batch = RaystarCore::shortenConfigurationTransitions(
+    *plan.polymap, plan.path_solutions, pairs);
+
+  ASSERT_TRUE(batch) << batch.message;
+  ASSERT_EQ(batch.transitions.size(), pairs.size());
+  EXPECT_EQ(batch.transitions[0].pair.from_configuration, 0u);
+  ASSERT_TRUE(batch.transitions[0].shortening) << batch.transitions[0].shortening.message;
+  EXPECT_DOUBLE_EQ(batch.transitions[0].shortening.path_cost, 0.0);
+  ASSERT_TRUE(batch.transitions[1].shortening) << batch.transitions[1].shortening.message;
+  ASSERT_TRUE(batch.transitions[2].shortening) << batch.transitions[2].shortening.message;
+  EXPECT_NEAR(batch.transitions[1].shortening.path_cost,
+              batch.transitions[2].shortening.path_cost,
+              1.0e-12);
+}
+
+TEST(RaystarCore, UpsBatchRejectsPairIndicesAtomicallyAndSupportsCancellation) {
+  RaystarCore core;
+  const auto plan = core.plan(makeOpenMap(),
+                              Point2d{2.5, 2.5},
+                              Point2d{17.5, 17.5},
+                              1,
+                              false);
+  ASSERT_TRUE(plan.success) << plan.message;
+  ASSERT_NE(plan.polymap, nullptr);
+
+  const auto invalid = RaystarCore::shortenConfigurationTransitions(
+    *plan.polymap, plan.path_solutions, {{0, 0}, {0, 1}});
+  EXPECT_EQ(invalid.status, TransitionBatchStatus::invalid_request);
+  EXPECT_TRUE(invalid.transitions.empty());
+
+  const StopToken stop([]() { return true; });
+  const auto canceled = RaystarCore::shortenConfigurationTransitions(
+    *plan.polymap, plan.path_solutions, {{0, 0}}, stop);
+  EXPECT_EQ(canceled.status, TransitionBatchStatus::stopped);
+  EXPECT_TRUE(canceled.transitions.empty());
+}
+
+TEST(RaystarCore, UpsRejectsConfigurationsWithDifferentTetherBases) {
+  RaystarCore core;
+  const auto plan = core.plan(makeOpenMap(),
+                              Point2d{2.5, 2.5},
+                              Point2d{17.5, 17.5},
+                              1,
+                              false);
+  ASSERT_TRUE(plan.success) << plan.message;
+  ASSERT_NE(plan.polymap, nullptr);
+  const PathSolution first(Point2d{2.5, 2.5}, {}, Point2d{4.5, 4.5}, 0.0, {});
+  const PathSolution second(Point2d{3.5, 2.5}, {}, Point2d{5.5, 4.5}, 0.0, {});
+
+  const auto transition =
+    RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
+
+  EXPECT_EQ(transition.status, HomotopyShorteningStatus::invalid_reference);
+  EXPECT_NE(transition.message.find("base"), std::string::npos);
 }
 
 TEST(RaystarCore, PathSolutionsRetainCompleteDeepAncestorChains) {

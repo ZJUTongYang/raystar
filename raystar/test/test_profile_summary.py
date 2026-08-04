@@ -11,7 +11,7 @@ import unittest
 
 SUMMARY = pathlib.Path(sys.argv.pop(1)).resolve()
 
-FIELDS = [
+FIELDS_V2 = [
     "schema_version",
     "scenario",
     "width",
@@ -51,6 +51,21 @@ FIELDS = [
     "process_hwm_kib_after_plan",
     "verdict",
     "acceptance",
+]
+
+FIELDS_V3 = FIELDS_V2 + [
+    "mode",
+    "max_path_cost_cells",
+    "goal_count",
+    "completion",
+    "per_goal_complete",
+    "per_goal_outcomes",
+    "per_goal_limits",
+    "per_goal_completions",
+    "per_goal_found_paths",
+    "max_cost_bounded_paths",
+    "max_path_points",
+    "max_multi_goal_count",
 ]
 
 
@@ -105,11 +120,66 @@ def make_rows(measured_samples=2):
     return rows
 
 
-def write_csv(path, rows):
+def make_v3_rows(mode="top_k", measured_samples=2):
+    rows = make_rows(measured_samples)
+    for row in rows:
+        row.update(
+            {
+                "schema_version": "3",
+                "mode": mode,
+                "max_path_cost_cells": "0",
+                "goal_count": "1",
+                "completion": "requested_k_reached",
+                "per_goal_complete": "true",
+                "per_goal_outcomes": "complete",
+                "per_goal_limits": "none",
+                "per_goal_completions": "requested_k_reached",
+                "per_goal_found_paths": "1",
+                "max_cost_bounded_paths": "1000",
+                "max_path_points": "100000",
+                "max_multi_goal_count": "32",
+            }
+        )
+        if mode == "all_within_length":
+            row.update(
+                {
+                    "k": "0",
+                    "max_path_cost_cells": "400",
+                    "completion": "cost_bound_exhausted",
+                    "per_goal_completions": "cost_bound_exhausted",
+                }
+            )
+        elif mode == "multi_goal":
+            row.update(
+                {
+                    "k": "0",
+                    "max_path_cost_cells": "400",
+                    "goal_count": "2",
+                    "completion": "all_goals_complete",
+                    "found_paths": "2",
+                    "expected_paths": "2",
+                    "expanded_nodes": "2",
+                    "total_path_points": "4",
+                    "per_goal_complete": "true|true",
+                    "per_goal_outcomes": "complete|complete",
+                    "per_goal_limits": "none|none",
+                    "per_goal_completions": (
+                        "cost_bound_exhausted|frontier_exhausted"
+                    ),
+                    "per_goal_found_paths": "1|1",
+                }
+            )
+    return rows
+
+
+def write_csv(path, rows, fields=FIELDS_V2):
     with path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=FIELDS, lineterminator="\n")
+        writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(
+            {field: row[field] for field in fields}
+            for row in rows
+        )
 
 
 class ProfileSummaryContractTest(unittest.TestCase):
@@ -146,6 +216,237 @@ class ProfileSummaryContractTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(",2,PASS,PASS\n", result.stdout)
+
+    def test_schema_v2_is_reported_as_legacy_top_k(self):
+        profile = self.directory / "legacy-v2.csv"
+        write_csv(profile, make_rows())
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        header, record = result.stdout.splitlines()
+        self.assertEqual(
+            header.split(",")[-3:], ["measured_samples", "verdict", "acceptance"]
+        )
+        values = dict(zip(header.split(","), record.split(",")))
+        self.assertEqual(values["mode"], "top_k")
+        self.assertEqual(values["max_path_cost_cells"], "0.000")
+        self.assertEqual(values["goal_count"], "1")
+
+    def test_schema_v3_top_k_case_passes(self):
+        profile = self.directory / "top-k-v3.csv"
+        write_csv(profile, make_v3_rows(), FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("open_256,top_k,1,0,1,", result.stdout)
+
+    def test_schema_v3_all_within_length_case_passes(self):
+        profile = self.directory / "bounded-v3.csv"
+        write_csv(profile, make_v3_rows("all_within_length"), FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("open_256,all_within_length,0,400,1,", result.stdout)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,PASS,PASS"))
+
+    def test_complete_bounded_no_path_certificate_passes(self):
+        profile = self.directory / "bounded-no-path-v3.csv"
+        rows = make_v3_rows("all_within_length")
+        for row in rows:
+            row["success"] = "false"
+            row["outcome"] = "no_path"
+            row["found_paths"] = "0"
+            row["expected_paths"] = "0"
+            row["expanded_nodes"] = "0"
+            row["total_path_points"] = "0"
+            row["shortest_cost_cells"] = "0.000"
+            row["longest_cost_cells"] = "0.000"
+            row["per_goal_outcomes"] = "no_path"
+            row["per_goal_found_paths"] = "0"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,PASS,PASS"))
+
+    def test_bounded_path_cost_above_bound_cannot_pass(self):
+        profile = self.directory / "bounded-cost-overrun.csv"
+        rows = make_v3_rows("all_within_length")
+        for row in rows:
+            row["longest_cost_cells"] = "401.000"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",FAIL"))
+
+    def test_schema_v3_multi_goal_case_passes(self):
+        profile = self.directory / "multi-goal-v3.csv"
+        write_csv(profile, make_v3_rows("multi_goal"), FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("open_256,multi_goal,0,400,2,2,2,", result.stdout)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,PASS,PASS"))
+
+    def test_multi_goal_mixed_path_and_no_path_certificates_pass(self):
+        profile = self.directory / "mixed-multi-goal-v3.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["found_paths"] = "1"
+            row["expected_paths"] = "1"
+            row["total_path_points"] = "2"
+            row["per_goal_outcomes"] = "complete|no_path"
+            row["per_goal_found_paths"] = "1|0"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,PASS,PASS"))
+
+    def test_schema_v3_header_must_be_exact(self):
+        profile = self.directory / "missing-v3-field.csv"
+        write_csv(profile, make_v3_rows(), FIELDS_V3[:-1])
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("schema v2 or v3", result.stderr)
+
+    def test_bounded_mode_rejects_nonzero_k(self):
+        profile = self.directory / "bounded-nonzero-k.csv"
+        rows = make_v3_rows("all_within_length")
+        for row in rows:
+            row["k"] = "1"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("requires K=0", result.stderr)
+
+    def test_bound_change_between_repeats_is_rejected(self):
+        profile = self.directory / "changing-bound.csv"
+        rows = make_v3_rows("all_within_length")
+        rows[-1]["max_path_cost_cells"] = "401"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("measured records", result.stderr)
+
+    def test_multi_goal_array_length_must_match_goal_count(self):
+        profile = self.directory / "short-per-goal-array.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["per_goal_found_paths"] = "2"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("array length does not match goal_count", result.stderr)
+
+    def test_incomplete_multi_goal_certificate_cannot_pass(self):
+        profile = self.directory / "incomplete-goal.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["completion"] = "incomplete"
+            row["per_goal_complete"] = "true|false"
+            row["request_satisfied"] = "false"
+            row["search_complete"] = "false"
+            row["verdict"] = "INCOMPLETE_max_paths"
+            row["acceptance"] = "FAIL"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,INCOMPLETE_max_paths,FAIL"))
+
+    def test_multi_goal_requires_at_least_two_goals(self):
+        profile = self.directory / "one-goal-multi.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["goal_count"] = "1"
+            row["per_goal_complete"] = "true"
+            row["per_goal_outcomes"] = "complete"
+            row["per_goal_limits"] = "none"
+            row["per_goal_completions"] = "cost_bound_exhausted"
+            row["per_goal_found_paths"] = "2"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("goal_count between 2 and 32", result.stderr)
+
+    def test_max_path_points_must_admit_a_complete_path(self):
+        profile = self.directory / "invalid-max-path-points.csv"
+        rows = make_v3_rows("all_within_length")
+        for row in rows:
+            row["max_path_points"] = "1"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("max_path_points must be at least 2", result.stderr)
+
+    def test_multi_goal_count_cap_must_admit_all_goals(self):
+        profile = self.directory / "too-small-multi-goal-cap.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["max_multi_goal_count"] = "1"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be at least goal_count", result.stderr)
+
+    def test_new_resource_limits_must_use_canonical_integers(self):
+        profile = self.directory / "noncanonical-new-limit.csv"
+        rows = make_v3_rows()
+        for row in rows:
+            row["max_multi_goal_count"] = "032"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("max_multi_goal_count is not canonically encoded", result.stderr)
+
+    def test_resource_limit_change_between_repeats_cannot_pass(self):
+        profile = self.directory / "changing-resource-provenance.csv"
+        rows = make_v3_rows()
+        rows[-1]["max_path_points"] = "99999"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",2,PASS,FAIL"))
+
+    def test_reported_path_points_cannot_exceed_v3_resource_limit(self):
+        profile = self.directory / "path-points-over-v3-limit.csv"
+        rows = make_v3_rows("multi_goal")
+        for row in rows:
+            row["max_path_points"] = "3"
+        write_csv(profile, rows, FIELDS_V3)
+
+        result = self.run_summary([profile])
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(result.stdout.rstrip().endswith(",FAIL"))
 
     def test_header_only_input_is_not_silently_ignored(self):
         complete = self.directory / "complete.csv"
