@@ -430,7 +430,7 @@ Panel 不根据人类可读 `message` 判断完成状态，只读取 `PlanningRe
 | `raystar_rviz_plugins/.../raystar_panel.*` | mode/bound UI 与结果显示 |
 | `raystar_rviz_plugins/test/test_raystar_panel_plugin.cpp` | UI、配置持久化、goal schema 测试 |
 | `raystar/launch/raystar_demo.launch.py` | 暴露 `max_cost_bounded_paths` |
-| `raystar/README.md`、根 `README.md`、`LAUNCH.md` | API、示例、限制、迁移文档 |
+| 根 `README.md`、`raystar/LAUNCH.md` | API、示例、限制、迁移文档 |
 | 三个 `package.xml` | 版本同步升级至 `0.2.0` |
 
 ## 8. 测试矩阵
@@ -514,7 +514,7 @@ resource relocation 与算法语义正交，但它和新 profiling schema 已在
 
 ### Commit 5：Documentation 与 migration record
 
-- 根 README、package README、launch/compatibility 文档与本实现记录；
+- 根 README、launch/compatibility 文档与本实现记录；
 - 明确 0.2.0 wire migration、zero-bound identity 边界和历史 profiling evidence boundary；
 - 不把 dirty-tree 或最终组合测试结果伪装成中间 commits 的独立证据。
 

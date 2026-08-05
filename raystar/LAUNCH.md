@@ -12,11 +12,11 @@ sudo apt install ros-humble-nav2-map-server
 source /opt/ros/humble/setup.bash
 ```
 
-Then, **from the workspace root** (`ros2_version/`), source the overlay in every
-terminal before launching (one-time per terminal):
+Then source the built overlay from the ROS 2 workspace root in every terminal
+before launching (one-time per terminal):
 
 ```bash
-# run this from ros2_version/
+# run this from the workspace root, for example ~/raystar_ws
 source install/setup.bash
 ```
 
