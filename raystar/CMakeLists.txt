@@ -45,6 +45,8 @@ endif()
 # or exported as a downstream CMake API.
 add_library(raystar_core STATIC
   src/polymap.cpp
+  src/polymap_visibility.cpp
+  src/polymap_shortening.cpp
   src/raystar_core.cpp
   src/visibility_validation.cpp
 )
