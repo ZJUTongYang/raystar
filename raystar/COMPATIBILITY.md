@@ -21,7 +21,54 @@ when they satisfy the `>= 5.4` source contract, but they are not currently a
 CI-backed release claim. Qt 6, ROS 2 Kilted/Rolling, non-Linux platforms, and
 32-bit builds are unverified.
 
-## 0.2.0 interface migration
+## 0.3.0 interface and geometry migration
+
+Raystar `0.3.0` is wire-incompatible with every `0.2.x` release.
+`BuildRaystarTransitionGraph.Goal` gains `reference_path_policy`, while
+`MapStatus` gains `environment_id_disallow_unknown` and
+`environment_id_allow_unknown`. Adding ROSIDL fields changes the DDS type
+hash; unchanged endpoint names do not make a `0.2.x` client or RViz plugin
+compatible with a `0.3.0` server.
+
+Stop all Raystar nodes, RViz processes, and downstream clients before
+upgrading. Rebuild and deploy `raystar_interfaces`, `raystar`,
+`raystar_rviz_plugins`, and every downstream package together in one clean
+overlay. Prefer a fresh workspace with empty build and install directories; do
+not source a stale `0.2.x` overlay into the new build or runtime shell. Restart
+every process from a fresh terminal after the build, because replacing files
+beneath a running process does not replace its already-loaded ROS type support
+or plugin libraries.
+
+Generated clients that zero-initialize `reference_path_policy` retain the
+previous strict behavior after recompilation:
+`REFERENCE_PATHS_MUST_BE_TAUT == 0`. This source-level default is not binary
+compatibility. `REFERENCE_PATHS_MAY_BE_UNTAUT == 1` accepts a complete
+collision-free reference that still needs shortening. Raystar validates and
+shortens every complete reference before processing any directed pair; the
+opt-in policy never admits an obstacle-crossing reference.
+
+Version `0.3.0` sets `geometry_semantics_version` to `2`. UPS transition
+environments now retain unsimplified reachable grid contours instead of
+reusing the planner's simplified-contour geometry. Ordinary GCP planning keeps
+its existing simplified-contour behavior. The raw-contour environment
+preserves cross-map reference semantics, including shortening a path produced
+in a stricter configuration space against a less restrictive obstacle map.
+
+The geometry semantics version participates in `environment_id`, so an
+otherwise byte-identical map has a different environment identity after this
+upgrade. Clients must refresh identities from `MapStatus`; persisted version-1
+environment identities must not be reused. `map_id` remains a map-message
+identity and is not a substitute for this semantic guard.
+
+Raw-contour transition construction also has an additional fail-closed
+resource admission rule. After the fixed 32-byte-per-cell map estimate is
+charged, each unsimplified contour vertex is conservatively charged 4096 bytes
+against the remaining `max_map_bytes` budget. This is a complexity bound for
+coexisting CGAL and standard-library structures, not an exact heap estimate.
+Normal planning retains its existing admission rule, so it can accept a map
+whose UPS transition environment requires a larger `max_map_bytes` value.
+
+## Historical 0.2.0 interface migration
 
 Raystar `0.2.0` changes the rosidl wire schema. Existing
 `PlanRaystarPaths.action`, `GetRaystarPaths.srv`, `PlanningResultInfo.msg`,
@@ -76,7 +123,7 @@ prefix does not leave a compiled-in source-tree map path.
 - `raystar/CMakeLists.txt` rejects CGAL below 5.4 and CGAL configurations
   without GMP/MPFR, requires Boost for the exact-length implementation, and
   deliberately allows a later CGAL major release.
-- `raystar_interfaces/test/test_interface_schema.py` locks the complete 0.2.0
+- `raystar_interfaces/test/test_interface_schema.py` locks the complete 0.3.0
   Action/Service/message field and status-constant contract.
 - `raystar_rviz_plugins/CMakeLists.txt` requires Qt 5.15, `rviz_common` 11.2,
   and pluginlib 5.1. Its package config explicitly loads the Qt Widgets

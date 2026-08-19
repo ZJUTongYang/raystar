@@ -121,17 +121,35 @@ ros2 run raystar raystar_node --ros-args \
   -p max_transition_configurations:=4096 \
   -p max_transition_pairs:=1000 \
   -p max_nodes:=5000 -p planning_timeout_ms:=3000 \
-  -p max_map_cells:=1000000 -p max_map_bytes:=33554432 \
+  -p max_map_cells:=1000000 -p max_map_bytes:=67108864 \
   -p max_path_points:=50000 -p max_debug_nodes:=500 \
   -p max_response_bytes:=33554432 \
   -p path_visualization_republish_period_ms:=2000
 ```
 
 `occupied_threshold` must be between 1 and 100. All resource limits except
-`max_debug_nodes` must be positive; `max_path_points` must be at least 2 and
-`max_map_bytes` at least 32 bytes, and `max_response_bytes` at least 1024. A map exceeding either map
-budget is rejected before its binary copy is allocated; `max_map_bytes` uses
-a conservative 32-byte-per-cell working-set estimate. A goal set above
+`max_debug_nodes` must be positive; `max_path_points` must be at least 2,
+`max_map_bytes` at least 32 bytes, and `max_response_bytes` at least 1024. A
+map must satisfy both `max_map_cells` and the fixed `max_map_bytes` admission
+estimate of 32 bytes per cell; this check happens before either Core or Polymap
+copies the binary grid.
+
+Ordinary planning retains that simplified-contour admission rule. UPS
+transition construction additionally charges its unsimplified reachable
+contour topology against the unused byte budget before constructing the CDT.
+After fixed map admission, its conservative raw-contour ceiling is:
+
+```text
+floor((max_map_bytes - 32 * cell_count) / 4096) vertices
+```
+
+The 4096-byte charge is a fail-closed complexity estimate for the coexisting
+CGAL and standard-library structures, not an exact heap-size claim. A map can
+therefore pass normal planning admission but fail UPS reference-shortening
+admission. That failure returns `STATUS_INVALID_REQUEST` with a diagnostic
+naming the raw contour and `max_map_bytes`; it does not return a partial
+transition graph. Increase `max_map_bytes` when a high-perimeter obstacle map
+needs a larger transition environment. A goal set above
 `max_multi_goal_count`, or a UPS batch above
 `max_transition_configurations`/`max_transition_pairs`, is rejected before its
 expensive geometry work. The two UPS limits are independent of the multi-goal
@@ -170,9 +188,21 @@ Multi-goal bounded clients use `/raystar/plan_goal_set`
 and equally sized inclusive `max_path_lengths[]` arrays and expands one shared
 tree. UPS clients use `/raystar/build_transition_graph`
 (`raystar_interfaces/action/BuildRaystarTransitionGraph`) with an ordered
-configuration array and explicit directed index pairs. When configurations
-come from a Raystar planning result, pass `PathResult.topology_path`, not the
-dense execution/display `PathResult.path`.
+configuration array and explicit directed index pairs. `reference_path_policy`
+defaults to `REFERENCE_PATHS_MUST_BE_TAUT`; this preserves the original strict
+requirement for recompiled zero-initialized clients. Set
+`REFERENCE_PATHS_MAY_BE_UNTAUT` when each complete reference is collision-free
+in the cached target map but must first be shortened there. Raystar validates
+and shortens every complete reference before removing common prefixes and
+processing pairs. The opt-in mode does not relax the frame, endpoint,
+common-base, or collision requirements.
+
+Transition construction uses a separately cached raw-contour environment;
+normal planning geometry is simplified and is not reused for this purpose.
+This distinction is required when a reference produced in a stricter map, such
+as an inflated configuration space, is shortened in a less restrictive
+obstacle map. When a reference comes from planning, pass
+`PathResult.topology_path`, not the densely sampled `PathResult.path`.
 Cancellation reaches the server's cooperative stop token while the executor
 remains available to process the cancel request.  The existing
 `/raystar/get_raystar_paths` Service remains available for compatibility, but
@@ -197,11 +227,15 @@ In multi-goal mode, changing **Set all budgets** updates every existing target
 row and invalidates the old result before the next **Plan**. Edit individual
 `Budget (m)` cells afterward when goals need different limits.
 
-The structured-result and topology-path revision changes the affected ROS
-interface type hashes. Rebuild and deploy the node, RViz plugin, and every
-client together; the compatibility Service preserves the call style and
-endpoint, not wire compatibility with clients compiled against the previous
-interfaces.
+Raystar 0.3.0 changes the `BuildRaystarTransitionGraph` goal and `MapStatus`
+ROS types and therefore changes their DDS type hashes. It also advances
+`geometry_semantics_version` to 2, so every environment identity changes even
+when the occupancy-grid bytes do not. Stop all running nodes, RViz instances,
+and clients; perform a clean lockstep rebuild of all three Raystar packages and
+downstream consumers; then restart every process from a fresh terminal that
+sources only the 0.3.0 overlay. Refresh identities from the new `MapStatus`.
+Endpoint compatibility does not provide wire compatibility with 0.2.x
+binaries.
 
 ## Stopping
 

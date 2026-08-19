@@ -70,9 +70,10 @@ New Panel** and select `raystar_rviz_plugins/RaystarPanel`.
   inclusive metric length budget.
 - Multi-goal bounded planning with independent goal budgets and one shared
   topology tree.
-- Homotopy-preserving UPS transition planning over a reusable constrained
-  Delaunay triangulation; result paths may cross triangle interiors and are not
-  restricted to mesh edges.
+- Homotopy-preserving UPS transition planning over a reusable raw-contour
+  constrained Delaunay triangulation. Inputs must be taut by default, while an
+  explicit policy admits complete collision-free references that still need
+  shortening; result paths may cross triangle interiors.
 - Cached-map, cancellable ROS 2 Actions with structured completion and resource
   diagnostics.
 - Point-and-click single- and multi-goal workflows in RaystarPanel.
@@ -130,6 +131,26 @@ Run `sudo rosdep init` once if rosdep has not been initialized. In each new
 terminal, source both the ROS distribution and workspace overlay before using
 Raystar.
 
+### Upgrading from 0.2.x
+
+Raystar 0.3.0 changes ROSIDL wire types. Stop every running Raystar node, RViz
+instance, and downstream client before upgrading. Rebuild
+`raystar_interfaces`, `raystar`, `raystar_rviz_plugins`, and every downstream
+package together in a clean overlay, then restart every process from a fresh
+terminal that sources only the 0.3.0 overlay. A new workspace with empty
+`build`, `install`, and `log` directories is the safest upgrade path; mixed
+0.2.x/0.3.0 build or runtime overlays are not supported.
+
+Version 0.3.0 also advances `geometry_semantics_version` to 2. Environment
+identities therefore change even for a byte-identical occupancy grid, and
+clients must refresh them from `MapStatus` after restart. UPS now retains raw
+reachable contours for reference shortening. Those contours consume the
+unused `max_map_bytes` budget, so a map that passes normal planning admission
+can still require a larger byte budget for transition construction. See
+[COMPATIBILITY.md](raystar/COMPATIBILITY.md) and
+[LAUNCH.md](raystar/LAUNCH.md) for the complete migration and resource
+contracts.
+
 ## Maps and deployment
 
 To run the Panel demo on another Nav2 map YAML:
@@ -161,10 +182,12 @@ The default node name is `raystar`:
 | Action | `/raystar/plan_goal_set` | Cancellable multi-goal all-within-length planning using one shared tree |
 | Action | `/raystar/build_transition_graph` | UPS for explicit directed pairs of tether configurations |
 | Service | `/raystar/get_raystar_paths` | Full-map compatibility API for legacy clients; disabled by the demo launch |
-| Topic | `/raystar/map_status` | Current cached-map identity; copy its `map_id` into Action goals |
+| Topic | `/raystar/map_status` | Cached-map identity, semantic versions, and environment identities for both `allow_unknown` policies |
 
-An Action client first waits for `/raystar/map_status`, copies its `map_id`,
-and then submits the planning or UPS goal.
+An Action client first waits for `/raystar/map_status` and copies its `map_id`.
+For result validation, select `environment_id_disallow_unknown` or
+`environment_id_allow_unknown` to match the request. A transition client may
+also copy that value into `expected_environment_id`.
 
 The complete schemas and their status/completion semantics are documented in
 the interface definitions:
@@ -188,6 +211,13 @@ The most important client-side rules are:
 - `PathResult.path` is the execution/display path and is normally densely
   sampled. When a Raystar result becomes a UPS tether configuration, pass its
   unsampled `PathResult.topology_path`.
+- `BuildRaystarTransitionGraph.reference_path_policy` defaults to
+  `REFERENCE_PATHS_MUST_BE_TAUT`. Use
+  `REFERENCE_PATHS_MAY_BE_UNTAUT` only when a complete reference is
+  collision-free in the target map but still needs local shortening, such as
+  a configuration-space path shortened against a less restrictive obstacle
+  map. This policy does not relax frame, endpoint, common-base, or collision
+  checks.
 
 ## Tests and profiling
 
