@@ -91,6 +91,9 @@ endif()
 add_executable(raystar_node
   src/raystar_node_main.cpp
   src/raystar_node.cpp
+  src/raystar_node_actions.cpp
+  src/raystar_node_planning.cpp
+  src/raystar_node_visualization.cpp
 )
 target_include_directories(raystar_node PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
