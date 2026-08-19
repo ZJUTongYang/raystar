@@ -224,6 +224,24 @@ public:
                                                   const StopToken& stop_token,
                                                   const PlanningLimits& limits = PlanningLimits{});
 
+  // Build the reusable shortening environment from the exact reachable grid
+  // contours.  The normal planner may conservatively replace reflex contour
+  // chains with chords, which is safe on one map but does not preserve set
+  // inclusion between an obstacle map and its inflated configuration map.
+  // Cross-map reference shortening therefore must retain the raw contours.
+  // Because those contours feed the CDT without simplification, this factory
+  // also admits their topology against a reference-only budget derived from
+  // max_map_bytes.  Ordinary planning keeps its existing simplified-contour
+  // admission semantics.
+  [[nodiscard]] static PolymapCreateResult createForReferenceShortening(
+    const GridMap& grid_map,
+    int start_x,
+    int start_y,
+    const Point2d& start_position,
+    const std::vector<PolymapEndpoint>& goals,
+    const StopToken& stop_token,
+    const PlanningLimits& limits = PlanningLimits{});
+
   [[nodiscard]] bool isCDTReady() const noexcept {
     return cdt_ready_;
   }
@@ -448,6 +466,18 @@ private:
           const Point2d& start_position,
           const std::vector<PolymapEndpoint>& goals,
           const StopToken& stop_token);
+  struct RawContourResourceBudget {
+    size_t max_vertices = 0;
+    size_t max_map_bytes = 0;
+  };
+  Polymap(const GridMap& grid_map,
+          int start_x,
+          int start_y,
+          const Point2d& start_position,
+          const std::vector<PolymapEndpoint>& goals,
+          const StopToken& stop_token,
+          bool simplify_obstacle_contours,
+          std::optional<RawContourResourceBudget> raw_contour_budget = std::nullopt);
 
   [[nodiscard]] static PolymapCreateResult finishCreation(Polymap&& candidate);
 
@@ -458,6 +488,12 @@ private:
                                                  int start_y,
                                                  const std::vector<PolymapEndpoint>& goals,
                                                  const StopToken& stop_token);
+  [[nodiscard]] OperationStatus getPolyObstacles(
+    int start_x,
+    int start_y,
+    const std::vector<PolymapEndpoint>& goals,
+    const StopToken& stop_token,
+    std::optional<size_t> max_raw_contour_vertices);
 
   void simplifyPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   void simplifyPolyObstacles(const Point2d& start, const Point2d& goal);
@@ -501,11 +537,17 @@ private:
                                        bool& supports,
                                        const StopToken& stop_token) const;
   bool getPolyObstaclesImpl(
-    int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token);
+    int start_x,
+    int start_y,
+    int goal_x,
+    int goal_y,
+    const StopToken& stop_token,
+    std::optional<size_t> max_raw_contour_vertices = std::nullopt);
   bool getPolyObstaclesImpl(int start_x,
                             int start_y,
                             const std::vector<PolymapEndpoint>& goals,
-                            const StopToken& stop_token);
+                            const StopToken& stop_token,
+                            std::optional<size_t> max_raw_contour_vertices = std::nullopt);
   bool constructCGALRelatedImpl(CdtValidator validator,
                                 std::string& error,
                                 const StopToken& stop_token);
@@ -584,7 +626,8 @@ private:
     bool constrained = false;
   };
 
-  [[nodiscard]] bool buildTriangleEnvironment(std::string& error);
+  [[nodiscard]] OperationStatus buildTriangleEnvironment(std::string& error,
+                                                         const StopToken& stop_token);
   [[nodiscard]] OperationStatus traceFreeSpacePathImpl(const std::vector<Point2d>& path,
                                                        TriangleCorridor& corridor,
                                                        const StopToken& stop_token,

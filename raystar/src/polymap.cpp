@@ -115,12 +115,22 @@ double polylineLength(const std::vector<Point2d>& path) {
   return length;
 }
 
-bool pointInPolygon(const std::vector<std::pair<int, int>>& polygon, long double x, long double y) {
+OperationStatus pointInPolygon(const std::vector<std::pair<int, int>>& polygon,
+                               long double x,
+                               long double y,
+                               const StopToken& stop_token,
+                               bool& inside) {
+  inside = false;
+  if (stop_token.poll())
+    return OperationStatus::stopped;
   if (polygon.size() < 3)
-    return false;
-  bool inside = false;
+    return OperationStatus::success;
   for (size_t current = 0, previous = polygon.size() - 1; current < polygon.size();
        previous = current++) {
+    if (stop_token.poll()) {
+      inside = false;
+      return OperationStatus::stopped;
+    }
     const long double current_x = polygon[current].first;
     const long double current_y = polygon[current].second;
     const long double previous_x = polygon[previous].first;
@@ -133,8 +143,16 @@ bool pointInPolygon(const std::vector<std::pair<int, int>>& polygon, long double
     if (x < intersection_x)
       inside = !inside;
   }
-  return inside;
+  return OperationStatus::success;
 }
+
+// Raw reference contours coexist with the constrained triangulation, its
+// directed-facet lookup, the edge accumulator, and the retained triangle
+// mesh.  Their node-based CGAL/std containers have implementation-dependent
+// allocator overhead, so max_map_bytes is deliberately charged a coarse 4 KiB
+// admission estimate per unsimplified contour vertex.  This is a fail-closed
+// complexity budget, not a claim about exact heap consumption.
+constexpr size_t kEstimatedReferenceTopologyBytesPerRawContourVertex = 4096u;
 
 bool pointInTriangleClosed(const std::array<Point2d, 3>& vertices, const Point2d& point) {
   const long double first = cross2(vertices[0], vertices[1], point);
@@ -1795,7 +1813,11 @@ bool Polymap::constructCGALRelatedImpl(CdtValidator validator,
     cdt_table_ = std::move(candidate_table);
     cdt_ver_num_ = candidate_vertex_count;
     cdt_ready_ = true;
-    if (!buildTriangleEnvironment(error))
+    const OperationStatus triangle_environment_status =
+      buildTriangleEnvironment(error, stop_token);
+    if (triangle_environment_status == OperationStatus::stopped)
+      return false;
+    if (triangle_environment_status == OperationStatus::failure)
       return fail(error.empty() ? "Could not build the free-triangle environment" : error);
     return true;
   } catch (const CDT::Intersection_of_constraints_exception&) {
@@ -1828,9 +1850,20 @@ OperationStatus Polymap::getPolyObstacles(int start_x,
                                           int start_y,
                                           const std::vector<PolymapEndpoint>& goals,
                                           const StopToken& stop_token) {
+  return getPolyObstacles(start_x, start_y, goals, stop_token, std::nullopt);
+}
+
+OperationStatus Polymap::getPolyObstacles(
+  int start_x,
+  int start_y,
+  const std::vector<PolymapEndpoint>& goals,
+  const StopToken& stop_token,
+  std::optional<size_t> max_raw_contour_vertices) {
   if (stop_token.poll())
     return OperationStatus::stopped;
-  if (getPolyObstaclesImpl(start_x, start_y, goals, stop_token)) {
+  construction_error_.clear();
+  if (getPolyObstaclesImpl(
+        start_x, start_y, goals, stop_token, max_raw_contour_vertices)) {
     // obs_ now contains a newly extracted, unsimplified contour set.  Any
     // topology registry, CDT, facet table or visibility cache from a previous
     // build refers to different vertex indices and must not remain usable.
@@ -1850,7 +1883,6 @@ OperationStatus Polymap::getPolyObstacles(int start_x,
   // committed state remains untouched.
   solution_exist_ = false;
   construction_stopped_ = false;
-  construction_error_.clear();
   obs_.clear();
   std::fill(vertices_location_x_flat_.begin(), vertices_location_x_flat_.end(), -1);
   std::fill(vertices_location_y_flat_.begin(), vertices_location_y_flat_.end(), -1);
@@ -1859,19 +1891,26 @@ OperationStatus Polymap::getPolyObstacles(int start_x,
 }
 
 bool Polymap::getPolyObstaclesImpl(
-  int start_x, int start_y, int goal_x, int goal_y, const StopToken& stop_token) {
+  int start_x,
+  int start_y,
+  int goal_x,
+  int goal_y,
+  const StopToken& stop_token,
+  std::optional<size_t> max_raw_contour_vertices) {
   return getPolyObstaclesImpl(
     start_x,
     start_y,
     std::vector<PolymapEndpoint>{
       {goal_x, goal_y, {static_cast<double>(goal_x), static_cast<double>(goal_y)}}},
-    stop_token);
+    stop_token,
+    max_raw_contour_vertices);
 }
 
 bool Polymap::getPolyObstaclesImpl(int start_x,
                                    int start_y,
                                    const std::vector<PolymapEndpoint>& goals,
-                                   const StopToken& stop_token) {
+                                   const StopToken& stop_token,
+                                   std::optional<size_t> max_raw_contour_vertices) {
   if (stop_token.poll())
     return false;
   if (xsize_ <= 0 || ysize_ <= 0)
@@ -1903,7 +1942,17 @@ bool Polymap::getPolyObstaclesImpl(int start_x,
 
   std::unordered_map<UndirectedGridEdgeKey, DirectedGridEdge, UndirectedGridEdgeKeyHash> edges;
   const auto add_directed_edge = [&](int from, int to) {
-    edges.emplace(makeUndirectedGridEdgeKey(from, to), DirectedGridEdge{from, to});
+    const auto insertion =
+      edges.emplace(makeUndirectedGridEdgeKey(from, to), DirectedGridEdge{from, to});
+    if (max_raw_contour_vertices && edges.size() > *max_raw_contour_vertices) {
+      if (insertion.second)
+        edges.erase(insertion.first);
+      construction_error_ =
+        "Reference-shortening raw contour exceeds the vertex budget " +
+        std::to_string(*max_raw_contour_vertices);
+      return false;
+    }
+    return true;
   };
   std::stack<int> Q;
   Q.push(start_x + start_y * nx);
@@ -1917,14 +1966,20 @@ bool Polymap::getPolyObstaclesImpl(int start_x,
     if (data_[cur] != 0 || mask[x + y * nx] != 0)
       continue;
 
-    if (cur - 1 >= 0 && data_[cur - 1] != 0)
-      add_directed_edge(cur, cur + nx);
-    if (cur + 1 < static_cast<int>(nx * ny) && data_[cur + 1] != 0)
-      add_directed_edge(cur + nx + 1, cur + 1);
-    if (cur - static_cast<int>(nx) >= 0 && data_[cur - nx] != 0)
-      add_directed_edge(cur + 1, cur);
-    if (cur + static_cast<int>(nx) < static_cast<int>(nx * ny) && data_[cur + nx] != 0)
-      add_directed_edge(cur + nx, cur + nx + 1);
+    if (cur - 1 >= 0 && data_[cur - 1] != 0 && !add_directed_edge(cur, cur + nx))
+      return false;
+    if (cur + 1 < static_cast<int>(nx * ny) && data_[cur + 1] != 0 &&
+        !add_directed_edge(cur + nx + 1, cur + 1)) {
+      return false;
+    }
+    if (cur - static_cast<int>(nx) >= 0 && data_[cur - nx] != 0 &&
+        !add_directed_edge(cur + 1, cur)) {
+      return false;
+    }
+    if (cur + static_cast<int>(nx) < static_cast<int>(nx * ny) && data_[cur + nx] != 0 &&
+        !add_directed_edge(cur + nx, cur + nx + 1)) {
+      return false;
+    }
 
     mask[x + y * nx] = 1;
     if (x > 0 && data_[cur - 1] == 0)
@@ -2953,6 +3008,38 @@ PolymapCreateResult Polymap::create(const GridMap& grid_map,
   return finishCreation(Polymap(grid_map, start_x, start_y, start_position, goals, stop_token));
 }
 
+PolymapCreateResult Polymap::createForReferenceShortening(
+  const GridMap& grid_map,
+  int start_x,
+  int start_y,
+  const Point2d& start_position,
+  const std::vector<PolymapEndpoint>& goals,
+  const StopToken& stop_token,
+  const PlanningLimits& limits) {
+  PolymapCreateResult result;
+  MapResourceEstimate estimate;
+  if (!validateMapResourceBudget(static_cast<size_t>(grid_map.width),
+                                 static_cast<size_t>(grid_map.height),
+                                 grid_map.data.size(),
+                                 limits,
+                                 estimate,
+                                 result.error)) {
+    return result;
+  }
+  const size_t remaining_map_bytes = limits.max_map_bytes - estimate.estimated_bytes;
+  const size_t max_raw_contour_vertices =
+    remaining_map_bytes / kEstimatedReferenceTopologyBytesPerRawContourVertex;
+  return finishCreation(
+    Polymap(grid_map,
+            start_x,
+            start_y,
+            start_position,
+            goals,
+            stop_token,
+            false,
+            RawContourResourceBudget{max_raw_contour_vertices, limits.max_map_bytes}));
+}
+
 Polymap::Polymap(const GridMap& grid_map,
                  int start_x,
                  int start_y,
@@ -2974,6 +3061,16 @@ Polymap::Polymap(const GridMap& grid_map,
                  const Point2d& start_position,
                  const std::vector<PolymapEndpoint>& goals,
                  const StopToken& stop_token)
+  : Polymap(grid_map, start_x, start_y, start_position, goals, stop_token, true, std::nullopt) {}
+
+Polymap::Polymap(const GridMap& grid_map,
+                 int start_x,
+                 int start_y,
+                 const Point2d& start_position,
+                 const std::vector<PolymapEndpoint>& goals,
+                 const StopToken& stop_token,
+                 bool simplify_obstacle_contours,
+                 std::optional<RawContourResourceBudget> raw_contour_budget)
   : xsize_(0), ysize_(0) {
   const auto stop_construction = [&]() { clearStoppedConstructionState(); };
   const auto reject = [&](const std::string& message) { construction_error_ = message; };
@@ -3037,16 +3134,48 @@ Polymap::Polymap(const GridMap& grid_map,
     }
   }
 
-  const OperationStatus obstacle_status = getPolyObstacles(start_x, start_y, goals, stop_token);
+  const std::optional<size_t> max_raw_contour_vertices =
+    raw_contour_budget ? std::optional<size_t>(raw_contour_budget->max_vertices) : std::nullopt;
+  const OperationStatus obstacle_status =
+    getPolyObstacles(start_x, start_y, goals, stop_token, max_raw_contour_vertices);
   if (obstacle_status == OperationStatus::stopped) {
     stop_construction();
     return;
   }
   solution_exist_ = obstacle_status == OperationStatus::success;
   if (!solution_exist_) {
+    if (!construction_error_.empty()) {
+      if (raw_contour_budget) {
+        construction_error_ +=
+          " derived from max_map_bytes=" +
+          std::to_string(raw_contour_budget->max_map_bytes);
+      }
+      return;
+    }
     no_path_ = true;
     construction_error_ = "Start and every goal must be in the same reachable free-space component";
     return;
+  }
+
+  if (!simplify_obstacle_contours && raw_contour_budget) {
+    const size_t max_raw_contour_vertices = raw_contour_budget->max_vertices;
+    size_t raw_contour_vertices = 0;
+    for (const auto& obstacle : obs_) {
+      if (stop_token.poll()) {
+        stop_construction();
+        return;
+      }
+      if (raw_contour_vertices > max_raw_contour_vertices ||
+          obstacle.ordered_vertices_.size() >
+            max_raw_contour_vertices - raw_contour_vertices) {
+        construction_error_ =
+          "Reference-shortening raw contour exceeds the vertex budget " +
+          std::to_string(max_raw_contour_vertices) + " derived from max_map_bytes=" +
+          std::to_string(raw_contour_budget->max_map_bytes);
+        return;
+      }
+      raw_contour_vertices += obstacle.ordered_vertices_.size();
+    }
   }
 
   OperationStatus status = OperationStatus::success;
@@ -3091,49 +3220,51 @@ Polymap::Polymap(const GridMap& grid_map,
   if (status == OperationStatus::failure)
     return;
 
-  std::vector<Point2d> protected_points;
-  protected_points.reserve(goals.size() + 1);
-  protected_points.emplace_back(start_position);
-  for (const auto& goal : goals) protected_points.emplace_back(goal.position);
-  status = simplifyPolyObstaclesImpl(protected_points, stop_token)
-             ? OperationStatus::success
-             : (stop_token.poll() ? OperationStatus::stopped : OperationStatus::failure);
-  if (status == OperationStatus::stopped) {
-    stop_construction();
-    return;
-  }
-  if (status == OperationStatus::failure) {
-    construction_error_ = "Obstacle simplification failed";
-    return;
-  }
-
-  status = validateObstacleTopology(construction_error_, true, stop_token);
-  if (status == OperationStatus::stopped) {
-    stop_construction();
-    return;
-  }
-  if (status == OperationStatus::failure)
-    return;
-
-  if (has_outer_contour) {
-    status = validateFreeSpaceInterior(start_position, stop_token, &endpoint_error);
+  if (simplify_obstacle_contours) {
+    std::vector<Point2d> protected_points;
+    protected_points.reserve(goals.size() + 1);
+    protected_points.emplace_back(start_position);
+    for (const auto& goal : goals) protected_points.emplace_back(goal.position);
+    status = simplifyPolyObstaclesImpl(protected_points, stop_token)
+               ? OperationStatus::success
+               : (stop_token.poll() ? OperationStatus::stopped : OperationStatus::failure);
     if (status == OperationStatus::stopped) {
       stop_construction();
       return;
     }
     if (status == OperationStatus::failure) {
-      construction_error_ = "Invalid start position: " + endpoint_error;
+      construction_error_ = "Obstacle simplification failed";
       return;
     }
-    for (const auto& goal : goals) {
-      status = validateFreeSpaceInterior(goal.position, stop_token, &endpoint_error);
+
+    status = validateObstacleTopology(construction_error_, true, stop_token);
+    if (status == OperationStatus::stopped) {
+      stop_construction();
+      return;
+    }
+    if (status == OperationStatus::failure)
+      return;
+
+    if (has_outer_contour) {
+      status = validateFreeSpaceInterior(start_position, stop_token, &endpoint_error);
       if (status == OperationStatus::stopped) {
         stop_construction();
         return;
       }
       if (status == OperationStatus::failure) {
-        construction_error_ = "Invalid goal position: " + endpoint_error;
+        construction_error_ = "Invalid start position: " + endpoint_error;
         return;
+      }
+      for (const auto& goal : goals) {
+        status = validateFreeSpaceInterior(goal.position, stop_token, &endpoint_error);
+        if (status == OperationStatus::stopped) {
+          stop_construction();
+          return;
+        }
+        if (status == OperationStatus::failure) {
+          construction_error_ = "Invalid goal position: " + endpoint_error;
+          return;
+        }
       }
     }
   }
@@ -3372,7 +3503,8 @@ bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_po
   return true;
 }
 
-bool Polymap::buildTriangleEnvironment(std::string& error) {
+OperationStatus Polymap::buildTriangleEnvironment(std::string& error,
+                                                  const StopToken& stop_token) {
   using EdgeKey = std::pair<Point2d, Point2d>;
   struct EdgeUse {
     int face = -1;
@@ -3386,13 +3518,25 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
   error.clear();
   triangle_faces_.clear();
   triangle_edges_.clear();
+  const auto stopped = [&]() {
+    error.clear();
+    triangle_faces_.clear();
+    triangle_edges_.clear();
+    return OperationStatus::stopped;
+  };
+  const auto fail = [&](std::string message) {
+    error = std::move(message);
+    triangle_faces_.clear();
+    triangle_edges_.clear();
+    return OperationStatus::failure;
+  };
+  if (stop_token.poll())
+    return stopped();
   if (!cdt_ready_ || facets_.empty() || obs_.empty()) {
-    error = "Triangle environment requires a ready CDT and a reachable outer contour";
-    return false;
+    return fail("Triangle environment requires a ready CDT and a reachable outer contour");
   }
   if (facets_.size() > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
-    error = "Triangle count exceeds the stable TriangleId range";
-    return false;
+    return fail("Triangle count exceeds the stable TriangleId range");
   }
 
   const auto canonical_edge = [](Point2d first, Point2d second) {
@@ -3403,8 +3547,12 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
 
   std::set<EdgeKey> constrained_edges;
   for (const auto& obstacle : obs_) {
+    if (stop_token.poll())
+      return stopped();
     const auto& vertices = obstacle.ordered_vertices_;
     for (size_t index = 0; index < vertices.size(); ++index) {
+      if (stop_token.poll())
+        return stopped();
       const auto& first = vertices[index];
       const auto& second = vertices[(index + 1) % vertices.size()];
       constrained_edges.insert(
@@ -3417,9 +3565,13 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
   long double outer_area = 0.0L;
   bool found_clockwise_outer = false;
   for (size_t obstacle_index = 0; obstacle_index < obs_.size(); ++obstacle_index) {
+    if (stop_token.poll())
+      return stopped();
     const auto& vertices = obs_[obstacle_index].ordered_vertices_;
     long double twice_area = 0.0L;
     for (size_t index = 0; index < vertices.size(); ++index) {
+      if (stop_token.poll())
+        return stopped();
       const auto& from = vertices[index];
       const auto& to = vertices[(index + 1) % vertices.size()];
       twice_area += static_cast<long double>(from.first) * to.second -
@@ -3439,11 +3591,11 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
   triangle_faces_.resize(facets_.size());
   std::map<EdgeKey, EdgeAccumulator> edges;
   for (size_t face_index = 0; face_index < facets_.size(); ++face_index) {
+    if (stop_token.poll())
+      return stopped();
     const auto& facet = facets_[face_index];
     if (facet.size() != 3) {
-      error = "CDT facet does not contain exactly three vertices";
-      triangle_faces_.clear();
-      return false;
+      return fail("CDT facet does not contain exactly three vertices");
     }
     auto& face = triangle_faces_[face_index];
     long double centroid_x = 0.0L;
@@ -3456,16 +3608,35 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
     }
     centroid_x /= 3.0L;
     centroid_y /= 3.0L;
-    face.is_free = pointInPolygon(obs_[outer_index].ordered_vertices_, centroid_x, centroid_y);
+    bool point_is_inside = false;
+    if (pointInPolygon(obs_[outer_index].ordered_vertices_,
+                       centroid_x,
+                       centroid_y,
+                       stop_token,
+                       point_is_inside) == OperationStatus::stopped) {
+      return stopped();
+    }
+    face.is_free = point_is_inside;
     for (size_t obstacle_index = 0; obstacle_index < obs_.size() && face.is_free;
          ++obstacle_index) {
+      if (stop_token.poll())
+        return stopped();
       if (obstacle_index == outer_index)
         continue;
-      if (pointInPolygon(obs_[obstacle_index].ordered_vertices_, centroid_x, centroid_y))
+      if (pointInPolygon(obs_[obstacle_index].ordered_vertices_,
+                         centroid_x,
+                         centroid_y,
+                         stop_token,
+                         point_is_inside) == OperationStatus::stopped) {
+        return stopped();
+      }
+      if (point_is_inside)
         face.is_free = false;
     }
 
     for (size_t edge_index = 0; edge_index < 3; ++edge_index) {
+      if (stop_token.poll())
+        return stopped();
       const EdgeKey key =
         canonical_edge(face.vertices[edge_index], face.vertices[(edge_index + 1) % 3]);
       auto& accumulator = edges[key];
@@ -3475,11 +3646,10 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
   }
 
   for (auto& [key, accumulator] : edges) {
+    if (stop_token.poll())
+      return stopped();
     if (accumulator.uses.empty() || accumulator.uses.size() > 2) {
-      error = "CDT edge has an invalid number of incident finite faces";
-      triangle_faces_.clear();
-      triangle_edges_.clear();
-      return false;
+      return fail("CDT edge has an invalid number of incident finite faces");
     }
     TriangleMeshEdge edge;
     edge.a = key.first;
@@ -3507,24 +3677,22 @@ bool Polymap::buildTriangleEnvironment(std::string& error) {
 
   size_t free_count = 0;
   for (auto fit = cdt_.finite_faces_begin(); fit != cdt_.finite_faces_end(); ++fit) {
+    if (stop_token.poll())
+      return stopped();
     const int id = fit->info().stable_id;
     if (id < 0 || id >= static_cast<int>(triangle_faces_.size())) {
-      error = "CDT face lost its stable ID while building the triangle environment";
-      triangle_faces_.clear();
-      triangle_edges_.clear();
-      return false;
+      return fail("CDT face lost its stable ID while building the triangle environment");
     }
     fit->info().is_free = triangle_faces_[static_cast<size_t>(id)].is_free;
     if (fit->info().is_free)
       ++free_count;
   }
   if (free_count == 0) {
-    error = "Triangle environment contains no free faces";
-    triangle_faces_.clear();
-    triangle_edges_.clear();
-    return false;
+    return fail("Triangle environment contains no free faces");
   }
-  return true;
+  if (stop_token.poll())
+    return stopped();
+  return OperationStatus::success;
 }
 
 size_t Polymap::freeTriangleCount() const noexcept {

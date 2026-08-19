@@ -64,6 +64,26 @@ static nav_msgs::msg::OccupancyGrid makeTestGrid() {
   return grid;
 }
 
+static nav_msgs::msg::OccupancyGrid makeRawContourWedgeMap() {
+  nav_msgs::msg::OccupancyGrid grid;
+  grid.header.frame_id = "map";
+  grid.info.width = 50;
+  grid.info.height = 50;
+  grid.info.resolution = 1.0f;
+  grid.info.origin.orientation.w = 1.0;
+  grid.data.assign(50U * 50U, 0);
+
+  for (unsigned int x = 0; x < grid.info.width; ++x) {
+    grid.data[x] = 100;
+    grid.data[(grid.info.height - 1U) * grid.info.width + x] = 100;
+  }
+  for (unsigned int y = 0; y < grid.info.height; ++y) {
+    grid.data[y * grid.info.width] = 100;
+    grid.data[y * grid.info.width + grid.info.width - 1U] = 100;
+  }
+  return grid;
+}
+
 static RaystarService::Request::SharedPtr makeTestRequest() {
   auto request = std::make_shared<RaystarService::Request>();
   request->map = makeTestGrid();
@@ -180,20 +200,37 @@ static bool cacheMapAndWait(rclcpp::executors::SingleThreadedExecutor& executor,
                             const std::string& server_namespace,
                             std::chrono::milliseconds timeout = 5s) {
   const auto expected_id = raystar_interfaces::computeMapId(map);
+  const auto expected_environment_id_disallow_unknown =
+    raystar_interfaces::computeEnvironmentId(map, 99, false);
+  const auto expected_environment_id_allow_unknown =
+    raystar_interfaces::computeEnvironmentId(map, 99, true);
   const auto status_topic = server_namespace + "/raystar/map_status";
   const auto map_topic = server_namespace + "/map";
   bool admitted = false;
+  bool saw_matching_map_status = false;
+  bool environment_ids_nonzero = false;
   auto status_subscription = node->create_subscription<raystar_interfaces::msg::MapStatus>(
     status_topic,
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local(),
     [&](raystar_interfaces::msg::MapStatus::ConstSharedPtr status) {
+      if (!status || !raystar_interfaces::mapIdsEqual(status->map_id, expected_id)) {
+        return;
+      }
+      saw_matching_map_status = true;
+      environment_ids_nonzero =
+        !raystar_interfaces::isZeroEnvironmentId(status->environment_id_disallow_unknown) &&
+        !raystar_interfaces::isZeroEnvironmentId(status->environment_id_allow_unknown);
       admitted =
-        status && raystar_interfaces::mapIdsEqual(status->map_id, expected_id) &&
+        environment_ids_nonzero &&
         status->occupied_threshold == 99U &&
         status->environment_identity_version == raystar_interfaces::kEnvironmentIdentityVersion &&
         status->occupancy_semantics_version == raystar_interfaces::kOccupancySemanticsVersion &&
         status->geometry_semantics_version == raystar_interfaces::kGeometrySemanticsVersion &&
-        status->topology_semantics_version == raystar_interfaces::kTopologySemanticsVersion;
+        status->topology_semantics_version == raystar_interfaces::kTopologySemanticsVersion &&
+        raystar_interfaces::environmentIdsEqual(status->environment_id_disallow_unknown,
+                                                expected_environment_id_disallow_unknown) &&
+        raystar_interfaces::environmentIdsEqual(status->environment_id_allow_unknown,
+                                                expected_environment_id_allow_unknown);
     });
   auto map_publisher = node->create_publisher<nav_msgs::msg::OccupancyGrid>(
     map_topic, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local());
@@ -210,6 +247,10 @@ static bool cacheMapAndWait(rclcpp::executors::SingleThreadedExecutor& executor,
     std::this_thread::sleep_for(1ms);
   }
   (void)status_subscription;
+  if (saw_matching_map_status) {
+    EXPECT_TRUE(environment_ids_nonzero)
+      << "MapStatus environment identities must both be nonzero";
+  }
   return admitted;
 }
 
@@ -1437,6 +1478,8 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsNonTautConfigurationReferen
   RaystarTransitionAction::Goal goal;
   goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
   goal.allow_unknown = false;
+  goal.reference_path_policy =
+    RaystarTransitionAction::Goal::REFERENCE_PATHS_MUST_BE_TAUT;
   goal.tether_configurations = {detour};
   raystar_interfaces::msg::ConfigurationTransitionPair identity;
   identity.from_configuration = 0;
@@ -1457,6 +1500,275 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsNonTautConfigurationReferen
   EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
   EXPECT_TRUE(wrapped.result->transitions.empty());
   EXPECT_NE(wrapped.result->message.find("locally shortest (taut)"), std::string::npos);
+}
+
+TEST_F(IntegrationTestFixture, TransitionGraphRejectsUnknownReferencePathPolicy) {
+  auto node = std::make_shared<rclcpp::Node>("test_transition_unknown_reference_policy_client");
+  auto client = rclcpp_action::create_client<RaystarTransitionAction>(
+    node, raystarEndpoint(main_namespace_, "build_transition_graph"));
+  ASSERT_TRUE(client->wait_for_action_server(5s));
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+
+  geometry_msgs::msg::PoseStamped base;
+  base.header.frame_id = "map";
+  base.pose.position.x = 5.5;
+  base.pose.position.y = 5.5;
+  base.pose.orientation.w = 1.0;
+  nav_msgs::msg::Path home;
+  home.header.frame_id = "map";
+  home.poses = {base};
+
+  RaystarTransitionAction::Goal goal;
+  goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
+  goal.allow_unknown = false;
+  goal.reference_path_policy = 255;
+  goal.tether_configurations = {home};
+  raystar_interfaces::msg::ConfigurationTransitionPair identity;
+  identity.from_configuration = 0;
+  identity.to_configuration = 0;
+  goal.transition_pairs = {identity};
+
+  auto goal_future = client->async_send_goal(goal);
+  ASSERT_TRUE(waitForFuture(executor, goal_future, 5s));
+  const auto goal_handle = goal_future.get();
+  ASSERT_NE(goal_handle, nullptr);
+  auto result_future = client->async_get_result(goal_handle);
+  ASSERT_TRUE(waitForFuture(executor, result_future, 10s));
+  const auto wrapped = result_future.get();
+
+  EXPECT_EQ(wrapped.code, rclcpp_action::ResultCode::ABORTED);
+  ASSERT_NE(wrapped.result, nullptr);
+  EXPECT_FALSE(wrapped.result->success);
+  EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
+  EXPECT_TRUE(wrapped.result->transitions.empty());
+  EXPECT_NE(wrapped.result->message.find("reference_path_policy"), std::string::npos);
+}
+
+TEST_F(IntegrationTestFixture, TransitionGraphMayShortenUntautConfigurationReferences) {
+  auto node = std::make_shared<rclcpp::Node>("test_transition_untaut_reference_client");
+  auto client = rclcpp_action::create_client<RaystarTransitionAction>(
+    node, raystarEndpoint(main_namespace_, "build_transition_graph"));
+  ASSERT_TRUE(client->wait_for_action_server(5s));
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+
+  const auto pose = [](double x, double y) {
+    geometry_msgs::msg::PoseStamped result;
+    result.header.frame_id = "map";
+    result.pose.position.x = x;
+    result.pose.position.y = y;
+    result.pose.orientation.w = 1.0;
+    return result;
+  };
+  nav_msgs::msg::Path home;
+  home.header.frame_id = "map";
+  home.poses = {pose(5.5, 5.5)};
+  nav_msgs::msg::Path detour;
+  detour.header.frame_id = "map";
+  detour.poses = {pose(5.5, 5.5), pose(5.5, 8.5), pose(8.5, 8.5)};
+
+  RaystarTransitionAction::Goal goal;
+  goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
+  goal.allow_unknown = false;
+  goal.reference_path_policy =
+    RaystarTransitionAction::Goal::REFERENCE_PATHS_MAY_BE_UNTAUT;
+  goal.tether_configurations = {home, detour};
+  raystar_interfaces::msg::ConfigurationTransitionPair pair;
+  pair.from_configuration = 0;
+  pair.to_configuration = 1;
+  goal.transition_pairs = {pair};
+
+  auto goal_future = client->async_send_goal(goal);
+  ASSERT_TRUE(waitForFuture(executor, goal_future, 5s));
+  const auto goal_handle = goal_future.get();
+  ASSERT_NE(goal_handle, nullptr);
+  auto result_future = client->async_get_result(goal_handle);
+  ASSERT_TRUE(waitForFuture(executor, result_future, 10s));
+  const auto wrapped = result_future.get();
+
+  EXPECT_EQ(wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
+  ASSERT_NE(wrapped.result, nullptr);
+  ASSERT_TRUE(wrapped.result->success) << wrapped.result->message;
+  EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_COMPLETE);
+  ASSERT_EQ(wrapped.result->transitions.size(), 1u);
+  const auto& transition = wrapped.result->transitions.front();
+  EXPECT_EQ(transition.status, raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
+  ASSERT_EQ(transition.path.poses.size(), 2u);
+  EXPECT_DOUBLE_EQ(transition.path.poses.front().pose.position.x, 5.5);
+  EXPECT_DOUBLE_EQ(transition.path.poses.front().pose.position.y, 5.5);
+  EXPECT_DOUBLE_EQ(transition.path.poses.back().pose.position.x, 8.5);
+  EXPECT_DOUBLE_EQ(transition.path.poses.back().pose.position.y, 8.5);
+  EXPECT_NEAR(transition.path_length, std::hypot(3.0, 3.0), 1.0e-12);
+  EXPECT_TRUE(transition.collision_free);
+  EXPECT_TRUE(transition.homotopy_preserved);
+  EXPECT_TRUE(transition.locally_shortest);
+}
+
+TEST_F(IntegrationTestFixture, TransitionGraphUsesRawContourAfterSimplifiedPlannerRequest) {
+  const auto spawned = spawnRaystarNode("raw_contour_after_planner");
+  ASSERT_GT(spawned.pid, 0) << "Unable to exec raw-contour raystar_node: "
+                            << (spawned.launch_errno ? std::strerror(spawned.launch_errno)
+                                                     : "fork/pipe failure");
+  ChildProcessGuard process(spawned.pid);
+
+  auto node = std::make_shared<rclcpp::Node>("test_raw_contour_after_planner_client");
+  auto planning_client = rclcpp_action::create_client<RaystarAction>(
+    node, raystarEndpoint(spawned.node_namespace, "plan_paths"));
+  auto transition_client = rclcpp_action::create_client<RaystarTransitionAction>(
+    node, raystarEndpoint(spawned.node_namespace, "build_transition_graph"));
+  ASSERT_TRUE(planning_client->wait_for_action_server(5s));
+  ASSERT_TRUE(transition_client->wait_for_action_server(5s));
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+
+  const auto map = makeRawContourWedgeMap();
+  ASSERT_TRUE(cacheMapAndWait(executor, node, map, spawned.node_namespace));
+  const auto pose = [](double x, double y) {
+    geometry_msgs::msg::PoseStamped result;
+    result.header.frame_id = "map";
+    result.pose.position.x = x;
+    result.pose.position.y = y;
+    result.pose.orientation.w = 1.0;
+    return result;
+  };
+  const auto base = pose(2.5, 47.5);
+  const auto endpoint = pose(46.5, 3.5);
+
+  // Populate the ordinary planner's simplified-contour state first.  On this
+  // exact geometry, test_polymap.cpp proves that simplification removes a
+  // raw-free wedge containing the untaut reference constructed below.
+  RaystarAction::Goal planning_goal;
+  planning_goal.map_id = raystar_interfaces::computeMapId(map);
+  planning_goal.start = base;
+  planning_goal.goal = endpoint;
+  planning_goal.search_mode = RaystarAction::Goal::SEARCH_MODE_TOP_K;
+  planning_goal.k = 1;
+  planning_goal.allow_self_crossing = false;
+  planning_goal.allow_unknown = false;
+  planning_goal.include_debug = false;
+  auto planning_goal_future = planning_client->async_send_goal(planning_goal);
+  ASSERT_TRUE(waitForFuture(executor, planning_goal_future, 5s));
+  const auto planning_handle = planning_goal_future.get();
+  ASSERT_NE(planning_handle, nullptr);
+  auto planning_result_future = planning_client->async_get_result(planning_handle);
+  ASSERT_TRUE(waitForFuture(executor, planning_result_future, 10s));
+  const auto planning_wrapped = planning_result_future.get();
+  ASSERT_EQ(planning_wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
+  ASSERT_NE(planning_wrapped.result, nullptr);
+  ASSERT_TRUE(planning_wrapped.result->success) << planning_wrapped.result->message;
+  ASSERT_EQ(planning_wrapped.result->path_results.size(), 1u);
+  expectIndependentCollisionFreePath(
+    map, planning_wrapped.result->path_results.front().topology_path, false);
+
+  nav_msgs::msg::Path home;
+  home.header.frame_id = "map";
+  home.poses = {base};
+  nav_msgs::msg::Path raw_free_untaut_reference;
+  raw_free_untaut_reference.header.frame_id = "map";
+  raw_free_untaut_reference.poses = {
+    base, pose(32.0, 44.0), pose(39.0, 43.0), pose(45.0, 27.0), pose(46.0, 21.0), endpoint};
+  expectIndependentCollisionFreePath(map, raw_free_untaut_reference, false);
+
+  RaystarTransitionAction::Goal transition_goal;
+  transition_goal.map_id = planning_goal.map_id;
+  transition_goal.expected_environment_id = planning_wrapped.result->result_info.environment_id;
+  transition_goal.reference_path_policy =
+    RaystarTransitionAction::Goal::REFERENCE_PATHS_MAY_BE_UNTAUT;
+  transition_goal.tether_configurations = {home, raw_free_untaut_reference};
+  raystar_interfaces::msg::ConfigurationTransitionPair pair;
+  pair.from_configuration = 0;
+  pair.to_configuration = 1;
+  transition_goal.transition_pairs = {pair};
+  transition_goal.allow_unknown = false;
+
+  auto transition_goal_future = transition_client->async_send_goal(transition_goal);
+  ASSERT_TRUE(waitForFuture(executor, transition_goal_future, 5s));
+  const auto transition_handle = transition_goal_future.get();
+  ASSERT_NE(transition_handle, nullptr);
+  auto transition_result_future = transition_client->async_get_result(transition_handle);
+  ASSERT_TRUE(waitForFuture(executor, transition_result_future, 10s));
+  const auto first_wrapped = transition_result_future.get();
+  ASSERT_EQ(first_wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
+  ASSERT_NE(first_wrapped.result, nullptr);
+  ASSERT_TRUE(first_wrapped.result->success) << first_wrapped.result->message;
+  EXPECT_EQ(first_wrapped.result->status, RaystarTransitionAction::Result::STATUS_COMPLETE);
+  EXPECT_TRUE(raystar_interfaces::environmentIdsEqual(first_wrapped.result->environment_id,
+                                                      transition_goal.expected_environment_id));
+  ASSERT_EQ(first_wrapped.result->transitions.size(), 1u);
+  const auto& first_transition = first_wrapped.result->transitions.front();
+  EXPECT_EQ(first_transition.status,
+            raystar_interfaces::msg::HomotopyTransitionResult::STATUS_SUCCESS);
+  EXPECT_TRUE(first_transition.collision_free);
+  EXPECT_TRUE(first_transition.homotopy_preserved);
+  EXPECT_TRUE(first_transition.locally_shortest);
+  ASSERT_EQ(first_transition.path.poses.size(), 2u);
+  EXPECT_DOUBLE_EQ(first_transition.path.poses.front().pose.position.x, base.pose.position.x);
+  EXPECT_DOUBLE_EQ(first_transition.path.poses.front().pose.position.y, base.pose.position.y);
+  EXPECT_DOUBLE_EQ(first_transition.path.poses.back().pose.position.x, endpoint.pose.position.x);
+  EXPECT_DOUBLE_EQ(first_transition.path.poses.back().pose.position.y, endpoint.pose.position.y);
+  expectIndependentCollisionFreePath(map, first_transition.path, false);
+  raystar::ConservativeBinary64PathLength first_length_certificate;
+  ASSERT_TRUE(first_length_certificate.addSegment(base.pose.position.x,
+                                                  base.pose.position.y,
+                                                  endpoint.pose.position.x,
+                                                  endpoint.pose.position.y));
+  double expected_path_length = std::numeric_limits<double>::quiet_NaN();
+  ASSERT_TRUE(first_length_certificate.upperBound(expected_path_length));
+  EXPECT_DOUBLE_EQ(first_transition.path_length, expected_path_length);
+
+  // A second identical public request exercises the raw-environment cache-hit
+  // path without asserting on logs, timings, or any private cache structure.
+  auto repeat_goal_future = transition_client->async_send_goal(transition_goal);
+  ASSERT_TRUE(waitForFuture(executor, repeat_goal_future, 5s));
+  const auto repeat_handle = repeat_goal_future.get();
+  ASSERT_NE(repeat_handle, nullptr);
+  auto repeat_result_future = transition_client->async_get_result(repeat_handle);
+  ASSERT_TRUE(waitForFuture(executor, repeat_result_future, 10s));
+  const auto repeat_wrapped = repeat_result_future.get();
+  ASSERT_EQ(repeat_wrapped.code, rclcpp_action::ResultCode::SUCCEEDED);
+  ASSERT_NE(repeat_wrapped.result, nullptr);
+  ASSERT_TRUE(repeat_wrapped.result->success) << repeat_wrapped.result->message;
+  ASSERT_EQ(repeat_wrapped.result->transitions.size(), 1u);
+  const auto& repeated_transition = repeat_wrapped.result->transitions.front();
+  EXPECT_EQ(repeated_transition.status, first_transition.status);
+  EXPECT_EQ(repeated_transition.collision_free, first_transition.collision_free);
+  EXPECT_EQ(repeated_transition.homotopy_preserved, first_transition.homotopy_preserved);
+  EXPECT_EQ(repeated_transition.locally_shortest, first_transition.locally_shortest);
+  EXPECT_EQ(repeated_transition.triangle_occurrences, first_transition.triangle_occurrences);
+  EXPECT_DOUBLE_EQ(repeated_transition.path_length, first_transition.path_length);
+  ASSERT_EQ(repeated_transition.path.poses.size(), first_transition.path.poses.size());
+  for (size_t index = 0; index < repeated_transition.path.poses.size(); ++index) {
+    EXPECT_DOUBLE_EQ(repeated_transition.path.poses[index].pose.position.x,
+                     first_transition.path.poses[index].pose.position.x);
+    EXPECT_DOUBLE_EQ(repeated_transition.path.poses[index].pose.position.y,
+                     first_transition.path.poses[index].pose.position.y);
+  }
+
+  // MAY_BE_UNTAUT relaxes tautness only.  It must still reject a reference
+  // whose intermediate waypoint lies in the occupied right-hand border.
+  auto colliding_goal = transition_goal;
+  nav_msgs::msg::Path colliding_reference;
+  colliding_reference.header.frame_id = "map";
+  colliding_reference.poses = {base, pose(49.5, 25.5), endpoint};
+  colliding_goal.tether_configurations = {home, colliding_reference};
+  auto colliding_goal_future = transition_client->async_send_goal(colliding_goal);
+  ASSERT_TRUE(waitForFuture(executor, colliding_goal_future, 5s));
+  const auto colliding_handle = colliding_goal_future.get();
+  ASSERT_NE(colliding_handle, nullptr);
+  auto colliding_result_future = transition_client->async_get_result(colliding_handle);
+  ASSERT_TRUE(waitForFuture(executor, colliding_result_future, 10s));
+  const auto colliding_wrapped = colliding_result_future.get();
+  EXPECT_EQ(colliding_wrapped.code, rclcpp_action::ResultCode::ABORTED);
+  ASSERT_NE(colliding_wrapped.result, nullptr);
+  EXPECT_FALSE(colliding_wrapped.result->success);
+  EXPECT_EQ(colliding_wrapped.result->status,
+            RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
+  EXPECT_EQ(colliding_wrapped.result->completed_transition_count, 0u);
+  EXPECT_TRUE(colliding_wrapped.result->transitions.empty());
+  EXPECT_NE(colliding_wrapped.result->message.find("Tether configuration 1"), std::string::npos);
+  EXPECT_NE(colliding_wrapped.result->message.find("collision-free reference"),
+            std::string::npos);
 }
 
 TEST_F(IntegrationTestFixture, ExhaustedSearchReportsFewerPathsWithoutStringParsing) {

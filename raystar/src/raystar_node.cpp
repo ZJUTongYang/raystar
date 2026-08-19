@@ -1095,6 +1095,10 @@ void RaystarNode::handleMap(nav_msgs::msg::OccupancyGrid::ConstSharedPtr map) {
     status.occupancy_semantics_version = raystar_interfaces::kOccupancySemanticsVersion;
     status.geometry_semantics_version = raystar_interfaces::kGeometrySemanticsVersion;
     status.topology_semantics_version = raystar_interfaces::kTopologySemanticsVersion;
+    status.environment_id_disallow_unknown = raystar_interfaces::computeEnvironmentId(
+      *map, configuration.occupied_threshold, false);
+    status.environment_id_allow_unknown = raystar_interfaces::computeEnvironmentId(
+      *map, configuration.occupied_threshold, true);
     map_status_publisher_->publish(status);
     RCLCPP_INFO(get_logger(),
                 "Cached admitted OccupancyGrid generation=%llu",
@@ -2381,22 +2385,6 @@ void RaystarNode::executePlanning(const RequestT& request_value,
   SearchStateRelease search_state_release(core_);
   const auto& nodes = core_.getNodes();
 
-  // Core has finished every mutable visibility query before returning and
-  // exposes only const shared ownership here. Retain that completed geometry,
-  // independently of the search tree, for a following exact-key UPS request.
-  if (result.polymap && !result.path_solutions.empty()) {
-    cacheCompletedTransitionEnvironment(
-      grid,
-      map_id,
-      request->allow_unknown,
-      configuration,
-      PolymapEndpoint{
-        start_endpoint.cell_.first, start_endpoint.cell_.second, start_endpoint.position_},
-      {PolymapEndpoint{
-        goal_endpoint.cell_.first, goal_endpoint.cell_.second, goal_endpoint.position_}},
-      result.polymap);
-  }
-
   auto& result_info = response->result_info;
   result_info.found_path_count = boundedUint32(result.path_solutions.size());
   result_info.expanded_nodes = boundedUint64(result.expanded_nodes);
@@ -3023,33 +3011,6 @@ void RaystarNode::executeGoalSetPlanning(const GoalSetAction::Goal& request,
     return;
   }
 
-  // Reuse is admitted only when every requested protected endpoint produced a
-  // path. This proves every endpoint belonged to the reachable set passed to
-  // Polymap; otherwise the Core may have built geometry for only a subset and
-  // an exact full-request cache key would overstate its construction inputs.
-  const bool complete_environment_endpoint_set =
-    result.polymap && result.goal_results.size() == core_goals.size() &&
-    std::all_of(result.goal_results.begin(), result.goal_results.end(), [](const auto& goal) {
-      return !goal.path_solutions.empty();
-    });
-  if (complete_environment_endpoint_set) {
-    std::vector<PolymapEndpoint> environment_goals;
-    environment_goals.reserve(core_goals.size());
-    for (const auto& goal : core_goals) {
-      environment_goals.push_back(
-        {goal.endpoint.cell_.first, goal.endpoint.cell_.second, goal.endpoint.position_});
-    }
-    cacheCompletedTransitionEnvironment(
-      grid,
-      map_id,
-      request.allow_unknown,
-      configuration,
-      PolymapEndpoint{
-        start_endpoint.cell_.first, start_endpoint.cell_.second, start_endpoint.position_},
-      environment_goals,
-      result.polymap);
-  }
-
   auto& aggregate = response.result_info;
   aggregate.expanded_nodes = boundedUint64(result.expanded_nodes);
   aggregate.map_time_ms = result.map_time_ms;
@@ -3463,6 +3424,16 @@ void RaystarNode::executeTransitionPlanning(
       "or Raystar planning semantics";
     return;
   }
+  const bool references_must_be_taut =
+    request.reference_path_policy == TransitionAction::Goal::REFERENCE_PATHS_MUST_BE_TAUT;
+  if (!references_must_be_taut &&
+      request.reference_path_policy != TransitionAction::Goal::REFERENCE_PATHS_MAY_BE_UNTAUT) {
+    response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
+    response.message =
+      "Invalid reference_path_policy: expected REFERENCE_PATHS_MUST_BE_TAUT or "
+      "REFERENCE_PATHS_MAY_BE_UNTAUT";
+    return;
+  }
   const auto planning_deadline =
     std::chrono::steady_clock::now() + configuration.planning.planning_timeout;
   bool planning_timed_out = false;
@@ -3656,6 +3627,8 @@ void RaystarNode::executeTransitionPlanning(
   const StopToken stop_token(effective_stop_requested);
   const PolymapEndpoint base_endpoint{
     static_cast<int>(base->cell_x), static_cast<int>(base->cell_y), Point2d{base->x, base->y}};
+  // Only transition construction writes this cache. Planner Polymaps use
+  // simplified contours and must never satisfy a raw-contour UPS lookup.
   std::shared_ptr<const Polymap> polymap_owner = findCachedTransitionEnvironment(
     grid, map_id, request.allow_unknown, configuration, base_endpoint, endpoints);
   if (polymap_owner) {
@@ -3663,22 +3636,13 @@ void RaystarNode::executeTransitionPlanning(
                  "Reusing the completed free-triangle environment for %zu UPS transition(s)",
                  request.transition_pairs.size());
   } else {
-    auto polymap_result = endpoints.size() == 1 ? Polymap::create(work_map,
-                                                                  base_endpoint.cell_x,
-                                                                  base_endpoint.cell_y,
-                                                                  endpoints.front().cell_x,
-                                                                  endpoints.front().cell_y,
-                                                                  base_endpoint.position,
-                                                                  endpoints.front().position,
-                                                                  stop_token,
-                                                                  configuration.planning)
-                                                : Polymap::create(work_map,
-                                                                  base_endpoint.cell_x,
-                                                                  base_endpoint.cell_y,
-                                                                  base_endpoint.position,
-                                                                  endpoints,
-                                                                  stop_token,
-                                                                  configuration.planning);
+    auto polymap_result = Polymap::createForReferenceShortening(work_map,
+                                                                 base_endpoint.cell_x,
+                                                                 base_endpoint.cell_y,
+                                                                 base_endpoint.position,
+                                                                 endpoints,
+                                                                 stop_token,
+                                                                 configuration.planning);
     if (polymap_result.status == PolymapCreateStatus::stopped) {
       response.status = stopped_status();
       response.message =
@@ -3732,20 +3696,22 @@ void RaystarNode::executeTransitionPlanning(
       response.message.resize(std::min(response.message.size(), kMaxDiagnosticBytes));
       return;
     }
-    double input_cost = 0.0;
-    for (size_t point_index = 1; point_index < configurations[configuration_index].size();
-         ++point_index) {
-      const auto& previous = configurations[configuration_index][point_index - 1];
-      const auto& current = configurations[configuration_index][point_index];
-      input_cost += std::hypot(current.first - previous.first, current.second - previous.second);
-    }
-    const double taut_tolerance = 1.0e-10 * std::max({1.0, input_cost, validation.path_cost});
-    if (!std::isfinite(input_cost) ||
-        std::abs(input_cost - validation.path_cost) > taut_tolerance) {
-      response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
-                         " is not a locally shortest (taut) reference";
-      return;
+    if (references_must_be_taut) {
+      double input_cost = 0.0;
+      for (size_t point_index = 1; point_index < configurations[configuration_index].size();
+           ++point_index) {
+        const auto& previous = configurations[configuration_index][point_index - 1];
+        const auto& current = configurations[configuration_index][point_index];
+        input_cost += std::hypot(current.first - previous.first, current.second - previous.second);
+      }
+      const double taut_tolerance = 1.0e-10 * std::max({1.0, input_cost, validation.path_cost});
+      if (!std::isfinite(input_cost) ||
+          std::abs(input_cost - validation.path_cost) > taut_tolerance) {
+        response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
+        response.message = "Tether configuration " + std::to_string(configuration_index) +
+                           " is not a locally shortest (taut) reference";
+        return;
+      }
     }
   }
 

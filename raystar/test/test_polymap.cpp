@@ -83,6 +83,12 @@ public:
     return polymap.validateObstacleTopology(error, true);
   }
 
+  static OperationStatus rebuildTriangleEnvironment(Polymap& polymap,
+                                                    std::string& error,
+                                                    const StopToken& stop_token) {
+    return polymap.buildTriangleEnvironment(error, stop_token);
+  }
+
   static bool simplificationChordIsTopologicallySafe(const Polymap& polymap,
                                                      size_t obstacle_index,
                                                      size_t current_index) {
@@ -997,6 +1003,88 @@ TEST(Polymap, HomotopyFunnelRejectsAReferenceThroughAnObstacle) {
   EXPECT_FALSE(result.collision_free);
   EXPECT_FALSE(result.homotopy_preserved);
   EXPECT_FALSE(result.locally_shortest);
+}
+
+TEST(Polymap, ReferenceShorteningRetainsRawOuterContourFreeSpace) {
+  const auto map = makeBorderedFreeMap(50, 50);
+  const Point2d start{2.5, 47.5};
+  const Point2d goal{46.5, 3.5};
+  const std::vector<PolymapEndpoint> goals = {{46, 3, goal}};
+  const std::vector<Point2d> reference = {
+    start, {32.0, 44.0}, {39.0, 43.0}, {45.0, 27.0}, {46.0, 21.0}, goal};
+
+  auto planner_environment =
+    Polymap::create(map, 2, 47, start, goals, StopToken{});
+  auto shortening_environment =
+    Polymap::createForReferenceShortening(map, 2, 47, start, goals, StopToken{});
+
+  ASSERT_TRUE(planner_environment) << planner_environment.error;
+  ASSERT_TRUE(shortening_environment) << shortening_environment.error;
+  const auto planner_result =
+    planner_environment.value->shortenPathWithinHomotopy(reference);
+  const auto shortening_result =
+    shortening_environment.value->shortenPathWithinHomotopy(reference);
+
+  // Planner contour chords are conservative for this one map, but the large
+  // outer-contour chord removes a raw-free wedge traversed by the reference.
+  EXPECT_FALSE(planner_result);
+  ASSERT_TRUE(shortening_result) << shortening_result.message;
+  EXPECT_TRUE(shortening_result.collision_free);
+  EXPECT_TRUE(shortening_result.homotopy_preserved);
+  EXPECT_TRUE(shortening_result.locally_shortest);
+  ASSERT_EQ(shortening_result.path.front(), start);
+  ASSERT_EQ(shortening_result.path.back(), goal);
+  EXPECT_NEAR(shortening_result.path_cost,
+              std::hypot(goal.first - start.first, goal.second - start.second),
+              1.0e-12);
+}
+
+TEST(Polymap, ReferenceShorteningFailsClosedWhenRawContourExceedsMapByteBudget) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  const std::vector<PolymapEndpoint> goals = {{9, 5, goal}};
+  PlanningLimits limits;
+  limits.max_map_cells = map.data.size();
+  limits.max_map_bytes = map.data.size() * kEstimatedPlannerMapBytesPerCell;
+
+  auto planner_environment =
+    Polymap::create(map, 2, 2, start, goals, StopToken{}, limits);
+  auto shortening_environment =
+    Polymap::createForReferenceShortening(map, 2, 2, start, goals, StopToken{}, limits);
+
+  // The reference-only raw-contour charge must not change normal planning's
+  // existing simplified-contour admission semantics.
+  ASSERT_TRUE(planner_environment) << planner_environment.error;
+  EXPECT_EQ(shortening_environment.status, PolymapCreateStatus::failure);
+  EXPECT_FALSE(shortening_environment.value.has_value());
+  EXPECT_NE(shortening_environment.error.find("raw contour"), std::string::npos)
+    << shortening_environment.error;
+  EXPECT_NE(shortening_environment.error.find("max_map_bytes"), std::string::npos)
+    << shortening_environment.error;
+}
+
+TEST(Polymap, RawTriangleEnvironmentConstructionCooperativelyStopsInsideContourScan) {
+  const auto map = makeBorderedFreeMap(12, 8);
+  const Point2d start{2.5, 2.5};
+  const Point2d goal{9.5, 5.5};
+  const std::vector<PolymapEndpoint> goals = {{9, 5, goal}};
+  auto environment =
+    Polymap::createForReferenceShortening(map, 2, 2, start, goals, StopToken{});
+  ASSERT_TRUE(environment) << environment.error;
+
+  size_t poll_count = 0;
+  const StopToken stop_during_contour_scan(
+    [&poll_count]() { return ++poll_count >= 3; });
+  std::string error = "stale diagnostic";
+  const auto status = PolymapTestPeer::rebuildTriangleEnvironment(
+    *environment.value, error, stop_during_contour_scan);
+
+  EXPECT_EQ(status, OperationStatus::stopped);
+  EXPECT_EQ(poll_count, 3u);
+  EXPECT_TRUE(error.empty());
+  EXPECT_EQ(environment.value->freeTriangleCount(), 0u)
+    << "A stopped rebuild must not expose a partially rebuilt triangle mesh";
 }
 
 TEST(Polymap, MultiGoalConstructionRejectsAReachabilityMismatchAtomically) {

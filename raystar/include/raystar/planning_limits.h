@@ -47,7 +47,9 @@ struct PlanningLimits {
   // Optional cooperative-cancellation hook. Callers that signal it from
   // another thread must provide a thread-safe predicate.
   StopPredicate cancel_requested;
-  // Map admission is checked before either Core or Polymap copies GridMap.
+  // Fixed map admission is checked before either Core or Polymap copies
+  // GridMap. Reference-shortening Polymaps additionally charge unsimplified
+  // contour topology against the unused byte budget before constructing CDT.
   size_t max_map_cells = kDefaultMaxMapCells;
   size_t max_map_bytes = kDefaultMaxMapBytes;
   // Aggregate structural/output limits used by Core and the ROS adapter.

@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>raystar</name>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
   <description>Ray*: Efficient Calculation of 2D Non-homotopic Shortest Paths (ROS2)</description>
   <maintainer email="tong.yang@zju.edu.cn">Tong Yang</maintainer>
   <license>MIT</license>
@@ -16,7 +16,7 @@
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
-  <depend version_gte="0.2.0">raystar_interfaces</depend>
+  <depend version_gte="0.3.0">raystar_interfaces</depend>
   <depend>unique_identifier_msgs</depend>
 
   <!-- The optional installed profiling runner locates its bundled map through
@@ -24,7 +24,7 @@
   <depend>ament_index_cpp</depend>
 
   <!-- The installed RViz configuration instantiates this panel at runtime. -->
-  <exec_depend>raystar_rviz_plugins</exec_depend>
+  <exec_depend version_gte="0.3.0">raystar_rviz_plugins</exec_depend>
 
   <!-- Optional demo bringup dependencies.  The core node does not require a
        map server or RViz to run, but the bundled launch file does. -->
