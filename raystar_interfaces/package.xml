@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>raystar_interfaces</name>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
   <description>Action and Service definitions for the Ray* non-homotopic path planner</description>
   <maintainer email="tong.yang@zju.edu.cn">Tong Yang</maintainer>
   <license>MIT</license>

@@ -103,6 +103,7 @@ def test_transition_graph_action_schema_contract():
     assert _field_names_and_types(BuildRaystarTransitionGraph.Goal) == {
         "map_id": "unique_identifier_msgs/UUID",
         "expected_environment_id": "unique_identifier_msgs/UUID",
+        "reference_path_policy": "uint8",
         "tether_configurations": "sequence<nav_msgs/Path>",
         "transition_pairs": "sequence<raystar_interfaces/ConfigurationTransitionPair>",
         "allow_unknown": "boolean",
@@ -162,6 +163,8 @@ def test_message_schema_contract():
         "occupancy_semantics_version": "uint32",
         "geometry_semantics_version": "uint32",
         "topology_semantics_version": "uint32",
+        "environment_id_disallow_unknown": "unique_identifier_msgs/UUID",
+        "environment_id_allow_unknown": "unique_identifier_msgs/UUID",
     }
     assert _field_names_and_types(PlanningResultInfo) == {
         "map_id": "unique_identifier_msgs/UUID",
@@ -215,6 +218,8 @@ def test_message_schema_contract():
 
 
 def test_status_constants_contract():
+    assert BuildRaystarTransitionGraph.Goal.REFERENCE_PATHS_MUST_BE_TAUT == 0
+    assert BuildRaystarTransitionGraph.Goal.REFERENCE_PATHS_MAY_BE_UNTAUT == 1
     assert BuildRaystarTransitionGraph.Result.STATUS_UNKNOWN == 0
     assert BuildRaystarTransitionGraph.Result.STATUS_COMPLETE == 1
     assert BuildRaystarTransitionGraph.Result.STATUS_INVALID_REQUEST == 2

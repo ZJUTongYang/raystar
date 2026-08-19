@@ -16,7 +16,7 @@ using EnvironmentId = unique_identifier_msgs::msg::UUID;
 // OccupancyGrid bytes and request policy remain identical.
 inline constexpr std::uint32_t kEnvironmentIdentityVersion = 1U;
 inline constexpr std::uint32_t kOccupancySemanticsVersion = 1U;
-inline constexpr std::uint32_t kGeometrySemanticsVersion = 1U;
+inline constexpr std::uint32_t kGeometrySemanticsVersion = 2U;
 inline constexpr std::uint32_t kTopologySemanticsVersion = 1U;
 
 struct EnvironmentSemanticVersions {

@@ -1,17 +1,25 @@
 # Shorten explicit directed pairs of base-to-robot tether configurations on
 # the cached map. Every non-empty input Path must use the map frame, be
 # oriented from one exactly identical tether base to its robot endpoint, and
-# be a complete collision-free, locally shortest (taut), piecewise-linear
-# topology reference. Every reference is traced and shortened in full before
-# exact common prefixes are removed for pairwise shortening. When a
-# configuration comes from PathResult, pass
-# topology_path rather than the densely sampled path.
+# be a complete collision-free piecewise-linear topology reference. Every
+# reference is traced and shortened in full before exact common prefixes are
+# removed for pairwise shortening. The default policy additionally requires
+# every reference to already be locally shortest (taut); the opt-in untaut
+# policy accepts a collision-free reference that still needs shortening. When
+# a configuration comes from PathResult, pass topology_path rather than the
+# densely sampled path.
 # Result paths run from the source robot pose to the destination robot pose
 # and may cross CDT triangle interiors.
 unique_identifier_msgs/UUID map_id
 # Optional compatibility guard. Zero lets Raystar derive the environment from
 # map_id and allow_unknown; non-zero requires an exact match before UPS work.
 unique_identifier_msgs/UUID expected_environment_id
+# Compatibility default: generated/zero-initialized clients retain the
+# original requirement that every reference is already taut. The opt-in mode
+# still validates every complete reference for collision before pairwise UPS.
+uint8 REFERENCE_PATHS_MUST_BE_TAUT=0
+uint8 REFERENCE_PATHS_MAY_BE_UNTAUT=1
+uint8 reference_path_policy
 # Aggregate admission is controlled by max_transition_configurations and
 # max_path_points, independently of multi-goal/path-enumeration limits.
 nav_msgs/Path[] tether_configurations
