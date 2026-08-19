@@ -48,6 +48,7 @@ add_library(raystar_core STATIC
   src/polymap_visibility.cpp
   src/polymap_shortening.cpp
   src/raystar_core.cpp
+  src/raystar_core_planning.cpp
   src/visibility_validation.cpp
 )
 target_include_directories(raystar_core PUBLIC
