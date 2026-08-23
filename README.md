@@ -133,7 +133,12 @@ Raystar.
 
 ### Upgrading from 0.2.x
 
-Raystar 0.3.0 changes ROSIDL wire types. Stop every running Raystar node, RViz
+Raystar 0.3.0 changes ROSIDL wire types. `BuildRaystarTransitionGraph.Goal`
+gains `reference_path_policy` and renames `tether_configurations` to
+`rooted_reference_paths`, `ConfigurationTransitionPair` becomes
+`ReferenceTransitionPair` with `from_reference`/`to_reference` indices, and
+the node parameter `max_transition_configurations` becomes
+`max_transition_references`. Stop every running Raystar node, RViz
 instance, and downstream client before upgrading. Rebuild
 `raystar_interfaces`, `raystar`, `raystar_rviz_plugins`, and every downstream
 package together in a clean overlay, then restart every process from a fresh
@@ -180,7 +185,7 @@ The default node name is `raystar`:
 |---|---|---|
 | Action | `/raystar/plan_paths` | Cancellable single-goal top-K or all-within-length planning against the cached map |
 | Action | `/raystar/plan_goal_set` | Cancellable multi-goal all-within-length planning using one shared tree |
-| Action | `/raystar/build_transition_graph` | UPS for explicit directed pairs of tether configurations |
+| Action | `/raystar/build_transition_graph` | UPS for explicit directed transitions between rooted reference paths |
 | Service | `/raystar/get_raystar_paths` | Full-map compatibility API for legacy clients; disabled by the demo launch |
 | Topic | `/raystar/map_status` | Cached-map identity, semantic versions, and environment identities for both `allow_unknown` policies |
 
@@ -209,7 +214,7 @@ The most important client-side rules are:
 - A resource limit can produce a partial result. Use the structured status and
   completion fields instead of assuming every returned list is exhaustive.
 - `PathResult.path` is the execution/display path and is normally densely
-  sampled. When a Raystar result becomes a UPS tether configuration, pass its
+  sampled. When a Raystar result becomes a UPS rooted reference, pass its
   unsampled `PathResult.topology_path`.
 - `BuildRaystarTransitionGraph.reference_path_policy` defaults to
   `REFERENCE_PATHS_MUST_BE_TAUT`. Use

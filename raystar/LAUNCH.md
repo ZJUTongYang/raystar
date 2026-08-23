@@ -227,23 +227,18 @@ In multi-goal mode, changing **Set all budgets** updates every existing target
 row and invalidates the old result before the next **Plan**. Edit individual
 `Budget (m)` cells afterward when goals need different limits.
 
-Raystar 0.4.0 renames the transition-graph fields to planner-neutral names
-(`tether_configurations` to `rooted_reference_paths`,
-`ConfigurationTransitionPair` to `ReferenceTransitionPair`,
-`max_transition_configurations` to `max_transition_references`) and changes
-the corresponding DDS type hashes. Environment identities and geometry
-semantics are unchanged. Apply the same lockstep rebuild-and-restart
-procedure as below.
-
 Raystar 0.3.0 changes the `BuildRaystarTransitionGraph` goal and `MapStatus`
-ROS types and therefore changes their DDS type hashes. It also advances
-`geometry_semantics_version` to 2, so every environment identity changes even
-when the occupancy-grid bytes do not. Stop all running nodes, RViz instances,
-and clients; perform a clean lockstep rebuild of all three Raystar packages and
-downstream consumers; then restart every process from a fresh terminal that
-sources only the 0.3.0 overlay. Refresh identities from the new `MapStatus`.
-Endpoint compatibility does not provide wire compatibility with 0.2.x
-binaries.
+ROS types — including the planner-neutral renames of `tether_configurations`
+to `rooted_reference_paths`, `ConfigurationTransitionPair` to
+`ReferenceTransitionPair`, and `max_transition_configurations` to
+`max_transition_references` — and therefore changes their DDS type hashes. It
+also advances `geometry_semantics_version` to 2, so every environment identity
+changes even when the occupancy-grid bytes do not. Stop all running nodes,
+RViz instances, and clients; perform a clean lockstep rebuild of all three
+Raystar packages and downstream consumers; then restart every process from a
+fresh terminal that sources only the 0.3.0 overlay. Refresh identities from
+the new `MapStatus`. Endpoint compatibility does not provide wire
+compatibility with 0.2.x binaries.
 
 ## Stopping
 

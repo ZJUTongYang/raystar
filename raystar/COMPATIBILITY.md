@@ -21,30 +21,22 @@ when they satisfy the `>= 5.4` source contract, but they are not currently a
 CI-backed release claim. Qt 6, ROS 2 Kilted/Rolling, non-Linux platforms, and
 32-bit builds are unverified.
 
-## 0.4.0 interface and naming migration
-
-Raystar `0.4.0` is wire-incompatible with every `0.3.x` release, but the
-change is a pure vocabulary generalization: the transition-graph feature is
-now described in planner-neutral terms. `Goal.tether_configurations` becomes
-`Goal.rooted_reference_paths`; the message `ConfigurationTransitionPair`
-becomes `ReferenceTransitionPair` with `from_reference`/`to_reference`
-fields; and the node parameter `max_transition_configurations` becomes
-`max_transition_references` (same default and semantics). Validation,
-shortening, certification, resource budgets, and result fields are
-unchanged. `geometry_semantics_version` stays `2` and environment identities
-are unaffected, so `map_id`/environment-id bookkeeping survives the upgrade;
-only client source referencing the renamed fields must be recompiled.
-Generated clients that reference the old names fail at compile time, which
-is the intended fail-closed behavior.
-
-## 0.3.0 interface and geometry migration
+## 0.3.0 interface, naming, and geometry migration
 
 Raystar `0.3.0` is wire-incompatible with every `0.2.x` release.
-`BuildRaystarTransitionGraph.Goal` gains `reference_path_policy`, while
-`MapStatus` gains `environment_id_disallow_unknown` and
-`environment_id_allow_unknown`. Adding ROSIDL fields changes the DDS type
-hash; unchanged endpoint names do not make a `0.2.x` client or RViz plugin
-compatible with a `0.3.0` server.
+`BuildRaystarTransitionGraph.Goal` gains `reference_path_policy` and
+renames `tether_configurations` to `rooted_reference_paths`; the message
+`ConfigurationTransitionPair` becomes `ReferenceTransitionPair` with
+`from_reference`/`to_reference` fields; `MapStatus` gains
+`environment_id_disallow_unknown` and `environment_id_allow_unknown`; and
+the node parameter `max_transition_configurations` becomes
+`max_transition_references` (same default and semantics). Changing ROSIDL
+fields changes the DDS type hash; unchanged endpoint names do not make a
+`0.2.x` client or RViz plugin compatible with a `0.3.0` server. The
+transition-graph feature is now described in planner-neutral terms usable
+by any non-homotopic planning consumer, not only tethered-robot workspaces.
+Generated clients that reference the old names fail at compile time, which
+is the intended fail-closed behavior.
 
 Stop all Raystar nodes, RViz processes, and downstream clients before
 upgrading. Rebuild and deploy `raystar_interfaces`, `raystar`,
@@ -139,7 +131,7 @@ prefix does not leave a compiled-in source-tree map path.
 - `raystar/CMakeLists.txt` rejects CGAL below 5.4 and CGAL configurations
   without GMP/MPFR, requires Boost for the exact-length implementation, and
   deliberately allows a later CGAL major release.
-- `raystar_interfaces/test/test_interface_schema.py` locks the complete 0.4.0
+- `raystar_interfaces/test/test_interface_schema.py` locks the complete 0.3.0
   Action/Service/message field and status-constant contract.
 - `raystar_rviz_plugins/CMakeLists.txt` requires Qt 5.15, `rviz_common` 11.2,
   and pluginlib 5.1. Its package config explicitly loads the Qt Widgets
