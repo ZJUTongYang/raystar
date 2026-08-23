@@ -37,7 +37,7 @@ Useful overrides include `map_yaml:=/path/to/map.yaml`,
 `transition_action_name:=/robot1/raystar/build_transition_graph`,
 `goal_set_action_name:=/robot1/raystar/plan_goal_set`, `start_rviz:=false`, and
 the planner/resource parameters (`max_k`, `max_cost_bounded_paths`,
-`max_multi_goal_count`, `max_transition_configurations`,
+`max_multi_goal_count`, `max_transition_references`,
 `max_transition_pairs`, `max_nodes`, `planning_timeout_ms`, `max_debug_nodes`,
 and so on). The default launch intentionally disables the legacy full-map
 Service; set `enable_legacy_map_service:=true` only for old clients. When using
@@ -104,7 +104,7 @@ is the translated `nav_msgs/OccupancyGrid` representation; raw
 The server also defaults to the following configuration and resource limits:
 `occupied_threshold=99`, `max_k=100`, `max_cost_bounded_paths=1000`,
 `max_multi_goal_count=128`,
-`max_transition_configurations=4096`, `max_transition_pairs=1000`,
+`max_transition_references=4096`, `max_transition_pairs=1000`,
 `max_nodes=10000`,
 `planning_timeout_ms=5000`,
 `max_map_cells=8388608`, `max_map_bytes=536870912`,
@@ -118,7 +118,7 @@ ros2 run raystar raystar_node --ros-args \
   -p occupied_threshold:=99 \
   -p max_k:=20 -p max_cost_bounded_paths:=1000 \
   -p max_multi_goal_count:=128 \
-  -p max_transition_configurations:=4096 \
+  -p max_transition_references:=4096 \
   -p max_transition_pairs:=1000 \
   -p max_nodes:=5000 -p planning_timeout_ms:=3000 \
   -p max_map_cells:=1000000 -p max_map_bytes:=67108864 \
@@ -151,7 +151,7 @@ naming the raw contour and `max_map_bytes`; it does not return a partial
 transition graph. Increase `max_map_bytes` when a high-perimeter obstacle map
 needs a larger transition environment. A goal set above
 `max_multi_goal_count`, or a UPS batch above
-`max_transition_configurations`/`max_transition_pairs`, is rejected before its
+`max_transition_references`/`max_transition_pairs`, is rejected before its
 expensive geometry work. The two UPS limits are independent of the multi-goal
 and per-goal path limits. Reaching the node or time limit stops work cleanly;
 Raystar planning reports partial-search fields, while UPS reports
@@ -226,6 +226,14 @@ default start/goals interactively on
 In multi-goal mode, changing **Set all budgets** updates every existing target
 row and invalidates the old result before the next **Plan**. Edit individual
 `Budget (m)` cells afterward when goals need different limits.
+
+Raystar 0.4.0 renames the transition-graph fields to planner-neutral names
+(`tether_configurations` to `rooted_reference_paths`,
+`ConfigurationTransitionPair` to `ReferenceTransitionPair`,
+`max_transition_configurations` to `max_transition_references`) and changes
+the corresponding DDS type hashes. Environment identities and geometry
+semantics are unchanged. Apply the same lockstep rebuild-and-restart
+procedure as below.
 
 Raystar 0.3.0 changes the `BuildRaystarTransitionGraph` goal and `MapStatus`
 ROS types and therefore changes their DDS type hashes. It also advances

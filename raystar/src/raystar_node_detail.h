@@ -46,8 +46,8 @@ constexpr int64_t kDefaultMaxCostBoundedPaths =
   static_cast<int64_t>(PlanningLimits::kDefaultMaxCostBoundedPaths);
 constexpr int64_t kDefaultMaxMultiGoalCount =
   static_cast<int64_t>(PlanningLimits::kDefaultMaxMultiGoalCount);
-constexpr int64_t kDefaultMaxTransitionConfigurations =
-  static_cast<int64_t>(PlanningLimits::kDefaultMaxTransitionConfigurations);
+constexpr int64_t kDefaultMaxTransitionReferences =
+  static_cast<int64_t>(PlanningLimits::kDefaultMaxTransitionReferences);
 constexpr int64_t kDefaultMaxTransitionPairs =
   static_cast<int64_t>(PlanningLimits::kDefaultMaxTransitionPairs);
 constexpr int64_t kDefaultMaxNodes = 10000;
@@ -125,11 +125,11 @@ constexpr std::array<IntegerParameterSpec, 14> kIntegerParameterSpecs{{
    kMaxIntParameterValue,
    "Maximum goals accepted by one shared-tree bounded request.",
    false},
-  {"max_transition_configurations",
-   kDefaultMaxTransitionConfigurations,
+  {"max_transition_references",
+   kDefaultMaxTransitionReferences,
    1,
    kMaxIntParameterValue,
-   "Maximum flattened tether configurations accepted by one UPS batch.",
+   "Maximum flattened rooted references accepted by one UPS batch.",
    false},
   {"max_transition_pairs",
    kDefaultMaxTransitionPairs,

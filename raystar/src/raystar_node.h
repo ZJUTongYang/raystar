@@ -182,13 +182,13 @@ private:
     const raystar_interfaces::MapId& map_id,
     bool allow_unknown,
     const RequestConfiguration& configuration,
-    const PolymapEndpoint& base,
+    const PolymapEndpoint& root,
     const std::vector<PolymapEndpoint>& goals);
   void cacheCompletedTransitionEnvironment(const nav_msgs::msg::OccupancyGrid& grid,
                                            const raystar_interfaces::MapId& map_id,
                                            bool allow_unknown,
                                            const RequestConfiguration& configuration,
-                                           const PolymapEndpoint& base,
+                                           const PolymapEndpoint& root,
                                            const std::vector<PolymapEndpoint>& goals,
                                            std::shared_ptr<const Polymap> environment);
 

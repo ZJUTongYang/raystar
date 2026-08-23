@@ -22,7 +22,7 @@ struct PlanningLimits {
   static constexpr size_t kDefaultMaxResponseBytes = 64u * 1024u * 1024u;
   static constexpr size_t kDefaultMaxCostBoundedPaths = 1000u;
   static constexpr size_t kDefaultMaxMultiGoalCount = 128u;
-  static constexpr size_t kDefaultMaxTransitionConfigurations = 4096u;
+  static constexpr size_t kDefaultMaxTransitionReferences = 4096u;
   static constexpr size_t kDefaultMaxTransitionPairs = 1000u;
 
   int max_k = std::numeric_limits<int>::max();
@@ -37,7 +37,7 @@ struct PlanningLimits {
   // Independent UPS batch admission limits. Configuration count is the
   // flattened union of all layers; pair count is the explicit directed edge
   // array. They are intentionally separate from GCP goal/path limits.
-  size_t max_transition_configurations = kDefaultMaxTransitionConfigurations;
+  size_t max_transition_references = kDefaultMaxTransitionReferences;
   size_t max_transition_pairs = kDefaultMaxTransitionPairs;
   // Counts fully constructed Nodes, including the root Node.
   size_t max_nodes = static_cast<size_t>(std::numeric_limits<int>::max());

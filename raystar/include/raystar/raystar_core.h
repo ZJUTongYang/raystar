@@ -492,7 +492,8 @@ struct PlanResult {
 struct CostBoundedGoal {
   PlanEndpoint endpoint;
   // Core/grid-coordinate units. Each goal may use a different inclusive
-  // bound; TMV normally supplies the same tether length for every goal.
+  // bound; a tethered-robot downstream such as TMV normally supplies the
+  // same tether length for every goal.
   double max_path_cost = 0.0;
   BoundedPathAdmissionCallback path_admission;
 
@@ -527,16 +528,16 @@ struct MultiGoalPlanResult {
   std::shared_ptr<const Polymap> polymap;
 };
 
-// One directed UPS request between two base-to-robot tether configurations.
+// One directed UPS request between two rooted references sharing one root.
 // Indices refer to the configuration vector supplied to
-// shortenConfigurationTransitions().
-struct ConfigurationTransitionPair {
-  uint32_t from_configuration = 0;
-  uint32_t to_configuration = 0;
+// shortenReferenceTransitions().
+struct ReferenceTransitionPair {
+  uint32_t from_reference = 0;
+  uint32_t to_reference = 0;
 };
 
-struct ConfigurationTransitionResult {
-  ConfigurationTransitionPair pair;
+struct ReferenceTransitionResult {
+  ReferenceTransitionPair pair;
   HomotopyShorteningResult shortening;
 };
 
@@ -544,7 +545,7 @@ enum class TransitionBatchStatus { success, invalid_request, stopped, failure };
 
 struct TransitionBatchResult {
   TransitionBatchStatus status = TransitionBatchStatus::failure;
-  std::vector<ConfigurationTransitionResult> transitions;
+  std::vector<ReferenceTransitionResult> transitions;
   std::string message;
 
   [[nodiscard]] explicit operator bool() const noexcept {
@@ -598,10 +599,10 @@ public:
   // rebuilding the triangle environment. Pair indices are validated
   // atomically before any shortening is performed; individual geometric
   // failures remain attached to their corresponding transition.
-  [[nodiscard]] static TransitionBatchResult shortenConfigurationTransitions(
+  [[nodiscard]] static TransitionBatchResult shortenReferenceTransitions(
     const Polymap& polymap,
     const std::vector<PathSolution>& configurations,
-    const std::vector<ConfigurationTransitionPair>& pairs,
+    const std::vector<ReferenceTransitionPair>& pairs,
     const StopToken& stop_token = StopToken{});
 
   PlanResult plan(const GridMap& grid_map,

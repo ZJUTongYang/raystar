@@ -27,7 +27,7 @@ TEST(TransitionProgressReporterTest, ThrottlesLargeBatchAndPreservesEndpoints) {
 
   reporter.publishStage("validating transition request");
   reporter.publishStage("preparing transition environment");
-  reporter.publishStage("validating tether configurations");
+  reporter.publishStage("validating rooted references");
   reporter.publishStage("shortening transition pairs");
   for (std::uint32_t completed = 1; completed <= requested; ++completed)
     reporter.publishPairCompletion(completed, "shortening transition pairs");
@@ -42,7 +42,7 @@ TEST(TransitionProgressReporterTest, ThrottlesLargeBatchAndPreservesEndpoints) {
   EXPECT_EQ(records[1].completed, 0u);
   EXPECT_EQ(records[1].stage, "preparing transition environment");
   EXPECT_EQ(records[2].completed, 0u);
-  EXPECT_EQ(records[2].stage, "validating tether configurations");
+  EXPECT_EQ(records[2].stage, "validating rooted references");
   EXPECT_EQ(records[3].completed, 0u);
   EXPECT_EQ(records[3].stage, "shortening transition pairs");
   EXPECT_EQ(records.back().requested, requested);
@@ -79,7 +79,7 @@ TEST(TransitionProgressReporterTest, ContainsThrowingCallbackAndKeepsFinalProgre
 
   EXPECT_NO_THROW(reporter.publishStage("validating transition request"));
   EXPECT_NO_THROW(reporter.publishStage("preparing transition environment"));
-  EXPECT_NO_THROW(reporter.publishStage("validating tether configurations"));
+  EXPECT_NO_THROW(reporter.publishStage("validating rooted references"));
   EXPECT_NO_THROW(reporter.publishStage("shortening transition pairs"));
   for (std::uint32_t completed = 1; completed <= 3; ++completed)
     EXPECT_NO_THROW(reporter.publishPairCompletion(completed, "shortening transition pairs"));

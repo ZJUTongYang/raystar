@@ -38,12 +38,12 @@ HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(const Polymap& polym
 
   if (first.empty() || second.empty()) {
     invalid.status = HomotopyShorteningStatus::invalid_reference;
-    invalid.message = "UPS requires two non-empty tether configurations";
+    invalid.message = "UPS requires two non-empty rooted references";
     return invalid;
   }
   if (first.front() != second.front()) {
     invalid.status = HomotopyShorteningStatus::invalid_reference;
-    invalid.message = "UPS tether configurations must have the same exact base point";
+    invalid.message = "UPS rooted references must have the same exact root point";
     return invalid;
   }
 
@@ -52,12 +52,12 @@ HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(const Polymap& polym
          first[common_prefix] == second[common_prefix]) {
     if (stop_token.poll()) {
       invalid.status = HomotopyShorteningStatus::stopped;
-      invalid.message = "UPS was canceled while removing the common tether prefix";
+      invalid.message = "UPS was canceled while removing the common reference prefix";
       return invalid;
     }
     ++common_prefix;
   }
-  // The shared base check above guarantees at least one common point.
+  // The shared root check above guarantees at least one common point.
   const size_t branch_point = common_prefix - 1;
   std::vector<Point2d> reference;
   reference.reserve((first.size() - branch_point) + (second.size() - common_prefix));
@@ -71,10 +71,10 @@ HomotopyShorteningResult RaystarCore::shortenWithinHomotopy(const Polymap& polym
   return polymap.shortenPathWithinHomotopy(reference, stop_token);
 }
 
-TransitionBatchResult RaystarCore::shortenConfigurationTransitions(
+TransitionBatchResult RaystarCore::shortenReferenceTransitions(
   const Polymap& polymap,
   const std::vector<PathSolution>& configurations,
-  const std::vector<ConfigurationTransitionPair>& pairs,
+  const std::vector<ReferenceTransitionPair>& pairs,
   const StopToken& stop_token) {
   TransitionBatchResult result;
   result.transitions.reserve(pairs.size());
@@ -86,8 +86,8 @@ TransitionBatchResult RaystarCore::shortenConfigurationTransitions(
 
   for (size_t index = 0; index < pairs.size(); ++index) {
     const auto& pair = pairs[index];
-    if (pair.from_configuration >= configurations.size() ||
-        pair.to_configuration >= configurations.size()) {
+    if (pair.from_reference >= configurations.size() ||
+        pair.to_reference >= configurations.size()) {
       result.status = TransitionBatchStatus::invalid_request;
       result.message = "UPS transition pair " + std::to_string(index) +
                        " contains an out-of-range configuration index";
@@ -103,11 +103,11 @@ TransitionBatchResult RaystarCore::shortenConfigurationTransitions(
                        std::to_string(result.transitions.size()) + " transitions";
       return result;
     }
-    ConfigurationTransitionResult transition;
+    ReferenceTransitionResult transition;
     transition.pair = pair;
     transition.shortening = shortenWithinHomotopy(polymap,
-                                                  configurations[pair.from_configuration],
-                                                  configurations[pair.to_configuration],
+                                                  configurations[pair.from_reference],
+                                                  configurations[pair.to_reference],
                                                   stop_token);
     result.transitions.emplace_back(std::move(transition));
     if (result.transitions.back().shortening.status == HomotopyShorteningStatus::stopped) {

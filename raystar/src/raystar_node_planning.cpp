@@ -1309,15 +1309,15 @@ void RaystarNode::executeTransitionPlanning(
     response.message = "UPS transition construction " + stopped_reason() + " before validation";
     return;
   }
-  if (request.tether_configurations.empty()) {
+  if (request.rooted_reference_paths.empty()) {
     response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-    response.message = "At least one tether configuration is required";
+    response.message = "At least one rooted reference is required";
     return;
   }
-  if (request.tether_configurations.size() > configuration.planning.max_transition_configurations) {
+  if (request.rooted_reference_paths.size() > configuration.planning.max_transition_references) {
     response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-    response.message = "Tether configuration count exceeds max_transition_configurations=" +
-                       std::to_string(configuration.planning.max_transition_configurations);
+    response.message = "Rooted reference count exceeds max_transition_references=" +
+                       std::to_string(configuration.planning.max_transition_references);
     return;
   }
   if (request.transition_pairs.empty()) {
@@ -1333,8 +1333,8 @@ void RaystarNode::executeTransitionPlanning(
   }
   for (size_t index = 0; index < request.transition_pairs.size(); ++index) {
     const auto& pair = request.transition_pairs[index];
-    if (pair.from_configuration >= request.tether_configurations.size() ||
-        pair.to_configuration >= request.tether_configurations.size()) {
+    if (pair.from_reference >= request.rooted_reference_paths.size() ||
+        pair.to_reference >= request.rooted_reference_paths.size()) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
       response.message = "Transition pair " + std::to_string(index) +
                          " contains an out-of-range configuration index";
@@ -1386,31 +1386,31 @@ void RaystarNode::executeTransitionPlanning(
   };
 
   std::vector<std::vector<Point2d>> configurations;
-  configurations.reserve(request.tether_configurations.size());
+  configurations.reserve(request.rooted_reference_paths.size());
   std::vector<PolymapEndpoint> endpoints;
-  endpoints.reserve(request.tether_configurations.size());
+  endpoints.reserve(request.rooted_reference_paths.size());
   size_t input_point_count = 0;
-  std::optional<ContinuousGridPoint> base;
-  for (size_t configuration_index = 0; configuration_index < request.tether_configurations.size();
+  std::optional<ContinuousGridPoint> root;
+  for (size_t configuration_index = 0; configuration_index < request.rooted_reference_paths.size();
        ++configuration_index) {
-    const auto& input_path = request.tether_configurations[configuration_index];
+    const auto& input_path = request.rooted_reference_paths[configuration_index];
     if (input_path.header.frame_id != grid.header.frame_id ||
         input_path.header.frame_id.size() > kMaxFrameIdBytes) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
+      response.message = "Rooted reference " + std::to_string(configuration_index) +
                          " Path frame_id does not match the cached map";
       return;
     }
     if (input_path.poses.empty()) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
       response.message =
-        "Tether configuration " + std::to_string(configuration_index) + " is empty";
+        "Rooted reference " + std::to_string(configuration_index) + " is empty";
       return;
     }
     if (!canAppendCount(
           input_point_count, input_path.poses.size(), configuration.planning.max_path_points)) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Input tether paths exceed max_path_points=" +
+      response.message = "Input rooted reference paths exceed max_path_points=" +
                          std::to_string(configuration.planning.max_path_points);
       return;
     }
@@ -1421,7 +1421,7 @@ void RaystarNode::executeTransitionPlanning(
       const auto& pose = input_path.poses[point_index];
       std::string pose_error;
       if (!validatePlanarPose(
-            pose, "Tether configuration waypoint", grid.header.frame_id, pose_error)) {
+            pose, "Rooted reference waypoint", grid.header.frame_id, pose_error)) {
         response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
         response.message = "Configuration " + std::to_string(configuration_index) + " waypoint " +
                            std::to_string(point_index) + ": " + pose_error;
@@ -1438,26 +1438,26 @@ void RaystarNode::executeTransitionPlanning(
         path.push_back(point);
     }
 
-    ContinuousGridPoint configuration_base;
+    ContinuousGridPoint reference_root;
     const auto& first_pose = input_path.poses.front().pose.position;
-    if (!worldToContinuousMap(work_map, first_pose.x, first_pose.y, configuration_base)) {
+    if (!worldToContinuousMap(work_map, first_pose.x, first_pose.y, reference_root)) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
-                         " base is not a strict map-interior point";
+      response.message = "Rooted reference " + std::to_string(configuration_index) +
+                         " root is not a strict map-interior point";
       return;
     }
-    if (!base) {
-      base = configuration_base;
-    } else if (base->x != configuration_base.x || base->y != configuration_base.y) {
+    if (!root) {
+      root = reference_root;
+    } else if (root->x != reference_root.x || root->y != reference_root.y) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "All tether configurations must have one identical base point";
+      response.message = "All rooted references must have one identical root point";
       return;
     }
     ContinuousGridPoint endpoint;
     const auto& last_pose = input_path.poses.back().pose.position;
     if (!worldToContinuousMap(work_map, last_pose.x, last_pose.y, endpoint)) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
+      response.message = "Rooted reference " + std::to_string(configuration_index) +
                          " endpoint is not a strict map-interior point";
       return;
     }
@@ -1476,21 +1476,21 @@ void RaystarNode::executeTransitionPlanning(
   }
 
   const StopToken stop_token(effective_stop_requested);
-  const PolymapEndpoint base_endpoint{
-    static_cast<int>(base->cell_x), static_cast<int>(base->cell_y), Point2d{base->x, base->y}};
+  const PolymapEndpoint root_endpoint{
+    static_cast<int>(root->cell_x), static_cast<int>(root->cell_y), Point2d{root->x, root->y}};
   // Only transition construction writes this cache. Planner Polymaps use
   // simplified contours and must never satisfy a raw-contour UPS lookup.
   std::shared_ptr<const Polymap> polymap_owner = findCachedTransitionEnvironment(
-    grid, map_id, request.allow_unknown, configuration, base_endpoint, endpoints);
+    grid, map_id, request.allow_unknown, configuration, root_endpoint, endpoints);
   if (polymap_owner) {
     RCLCPP_DEBUG(get_logger(),
                  "Reusing the completed free-triangle environment for %zu UPS transition(s)",
                  request.transition_pairs.size());
   } else {
     auto polymap_result = Polymap::createForReferenceShortening(work_map,
-                                                                 base_endpoint.cell_x,
-                                                                 base_endpoint.cell_y,
-                                                                 base_endpoint.position,
+                                                                 root_endpoint.cell_x,
+                                                                 root_endpoint.cell_y,
+                                                                 root_endpoint.position,
                                                                  endpoints,
                                                                  stop_token,
                                                                  configuration.planning);
@@ -1509,7 +1509,7 @@ void RaystarNode::executeTransitionPlanning(
     }
     polymap_owner = std::make_shared<Polymap>(std::move(*polymap_result.value));
     cacheCompletedTransitionEnvironment(
-      grid, map_id, request.allow_unknown, configuration, base_endpoint, endpoints, polymap_owner);
+      grid, map_id, request.allow_unknown, configuration, root_endpoint, endpoints, polymap_owner);
   }
   const Polymap& polymap = *polymap_owner;
 
@@ -1519,13 +1519,13 @@ void RaystarNode::executeTransitionPlanning(
   // references could share an obstacle-crossing prefix that never appears in
   // the composed alpha_a^{-1} * alpha_b path and would therefore evade the
   // pairwise corridor trace.
-  progress.publishStage("validating tether configurations");
+  progress.publishStage("validating rooted references");
   for (size_t configuration_index = 0; configuration_index < configurations.size();
        ++configuration_index) {
     if (stop_token.poll()) {
       response.status = stopped_status();
       response.message = "UPS transition construction " + stopped_reason() +
-                         " while validating tether configuration " +
+                         " while validating rooted reference " +
                          std::to_string(configuration_index);
       return;
     }
@@ -1534,13 +1534,13 @@ void RaystarNode::executeTransitionPlanning(
     if (validation.status == HomotopyShorteningStatus::stopped) {
       response.status = stopped_status();
       response.message = "UPS transition construction " + stopped_reason() +
-                         " while validating tether configuration " +
+                         " while validating rooted reference " +
                          std::to_string(configuration_index);
       return;
     }
     if (!validation) {
       response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-      response.message = "Tether configuration " + std::to_string(configuration_index) +
+      response.message = "Rooted reference " + std::to_string(configuration_index) +
                          " is not a collision-free reference in the cached map";
       if (!validation.message.empty())
         response.message += ": " + validation.message.substr(0, kMaxDiagnosticBytes);
@@ -1559,7 +1559,7 @@ void RaystarNode::executeTransitionPlanning(
       if (!std::isfinite(input_cost) ||
           std::abs(input_cost - validation.path_cost) > taut_tolerance) {
         response.status = TransitionAction::Result::STATUS_INVALID_REQUEST;
-        response.message = "Tether configuration " + std::to_string(configuration_index) +
+        response.message = "Rooted reference " + std::to_string(configuration_index) +
                            " is not a locally shortest (taut) reference";
         return;
       }
@@ -1585,8 +1585,8 @@ void RaystarNode::executeTransitionPlanning(
     const auto& requested_pair = request.transition_pairs[index];
     const auto shortening =
       RaystarCore::shortenWithinHomotopy(polymap,
-                                         configurations[requested_pair.from_configuration],
-                                         configurations[requested_pair.to_configuration],
+                                         configurations[requested_pair.from_reference],
+                                         configurations[requested_pair.to_reference],
                                          stop_token);
     if (shortening.status == HomotopyShorteningStatus::stopped) {
       response.status = stopped_status();

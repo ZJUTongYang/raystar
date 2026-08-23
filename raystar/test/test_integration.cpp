@@ -1134,14 +1134,14 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
   transition_goal.allow_unknown = false;
   for (const auto& path_result : planning_wrapped.result->path_results) {
     ASSERT_GE(path_result.topology_path.poses.size(), 2u);
-    transition_goal.tether_configurations.push_back(path_result.topology_path);
+    transition_goal.rooted_reference_paths.push_back(path_result.topology_path);
   }
-  raystar_interfaces::msg::ConfigurationTransitionPair identity;
-  identity.from_configuration = 0;
-  identity.to_configuration = 0;
-  raystar_interfaces::msg::ConfigurationTransitionPair change;
-  change.from_configuration = 0;
-  change.to_configuration = 1;
+  raystar_interfaces::msg::ReferenceTransitionPair identity;
+  identity.from_reference = 0;
+  identity.to_reference = 0;
+  raystar_interfaces::msg::ReferenceTransitionPair change;
+  change.from_reference = 0;
+  change.to_reference = 1;
   transition_goal.transition_pairs = {identity, change};
 
   std::vector<RaystarTransitionAction::Feedback::ConstSharedPtr> feedback_messages;
@@ -1192,7 +1192,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphActionReturnsCertifiedInteriorCros
       return 0;
     if (stage == "preparing transition environment")
       return 1;
-    if (stage == "validating tether configurations")
+    if (stage == "validating rooted references")
       return 2;
     if (stage == "shortening transition pairs")
       return 3;
@@ -1301,10 +1301,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsObstacleCrossingSharedPrefi
   RaystarTransitionAction::Goal goal;
   goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
   goal.allow_unknown = false;
-  goal.tether_configurations = {path(14.5), path(16.5)};
-  raystar_interfaces::msg::ConfigurationTransitionPair pair;
-  pair.from_configuration = 0;
-  pair.to_configuration = 1;
+  goal.rooted_reference_paths = {path(14.5), path(16.5)};
+  raystar_interfaces::msg::ReferenceTransitionPair pair;
+  pair.from_reference = 0;
+  pair.to_reference = 1;
   goal.transition_pairs = {pair};
 
   auto goal_future = client->async_send_goal(goal);
@@ -1321,7 +1321,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsObstacleCrossingSharedPrefi
   EXPECT_EQ(wrapped.result->status, RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
   EXPECT_EQ(wrapped.result->completed_transition_count, 0u);
   EXPECT_TRUE(wrapped.result->transitions.empty());
-  EXPECT_NE(wrapped.result->message.find("Tether configuration 0"), std::string::npos);
+  EXPECT_NE(wrapped.result->message.find("Rooted reference 0"), std::string::npos);
   EXPECT_NE(wrapped.result->message.find("collision-free reference"), std::string::npos);
 }
 
@@ -1345,10 +1345,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphAcceptsDegenerateHomeIdentityRefer
   RaystarTransitionAction::Goal goal;
   goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
   goal.allow_unknown = false;
-  goal.tether_configurations = {home};
-  raystar_interfaces::msg::ConfigurationTransitionPair identity;
-  identity.from_configuration = 0;
-  identity.to_configuration = 0;
+  goal.rooted_reference_paths = {home};
+  raystar_interfaces::msg::ReferenceTransitionPair identity;
+  identity.from_reference = 0;
+  identity.to_reference = 0;
   goal.transition_pairs = {identity};
 
   auto goal_future = client->async_send_goal(goal);
@@ -1419,10 +1419,10 @@ TEST_F(IntegrationTestFixture, TransitionPathLengthCoversSerializedAffineRoundin
 
   RaystarTransitionAction::Goal goal;
   goal.map_id = raystar_interfaces::computeMapId(map);
-  goal.tether_configurations = {first_configuration, second_configuration};
-  raystar_interfaces::msg::ConfigurationTransitionPair pair;
-  pair.from_configuration = 0;
-  pair.to_configuration = 1;
+  goal.rooted_reference_paths = {first_configuration, second_configuration};
+  raystar_interfaces::msg::ReferenceTransitionPair pair;
+  pair.from_reference = 0;
+  pair.to_reference = 1;
   goal.transition_pairs = {pair};
   goal.allow_unknown = false;
 
@@ -1480,10 +1480,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsNonTautConfigurationReferen
   goal.allow_unknown = false;
   goal.reference_path_policy =
     RaystarTransitionAction::Goal::REFERENCE_PATHS_MUST_BE_TAUT;
-  goal.tether_configurations = {detour};
-  raystar_interfaces::msg::ConfigurationTransitionPair identity;
-  identity.from_configuration = 0;
-  identity.to_configuration = 0;
+  goal.rooted_reference_paths = {detour};
+  raystar_interfaces::msg::ReferenceTransitionPair identity;
+  identity.from_reference = 0;
+  identity.to_reference = 0;
   goal.transition_pairs = {identity};
 
   auto goal_future = client->async_send_goal(goal);
@@ -1523,10 +1523,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphRejectsUnknownReferencePathPolicy)
   goal.map_id = raystar_interfaces::computeMapId(makeTestGrid());
   goal.allow_unknown = false;
   goal.reference_path_policy = 255;
-  goal.tether_configurations = {home};
-  raystar_interfaces::msg::ConfigurationTransitionPair identity;
-  identity.from_configuration = 0;
-  identity.to_configuration = 0;
+  goal.rooted_reference_paths = {home};
+  raystar_interfaces::msg::ReferenceTransitionPair identity;
+  identity.from_reference = 0;
+  identity.to_reference = 0;
   goal.transition_pairs = {identity};
 
   auto goal_future = client->async_send_goal(goal);
@@ -1573,10 +1573,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphMayShortenUntautConfigurationRefer
   goal.allow_unknown = false;
   goal.reference_path_policy =
     RaystarTransitionAction::Goal::REFERENCE_PATHS_MAY_BE_UNTAUT;
-  goal.tether_configurations = {home, detour};
-  raystar_interfaces::msg::ConfigurationTransitionPair pair;
-  pair.from_configuration = 0;
-  pair.to_configuration = 1;
+  goal.rooted_reference_paths = {home, detour};
+  raystar_interfaces::msg::ReferenceTransitionPair pair;
+  pair.from_reference = 0;
+  pair.to_reference = 1;
   goal.transition_pairs = {pair};
 
   auto goal_future = client->async_send_goal(goal);
@@ -1675,10 +1675,10 @@ TEST_F(IntegrationTestFixture, TransitionGraphUsesRawContourAfterSimplifiedPlann
   transition_goal.expected_environment_id = planning_wrapped.result->result_info.environment_id;
   transition_goal.reference_path_policy =
     RaystarTransitionAction::Goal::REFERENCE_PATHS_MAY_BE_UNTAUT;
-  transition_goal.tether_configurations = {home, raw_free_untaut_reference};
-  raystar_interfaces::msg::ConfigurationTransitionPair pair;
-  pair.from_configuration = 0;
-  pair.to_configuration = 1;
+  transition_goal.rooted_reference_paths = {home, raw_free_untaut_reference};
+  raystar_interfaces::msg::ReferenceTransitionPair pair;
+  pair.from_reference = 0;
+  pair.to_reference = 1;
   transition_goal.transition_pairs = {pair};
   transition_goal.allow_unknown = false;
 
@@ -1751,7 +1751,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphUsesRawContourAfterSimplifiedPlann
   nav_msgs::msg::Path colliding_reference;
   colliding_reference.header.frame_id = "map";
   colliding_reference.poses = {base, pose(49.5, 25.5), endpoint};
-  colliding_goal.tether_configurations = {home, colliding_reference};
+  colliding_goal.rooted_reference_paths = {home, colliding_reference};
   auto colliding_goal_future = transition_client->async_send_goal(colliding_goal);
   ASSERT_TRUE(waitForFuture(executor, colliding_goal_future, 5s));
   const auto colliding_handle = colliding_goal_future.get();
@@ -1766,7 +1766,7 @@ TEST_F(IntegrationTestFixture, TransitionGraphUsesRawContourAfterSimplifiedPlann
             RaystarTransitionAction::Result::STATUS_INVALID_REQUEST);
   EXPECT_EQ(colliding_wrapped.result->completed_transition_count, 0u);
   EXPECT_TRUE(colliding_wrapped.result->transitions.empty());
-  EXPECT_NE(colliding_wrapped.result->message.find("Tether configuration 1"), std::string::npos);
+  EXPECT_NE(colliding_wrapped.result->message.find("Rooted reference 1"), std::string::npos);
   EXPECT_NE(colliding_wrapped.result->message.find("collision-free reference"),
             std::string::npos);
 }
@@ -2978,7 +2978,7 @@ TEST_F(IntegrationTestFixture, DynamicParametersAreDescribedAndUpdatedAtomically
     {"max_k", 1, max_int, false},
     {"max_cost_bounded_paths", 1, max_int, false},
     {"max_multi_goal_count", 1, max_int, false},
-    {"max_transition_configurations", 1, max_int, false},
+    {"max_transition_references", 1, max_int, false},
     {"max_transition_pairs", 1, max_int, false},
     {"max_nodes", 1, max_int, false},
     {"planning_timeout_ms", 1, max_timeout, false},
@@ -3014,7 +3014,7 @@ TEST_F(IntegrationTestFixture, DynamicParametersAreDescribedAndUpdatedAtomically
     "max_k",
     "max_cost_bounded_paths",
     "max_multi_goal_count",
-    "max_transition_configurations",
+    "max_transition_references",
     "max_transition_pairs",
     "occupied_threshold",
     "path_visualization_republish_period_ms",

@@ -126,9 +126,9 @@ def generate_launch_description():
             description="Goal-array admission limit for one shared-tree request.",
         ),
         DeclareLaunchArgument(
-            "max_transition_configurations",
+            "max_transition_references",
             default_value="4096",
-            description="Tether-configuration admission limit for one UPS batch.",
+            description="Rooted-reference admission limit for one UPS batch.",
         ),
         DeclareLaunchArgument(
             "max_transition_pairs",
@@ -203,8 +203,8 @@ def generate_launch_description():
                     "max_cost_bounded_paths"
                 ),
                 "max_multi_goal_count": _int_parameter("max_multi_goal_count"),
-                "max_transition_configurations": _int_parameter(
-                    "max_transition_configurations"
+                "max_transition_references": _int_parameter(
+                    "max_transition_references"
                 ),
                 "max_transition_pairs": _int_parameter("max_transition_pairs"),
                 "max_nodes": _int_parameter("max_nodes"),

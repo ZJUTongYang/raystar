@@ -15,8 +15,8 @@
 namespace raystar {
 
 // Polymap construction is not map-only: contour extraction selects the free
-// component containing base, and obstacle simplification protects the exact
-// continuous base/goal positions.  Keep those inputs in the cache identity so
+// component containing the root, and obstacle simplification protects the exact
+// continuous root/goal positions.  Keep those inputs in the cache identity so
 // a completed triangulation is reused only for an equivalent construction.
 struct TransitionEnvironmentEndpoint {
   int cell_x = 0;
@@ -62,11 +62,11 @@ class TransitionEnvironmentKey {
 public:
   TransitionEnvironmentKey(std::uint64_t map_generation,
                            TransitionEnvironmentPolicy policy,
-                           TransitionEnvironmentEndpoint base,
+                           TransitionEnvironmentEndpoint root,
                            std::vector<TransitionEnvironmentEndpoint> goals)
     : map_generation_(map_generation)
     , policy_(policy)
-    , base_(std::move(base))
+    , root_(std::move(root))
     , goals_(std::move(goals)) {
     // Goal order and duplicate goal entries do not affect either reachability
     // or the protected-point membership checks used by simplification.
@@ -76,13 +76,13 @@ public:
 
   [[nodiscard]] bool operator==(const TransitionEnvironmentKey& other) const noexcept {
     return map_generation_ == other.map_generation_ && policy_ == other.policy_ &&
-           base_ == other.base_ && goals_ == other.goals_;
+           root_ == other.root_ && goals_ == other.goals_;
   }
 
 private:
   std::uint64_t map_generation_ = 0;
   TransitionEnvironmentPolicy policy_;
-  TransitionEnvironmentEndpoint base_;
+  TransitionEnvironmentEndpoint root_;
   std::vector<TransitionEnvironmentEndpoint> goals_;
 };
 

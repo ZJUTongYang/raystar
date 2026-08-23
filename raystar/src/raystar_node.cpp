@@ -117,7 +117,7 @@ RaystarNode::RaystarNode(const rclcpp::NodeOptions& options) : Node("raystar", o
   RCLCPP_INFO(get_logger(),
               "Raystar node initialized: occupied_threshold=%d "
               "max_k=%d max_cost_bounded_paths=%zu max_multi_goal_count=%zu "
-              "max_transition_configurations=%zu max_transition_pairs=%zu max_nodes=%zu "
+              "max_transition_references=%zu max_transition_pairs=%zu max_nodes=%zu "
               "planning_timeout_ms=%lld max_map_cells=%zu max_map_bytes=%zu "
               "max_path_points=%zu max_debug_nodes=%zu max_response_bytes=%zu "
               "path_visualization_republish_period_ms=%lld map_topic=%s",
@@ -125,7 +125,7 @@ RaystarNode::RaystarNode(const rclcpp::NodeOptions& options) : Node("raystar", o
               configuration.planning.max_k,
               configuration.planning.max_cost_bounded_paths,
               configuration.planning.max_multi_goal_count,
-              configuration.planning.max_transition_configurations,
+              configuration.planning.max_transition_references,
               configuration.planning.max_transition_pairs,
               configuration.planning.max_nodes,
               static_cast<long long>(configuration.planning.planning_timeout.count()),
@@ -169,7 +169,7 @@ bool RaystarNode::loadRequestConfiguration(RequestConfiguration& configuration,
   const auto parameters = get_parameters({"max_k",
                                           "max_cost_bounded_paths",
                                           "max_multi_goal_count",
-                                          "max_transition_configurations",
+                                          "max_transition_references",
                                           "max_transition_pairs",
                                           "max_nodes",
                                           "planning_timeout_ms",
@@ -192,7 +192,7 @@ bool RaystarNode::loadRequestConfiguration(RequestConfiguration& configuration,
   const int64_t max_k = parameters[0].as_int();
   const int64_t max_cost_bounded_paths = parameters[1].as_int();
   const int64_t max_multi_goal_count = parameters[2].as_int();
-  const int64_t max_transition_configurations = parameters[3].as_int();
+  const int64_t max_transition_references = parameters[3].as_int();
   const int64_t max_transition_pairs = parameters[4].as_int();
   const int64_t max_nodes = parameters[5].as_int();
   const int64_t planning_timeout_ms = parameters[6].as_int();
@@ -207,8 +207,8 @@ bool RaystarNode::loadRequestConfiguration(RequestConfiguration& configuration,
   configuration.planning.max_k = static_cast<int>(max_k);
   configuration.planning.max_cost_bounded_paths = static_cast<size_t>(max_cost_bounded_paths);
   configuration.planning.max_multi_goal_count = static_cast<size_t>(max_multi_goal_count);
-  configuration.planning.max_transition_configurations =
-    static_cast<size_t>(max_transition_configurations);
+  configuration.planning.max_transition_references =
+    static_cast<size_t>(max_transition_references);
   configuration.planning.max_transition_pairs = static_cast<size_t>(max_transition_pairs);
   configuration.planning.max_nodes = static_cast<size_t>(max_nodes);
   configuration.planning.planning_timeout = std::chrono::milliseconds(planning_timeout_ms);
@@ -321,7 +321,7 @@ std::shared_ptr<const Polymap> RaystarNode::findCachedTransitionEnvironment(
   const raystar_interfaces::MapId& map_id,
   bool allow_unknown,
   const RequestConfiguration& configuration,
-  const PolymapEndpoint& base,
+  const PolymapEndpoint& root,
   const std::vector<PolymapEndpoint>& goals) {
   std::lock_guard<std::mutex> lock(map_cache_mutex_);
   if (!cached_map_.message || cached_map_.message.get() != &grid ||
@@ -336,14 +336,14 @@ std::shared_ptr<const Polymap> RaystarNode::findCachedTransitionEnvironment(
   cache_goals.reserve(goals.size());
   for (const auto& goal : goals) cache_goals.emplace_back(goal);
   return transition_environment_cache_.find(TransitionEnvironmentKey(
-    cached_map_.generation, policy, TransitionEnvironmentEndpoint(base), std::move(cache_goals)));
+    cached_map_.generation, policy, TransitionEnvironmentEndpoint(root), std::move(cache_goals)));
 }
 
 void RaystarNode::cacheCompletedTransitionEnvironment(const nav_msgs::msg::OccupancyGrid& grid,
                                                       const raystar_interfaces::MapId& map_id,
                                                       bool allow_unknown,
                                                       const RequestConfiguration& configuration,
-                                                      const PolymapEndpoint& base,
+                                                      const PolymapEndpoint& root,
                                                       const std::vector<PolymapEndpoint>& goals,
                                                       std::shared_ptr<const Polymap> environment) {
   if (!environment)
@@ -362,7 +362,7 @@ void RaystarNode::cacheCompletedTransitionEnvironment(const nav_msgs::msg::Occup
   for (const auto& goal : goals) cache_goals.emplace_back(goal);
   transition_environment_cache_.store(
     TransitionEnvironmentKey(
-      cached_map_.generation, policy, TransitionEnvironmentEndpoint(base), std::move(cache_goals)),
+      cached_map_.generation, policy, TransitionEnvironmentEndpoint(root), std::move(cache_goals)),
     std::move(environment));
 }
 

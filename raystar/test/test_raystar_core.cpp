@@ -963,7 +963,7 @@ TEST(RaystarCore, PlanAroundObstacle) {
   EXPECT_GE(result.path_solutions.size(), 1u);
 }
 
-TEST(RaystarCore, UpsRemovesCommonTetherPrefixAndCrossesTriangleInteriors) {
+TEST(RaystarCore, UpsRemovesCommonReferencePrefixAndCrossesTriangleInteriors) {
   RaystarCore core;
   const Point2d base{5.5, 15.5};
   const auto plan = core.plan(makeSimpleMap(), base, Point2d{25.5, 15.5}, 1, false);
@@ -1024,14 +1024,14 @@ TEST(RaystarCore, UpsBatchEvaluatesDirectedPairsAndIdentityTransitions) {
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_EQ(plan.path_solutions.size(), 2u);
   ASSERT_NE(plan.polymap, nullptr);
-  const std::vector<ConfigurationTransitionPair> pairs{{0, 0}, {0, 1}, {1, 0}};
+  const std::vector<ReferenceTransitionPair> pairs{{0, 0}, {0, 1}, {1, 0}};
 
   const auto batch =
-    RaystarCore::shortenConfigurationTransitions(*plan.polymap, plan.path_solutions, pairs);
+    RaystarCore::shortenReferenceTransitions(*plan.polymap, plan.path_solutions, pairs);
 
   ASSERT_TRUE(batch) << batch.message;
   ASSERT_EQ(batch.transitions.size(), pairs.size());
-  EXPECT_EQ(batch.transitions[0].pair.from_configuration, 0u);
+  EXPECT_EQ(batch.transitions[0].pair.from_reference, 0u);
   ASSERT_TRUE(batch.transitions[0].shortening) << batch.transitions[0].shortening.message;
   EXPECT_DOUBLE_EQ(batch.transitions[0].shortening.path_cost, 0.0);
   ASSERT_TRUE(batch.transitions[1].shortening) << batch.transitions[1].shortening.message;
@@ -1046,19 +1046,19 @@ TEST(RaystarCore, UpsBatchRejectsPairIndicesAtomicallyAndSupportsCancellation) {
   ASSERT_TRUE(plan.success) << plan.message;
   ASSERT_NE(plan.polymap, nullptr);
 
-  const auto invalid = RaystarCore::shortenConfigurationTransitions(
+  const auto invalid = RaystarCore::shortenReferenceTransitions(
     *plan.polymap, plan.path_solutions, {{0, 0}, {0, 1}});
   EXPECT_EQ(invalid.status, TransitionBatchStatus::invalid_request);
   EXPECT_TRUE(invalid.transitions.empty());
 
   const StopToken stop([]() { return true; });
-  const auto canceled = RaystarCore::shortenConfigurationTransitions(
+  const auto canceled = RaystarCore::shortenReferenceTransitions(
     *plan.polymap, plan.path_solutions, {{0, 0}}, stop);
   EXPECT_EQ(canceled.status, TransitionBatchStatus::stopped);
   EXPECT_TRUE(canceled.transitions.empty());
 }
 
-TEST(RaystarCore, UpsRejectsConfigurationsWithDifferentTetherBases) {
+TEST(RaystarCore, UpsRejectsReferencesWithDifferentRoots) {
   RaystarCore core;
   const auto plan = core.plan(makeOpenMap(), Point2d{2.5, 2.5}, Point2d{17.5, 17.5}, 1, false);
   ASSERT_TRUE(plan.success) << plan.message;
@@ -1069,7 +1069,7 @@ TEST(RaystarCore, UpsRejectsConfigurationsWithDifferentTetherBases) {
   const auto transition = RaystarCore::shortenWithinHomotopy(*plan.polymap, first, second);
 
   EXPECT_EQ(transition.status, HomotopyShorteningStatus::invalid_reference);
-  EXPECT_NE(transition.message.find("base"), std::string::npos);
+  EXPECT_NE(transition.message.find("root"), std::string::npos);
 }
 
 TEST(RaystarCore, PathSolutionsRetainCompleteDeepAncestorChains) {
