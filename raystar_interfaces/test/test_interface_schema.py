@@ -13,7 +13,7 @@ from raystar_interfaces.action import (
     PlanRaystarPaths,
 )
 from raystar_interfaces.msg import (
-    ConfigurationTransitionPair,
+    ReferenceTransitionPair,
     DebugNode,
     GoalPathResult,
     HomotopyTransitionResult,
@@ -104,8 +104,8 @@ def test_transition_graph_action_schema_contract():
         "map_id": "unique_identifier_msgs/UUID",
         "expected_environment_id": "unique_identifier_msgs/UUID",
         "reference_path_policy": "uint8",
-        "tether_configurations": "sequence<nav_msgs/Path>",
-        "transition_pairs": "sequence<raystar_interfaces/ConfigurationTransitionPair>",
+        "rooted_reference_paths": "sequence<nav_msgs/Path>",
+        "transition_pairs": "sequence<raystar_interfaces/ReferenceTransitionPair>",
         "allow_unknown": "boolean",
     }
     assert _field_names_and_types(BuildRaystarTransitionGraph.Result) == {
@@ -126,12 +126,12 @@ def test_transition_graph_action_schema_contract():
 
 
 def test_message_schema_contract():
-    assert _field_names_and_types(ConfigurationTransitionPair) == {
-        "from_configuration": "uint32",
-        "to_configuration": "uint32",
+    assert _field_names_and_types(ReferenceTransitionPair) == {
+        "from_reference": "uint32",
+        "to_reference": "uint32",
     }
     assert _field_names_and_types(HomotopyTransitionResult) == {
-        "pair": "raystar_interfaces/ConfigurationTransitionPair",
+        "pair": "raystar_interfaces/ReferenceTransitionPair",
         "status": "uint8",
         "path": "nav_msgs/Path",
         "path_length": "double",

@@ -4,7 +4,7 @@ uint8 STATUS_NO_CORRIDOR=2
 uint8 STATUS_STOPPED=3
 uint8 STATUS_FAILURE=4
 
-raystar_interfaces/ConfigurationTransitionPair pair
+raystar_interfaces/ReferenceTransitionPair pair
 uint8 status
 nav_msgs/Path path
 # For STATUS_SUCCESS, the least binary64 value that conservatively upper-bounds

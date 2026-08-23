@@ -13,7 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/BuildRaystarTransitionGraph.action"
   "action/PlanRaystarGoalSet.action"
   "action/PlanRaystarPaths.action"
-  "msg/ConfigurationTransitionPair.msg"
+  "msg/ReferenceTransitionPair.msg"
   "msg/DebugNode.msg"
   "msg/GoalPathResult.msg"
   "msg/HomotopyTransitionResult.msg"
