@@ -103,7 +103,7 @@ map server and lifecycle manager only to publish and activate its test map.
 `CGAL >= 5.4` is accepted by the build. The two versions in the table are the
 CI-verified distribution baselines; newer releases, including CGAL 6.x, are
 not yet a CI-backed compatibility claim. See
-[COMPATIBILITY.md](raystar/COMPATIBILITY.md) for details.
+[COMPATIBILITY.md](COMPATIBILITY.md) for details.
 
 ## Build from source
 
@@ -152,8 +152,8 @@ clients must refresh them from `MapStatus` after restart. UPS now retains raw
 reachable contours for reference shortening. Those contours consume the
 unused `max_map_bytes` budget, so a map that passes normal planning admission
 can still require a larger byte budget for transition construction. See
-[COMPATIBILITY.md](raystar/COMPATIBILITY.md) and
-[LAUNCH.md](raystar/LAUNCH.md) for the complete migration and resource
+[COMPATIBILITY.md](COMPATIBILITY.md) and
+[LAUNCH.md](LAUNCH.md) for the complete migration and resource
 contracts.
 
 ## Maps and deployment
@@ -175,7 +175,7 @@ ros2 launch raystar raystar_demo.launch.py \
 ```
 
 Namespaces, endpoint remapping, map requirements, resource parameters, and
-manual bringup are documented in [LAUNCH.md](raystar/LAUNCH.md).
+manual bringup are documented in [LAUNCH.md](LAUNCH.md).
 
 ## ROS API at a glance
 
@@ -254,8 +254,8 @@ API metres; consult `--help` before comparing results.
 
 | Document | Contents |
 |---|---|
-| [Launch guide](raystar/LAUNCH.md) | Panel bringup, custom maps, namespaces, parameters, and deployment |
-| [Compatibility contract](raystar/COMPATIBILITY.md) | Supported platforms, CGAL dependencies, rosdep, and install relocation |
+| [Launch guide](LAUNCH.md) | Panel bringup, custom maps, namespaces, parameters, and deployment |
+| [Compatibility contract](COMPATIBILITY.md) | Supported platforms, CGAL dependencies, rosdep, and install relocation |
 | [ROS interfaces](raystar_interfaces/action/PlanRaystarPaths.action) | Authoritative request, result, status, and completion schemas |
 
 ## Citation
