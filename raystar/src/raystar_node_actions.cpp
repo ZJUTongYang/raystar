@@ -30,7 +30,11 @@ namespace raystar {
 
 using namespace node_impl;
 
-void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goal_handle) {
+template <typename GoalHandleT>
+void RaystarNode::finishActionAcceptance(
+  const std::shared_ptr<GoalHandleT>& goal_handle,
+  const std::function<PendingActionJob(const std::shared_ptr<std::atomic<bool>>&)>& make_job,
+  const std::function<void(const std::shared_ptr<GoalHandleT>&)>& abort_with_unavailable) {
   std::shared_ptr<std::atomic<bool>> cancel_requested;
   {
     std::lock_guard<std::mutex> lock(action_state_mutex_);
@@ -51,7 +55,7 @@ void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goa
   {
     std::lock_guard<std::mutex> lock(action_worker_mutex_);
     if (!stop_action_worker_ && !pending_action_job_) {
-      pending_action_job_.emplace(ActionJob{goal_handle, cancel_requested});
+      pending_action_job_.emplace(make_job(cancel_requested));
       queued = true;
     }
   }
@@ -72,22 +76,33 @@ void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goa
     planning_busy_.store(false, std::memory_order_release);
   }
   try {
-    auto result = std::make_shared<PlanAction::Result>();
-    const auto rejected_goal = goal_handle ? goal_handle->get_goal() : nullptr;
-    if (rejected_goal) {
-      initializePlanningResponse(*result,
-                                 rejected_goal->search_mode,
-                                 rejected_goal->k,
-                                 rejected_goal->max_path_length,
-                                 rejected_goal->map_id,
-                                 rejected_goal->include_debug);
-    } else {
-      resetPlanningResponse(*result);
-    }
-    result->result_info.status = PlanningResultInfo::STATUS_FAILED;
-    result->message = "Raystar Action worker is unavailable";
-    goal_handle->abort(result);
+    abort_with_unavailable(goal_handle);
   } catch (...) {}
+}
+
+void RaystarNode::handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goal_handle) {
+  finishActionAcceptance<PlanGoalHandle>(
+    goal_handle,
+    [goal_handle](const std::shared_ptr<std::atomic<bool>>& cancel_requested) -> PendingActionJob {
+      return ActionJob{goal_handle, cancel_requested};
+    },
+    [](const std::shared_ptr<PlanGoalHandle>& handle) {
+      auto result = std::make_shared<PlanAction::Result>();
+      const auto rejected_goal = handle->get_goal();
+      if (rejected_goal) {
+        initializePlanningResponse(*result,
+                                   rejected_goal->search_mode,
+                                   rejected_goal->k,
+                                   rejected_goal->max_path_length,
+                                   rejected_goal->map_id,
+                                   rejected_goal->include_debug);
+      } else {
+        resetPlanningResponse(*result);
+      }
+      result->result_info.status = PlanningResultInfo::STATUS_FAILED;
+      result->message = "Raystar Action worker is unavailable";
+      handle->abort(result);
+    });
 }
 
 rclcpp_action::GoalResponse RaystarNode::handleGoalSetActionGoal(
@@ -131,48 +146,18 @@ rclcpp_action::CancelResponse RaystarNode::handleGoalSetActionCancel(
 
 void RaystarNode::handleGoalSetActionAccepted(
   const std::shared_ptr<GoalSetGoalHandle> goal_handle) {
-  std::shared_ptr<std::atomic<bool>> cancel_requested;
-  {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    if (goal_handle && active_goal_reserved_ && active_goal_id_ == goal_handle->get_goal_id())
-      cancel_requested = active_goal_cancel_;
-  }
-  if (!goal_handle || !cancel_requested) {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    active_goal_reserved_ = false;
-    active_goal_cancel_.reset();
-    planning_busy_.store(false, std::memory_order_release);
-    return;
-  }
-
-  bool queued = false;
-  {
-    std::lock_guard<std::mutex> lock(action_worker_mutex_);
-    if (!stop_action_worker_ && !pending_action_job_) {
-      pending_action_job_.emplace(GoalSetActionJob{goal_handle, cancel_requested});
-      queued = true;
-    }
-  }
-  if (queued) {
-    action_worker_cv_.notify_one();
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    if (active_goal_reserved_ && active_goal_id_ == goal_handle->get_goal_id()) {
-      active_goal_reserved_ = false;
-      active_goal_cancel_.reset();
-    }
-    planning_busy_.store(false, std::memory_order_release);
-  }
-  try {
-    auto result = std::make_shared<GoalSetAction::Result>();
-    result->result_info.map_id = goal_handle->get_goal()->map_id;
-    result->result_info.status = PlanningResultInfo::STATUS_FAILED;
-    result->message = "Raystar Action worker is unavailable";
-    goal_handle->abort(result);
-  } catch (...) {}
+  finishActionAcceptance<GoalSetGoalHandle>(
+    goal_handle,
+    [goal_handle](const std::shared_ptr<std::atomic<bool>>& cancel_requested) -> PendingActionJob {
+      return GoalSetActionJob{goal_handle, cancel_requested};
+    },
+    [](const std::shared_ptr<GoalSetGoalHandle>& handle) {
+      auto result = std::make_shared<GoalSetAction::Result>();
+      result->result_info.map_id = handle->get_goal()->map_id;
+      result->result_info.status = PlanningResultInfo::STATUS_FAILED;
+      result->message = "Raystar Action worker is unavailable";
+      handle->abort(result);
+    });
 }
 
 rclcpp_action::GoalResponse RaystarNode::handleTransitionActionGoal(
@@ -216,48 +201,18 @@ rclcpp_action::CancelResponse RaystarNode::handleTransitionActionCancel(
 
 void RaystarNode::handleTransitionActionAccepted(
   const std::shared_ptr<TransitionGoalHandle> goal_handle) {
-  std::shared_ptr<std::atomic<bool>> cancel_requested;
-  {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    if (goal_handle && active_goal_reserved_ && active_goal_id_ == goal_handle->get_goal_id())
-      cancel_requested = active_goal_cancel_;
-  }
-  if (!goal_handle || !cancel_requested) {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    active_goal_reserved_ = false;
-    active_goal_cancel_.reset();
-    planning_busy_.store(false, std::memory_order_release);
-    return;
-  }
-
-  bool queued = false;
-  {
-    std::lock_guard<std::mutex> lock(action_worker_mutex_);
-    if (!stop_action_worker_ && !pending_action_job_) {
-      pending_action_job_.emplace(TransitionActionJob{goal_handle, cancel_requested});
-      queued = true;
-    }
-  }
-  if (queued) {
-    action_worker_cv_.notify_one();
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(action_state_mutex_);
-    if (active_goal_reserved_ && active_goal_id_ == goal_handle->get_goal_id()) {
-      active_goal_reserved_ = false;
-      active_goal_cancel_.reset();
-    }
-    planning_busy_.store(false, std::memory_order_release);
-  }
-  try {
-    auto result = std::make_shared<TransitionAction::Result>();
-    result->map_id = goal_handle->get_goal()->map_id;
-    result->status = TransitionAction::Result::STATUS_FAILED;
-    result->message = "Raystar Action worker is unavailable";
-    goal_handle->abort(result);
-  } catch (...) {}
+  finishActionAcceptance<TransitionGoalHandle>(
+    goal_handle,
+    [goal_handle](const std::shared_ptr<std::atomic<bool>>& cancel_requested) -> PendingActionJob {
+      return TransitionActionJob{goal_handle, cancel_requested};
+    },
+    [](const std::shared_ptr<TransitionGoalHandle>& handle) {
+      auto result = std::make_shared<TransitionAction::Result>();
+      result->map_id = handle->get_goal()->map_id;
+      result->status = TransitionAction::Result::STATUS_FAILED;
+      result->message = "Raystar Action worker is unavailable";
+      handle->abort(result);
+    });
 }
 
 void RaystarNode::actionWorkerLoop() noexcept {

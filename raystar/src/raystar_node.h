@@ -17,6 +17,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -133,6 +134,17 @@ private:
                                                std::shared_ptr<const PlanAction::Goal> goal);
   rclcpp_action::CancelResponse handleActionCancel(
     const std::shared_ptr<PlanGoalHandle> goal_handle);
+
+  // Shared tail of handle*ActionAccepted(): reserve the queued cancellation
+  // token, hand the job to the action worker, and otherwise release admission
+  // and abort with make_job/abort_with_unavailable filling in the one thing
+  // that differs per Action (its Job variant and its Result type).
+  template <typename GoalHandleT>
+  void finishActionAcceptance(
+    const std::shared_ptr<GoalHandleT>& goal_handle,
+    const std::function<PendingActionJob(const std::shared_ptr<std::atomic<bool>>&)>& make_job,
+    const std::function<void(const std::shared_ptr<GoalHandleT>&)>& abort_with_unavailable);
+
   void handleActionAccepted(const std::shared_ptr<PlanGoalHandle> goal_handle);
   void executeAction(const std::shared_ptr<PlanGoalHandle> goal_handle,
                      const std::shared_ptr<std::atomic<bool>>& cancel_requested) noexcept;
