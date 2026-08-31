@@ -795,5 +795,4 @@ void RaystarNode::executeTransitionAction(
   }
 }
 
-
 }  // namespace raystar
