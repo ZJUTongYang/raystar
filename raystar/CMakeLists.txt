@@ -214,6 +214,14 @@ if(BUILD_TESTING)
   )
   target_link_libraries(test_visibility_reference raystar_core)
 
+  ament_add_gtest(test_visibility_degenerate
+    test/test_visibility_degenerate.cpp
+  )
+  target_include_directories(test_visibility_degenerate PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_visibility_degenerate raystar_core)
+
   ament_add_gtest(test_topov_regression
     test/test_topov_regression.cpp
   )

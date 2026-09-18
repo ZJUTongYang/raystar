@@ -53,6 +53,51 @@ inline int safeRoundedIntCast(double value) {
   return isRepresentableAsInt(rounded) ? static_cast<int>(rounded) : 0;
 }
 
+// General-position offset for a planning root that sits exactly on a grid
+// vertex: the x:y ratio 1:sqrt(2) is irrational, so no rational-slope
+// obstacle edge through that vertex stays exactly collinear with the offset
+// ray.  The magnitude is far below any representable integer-grid feature.
+constexpr double kDegenerateRootShiftX = 1e-6;
+constexpr double kDegenerateRootShiftY = 1e-6 * 1.4142135623730951;
+
+inline bool rootSitsOnGridVertex(double x, double y) {
+  return std::floor(x) == x && std::floor(y) == y;
+}
+
+// The exact visibility sweep is deliberately fail-closed when a root ray is
+// exactly collinear with an obstacle edge, which can only happen when the
+// root is an integer grid vertex (all obstacle edges are integer-grid
+// segments).  Retry once from the general-position offset above.  On
+// success io_start_x/io_start_y are updated in place so the whole search,
+// its certificates, and the reported solutions consistently use the offset
+// root; the solved instance moves by less than 2e-6 grid units.  Any
+// failure propagates the retry's own status unchanged.
+inline OperationStatus retryRootVisibilityFromGeneralPosition(
+  Polymap& polymap,
+  double& io_start_x,
+  double& io_start_y,
+  VisibilityRegion& visibility_region,
+  const StopToken& stop_token,
+  std::string& error) {
+  if (!rootSitsOnGridVertex(io_start_x, io_start_y))
+    return OperationStatus::failure;
+  const double shifted_x = io_start_x + kDegenerateRootShiftX;
+  const double shifted_y = io_start_y + kDegenerateRootShiftY;
+  std::string interior_error;
+  if (polymap.validateFreeSpaceInterior(Point2d{shifted_x, shifted_y}, stop_token,
+                                         &interior_error) != OperationStatus::success) {
+    error = interior_error;
+    return OperationStatus::failure;
+  }
+  const auto status = polymap.getRootVisibilityRegion(Point2d{shifted_x, shifted_y},
+                                                      visibility_region, stop_token, &error);
+  if (status == OperationStatus::success) {
+    io_start_x = shifted_x;
+    io_start_y = shifted_y;
+  }
+  return status;
+}
+
 inline bool addCertifiedSegment(ConservativeBinary64PathLength& certificate,
                          const Point2d& first,
                          const Point2d& second) {

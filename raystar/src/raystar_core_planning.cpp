@@ -323,8 +323,8 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(const GridMap& grid_map,
 
   const int start_x = start.cell_.first;
   const int start_y = start.cell_.second;
-  const double start_gx = start.position_.first;
-  const double start_gy = start.position_.second;
+  double start_gx = start.position_.first;
+  double start_gy = start.position_.second;
   if (work_map.at(static_cast<unsigned int>(start_x), static_cast<unsigned int>(start_y)) != 0) {
     result.outcome = PlanningOutcome::invalid_request;
     result.message = "Invalid start: corresponding cell is occupied or on the map boundary";
@@ -593,13 +593,18 @@ MultiGoalPlanResult RaystarCore::planToGoalsWithinCosts(const GridMap& grid_map,
     if (parent_index == -1) {
       VisibilityRegion visibility;
       std::string visibility_error;
-      const Point2d start_position = {start_gx, start_gy};
-      const auto visibility_status =
+      Point2d start_position = {start_gx, start_gy};
+      OperationStatus visibility_status =
         theMap->getRootVisibilityRegion(start_position, visibility, stop_token, &visibility_error);
+      if (visibility_status == OperationStatus::failure)
+        visibility_status = retryRootVisibilityFromGeneralPosition(
+          *theMap, start_gx, start_gy, visibility, stop_token, visibility_error);
       if (visibility_status == OperationStatus::stopped || stop_token.poll())
         return stop_for_request(theMap, planner_start);
       if (visibility_status == OperationStatus::failure)
         return fail_planning("Root visibility calculation failed: " + visibility_error);
+      // The retry may have moved the root to its general-position offset.
+      start_position = {start_gx, start_gy};
       if (N_.size() >= limits.max_nodes)
         return stop_for_limit(PlanningLimitReached::max_nodes, theMap, planner_start);
 
@@ -995,8 +1000,8 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
   const int start_y = start.cell_.second;
   const int goal_x = goal.cell_.first;
   const int goal_y = goal.cell_.second;
-  const double start_gx = start.position_.first;
-  const double start_gy = start.position_.second;
+  double start_gx = start.position_.first;
+  double start_gy = start.position_.second;
   const double goal_gx = goal.position_.first;
   const double goal_gy = goal.position_.second;
 
@@ -1191,14 +1196,19 @@ PlanResult RaystarCore::plan(const GridMap& grid_map,
     if (parent_index == -1) {
       VisibilityRegion Vtemp;
       std::string visibility_error;
-      const Point2d start_position = {start_gx, start_gy};
-      const auto visibility_status =
+      Point2d start_position = {start_gx, start_gy};
+      OperationStatus visibility_status =
         theMap->getRootVisibilityRegion(start_position, Vtemp, stop_token, &visibility_error);
+      if (visibility_status == OperationStatus::failure)
+        visibility_status = retryRootVisibilityFromGeneralPosition(
+          *theMap, start_gx, start_gy, Vtemp, stop_token, visibility_error);
       if (visibility_status == OperationStatus::stopped || stop_token.poll())
         return stop_for_request();
       if (visibility_status == OperationStatus::failure) {
         return fail_planning("Root visibility calculation failed: " + visibility_error);
       }
+      // The retry may have moved the root to its general-position offset.
+      start_position = {start_gx, start_gy};
       if (N_.size() >= limits.max_nodes)
         return stop_for_limit(PlanningLimitReached::max_nodes);
 
