@@ -321,13 +321,29 @@ inline ExactSegmentRelationResult classifyExactSegments(const exact_geometry::Po
                                                  const exact_geometry::Point& first_to,
                                                  const exact_geometry::Point& second_from,
                                                  const exact_geometry::Point& second_to) {
-  const auto first_segment = exact_geometry::Kernel::Segment_2(first_from, first_to);
-  const auto second_segment = exact_geometry::Kernel::Segment_2(second_from, second_to);
-
   const CGAL::Orientation second_from_side = CGAL::orientation(first_from, first_to, second_from);
   const CGAL::Orientation second_to_side = CGAL::orientation(first_from, first_to, second_to);
   const CGAL::Orientation first_from_side = CGAL::orientation(second_from, second_to, first_from);
   const CGAL::Orientation first_to_side = CGAL::orientation(second_from, second_to, first_to);
+
+  // Strict same-side rejection: open half-planes are convex, so a segment
+  // whose endpoints both lie strictly on one side of the other segment's
+  // supporting line cannot share any point with it.  This certifies the
+  // dominant disjoint case from the four orientations already computed,
+  // without constructing segments or running has_on.  Collinear or
+  // degenerate configurations fall through to the original endpoint
+  // analysis unchanged.
+  const auto strictly_same_side = [](CGAL::Orientation one, CGAL::Orientation other) {
+    return (one == CGAL::LEFT_TURN && other == CGAL::LEFT_TURN) ||
+           (one == CGAL::RIGHT_TURN && other == CGAL::RIGHT_TURN);
+  };
+  if (strictly_same_side(second_from_side, second_to_side) ||
+      strictly_same_side(first_from_side, first_to_side)) {
+    return {ExactSegmentRelation::disjoint, std::nullopt};
+  }
+
+  const auto first_segment = exact_geometry::Kernel::Segment_2(first_from, first_to);
+  const auto second_segment = exact_geometry::Kernel::Segment_2(second_from, second_to);
 
   if (oppositeOrientations(second_from_side, second_to_side) &&
       oppositeOrientations(first_from_side, first_to_side)) {
