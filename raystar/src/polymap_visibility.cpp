@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <raystar/polymap.h>
 #include "visibility_validation.h"
 #include <unordered_set>
@@ -1119,6 +1120,19 @@ bool Polymap::boundarySupportsConsecutiveImpl(const BoundaryEndpoint& prev,
 }
 
 bool Polymap::isInTri(int x1, int y1, int x2, int y2, int x3, int y3, double x, double y) {
+  // Exact axis-aligned rejection first: the triangle's bounding box
+  // contains the triangle, so a query point strictly outside the box is
+  // outside the closed triangle without any exact predicate.  The contour
+  // scans call this for every candidate corner against every obstacle
+  // vertex, and the overwhelming majority of queries are far away.
+  const int min_x = std::min({x1, x2, x3});
+  const int max_x = std::max({x1, x2, x3});
+  const int min_y = std::min({y1, y2, y3});
+  const int max_y = std::max({y1, y2, y3});
+  if (x < static_cast<double>(min_x) || x > static_cast<double>(max_x) ||
+      y < static_cast<double>(min_y) || y > static_cast<double>(max_y)) {
+    return false;
+  }
   const exact_geometry::Kernel::Triangle_2 triangle(
     exact_geometry::Point(x1, y1), exact_geometry::Point(x2, y2), exact_geometry::Point(x3, y3));
   return triangle.bounded_side(exact_geometry::Point(x, y)) != CGAL::ON_UNBOUNDED_SIDE;
