@@ -209,6 +209,7 @@ int clockwiseContourIndex(const std::vector<Obs>& obstacles) {
 
 PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
                                                  const std::vector<std::pair<int, int>>& newly_occupied_cells,
+                                                 const std::vector<std::pair<int, int>>& newly_freed_cells,
                                                  int start_x,
                                                  int start_y,
                                                  const Point2d& start_position,
@@ -244,8 +245,23 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
       changed = true;
     }
   }
+  for (const auto& cell : newly_freed_cells) {
+    if (cell.first < 0 || cell.second < 0 || cell.first >= base.xsize_ ||
+        cell.second >= base.ysize_) {
+      result.error = "Newly freed cell (" + std::to_string(cell.first) + ", " +
+                     std::to_string(cell.second) + ") is outside the base occupancy";
+      return result;
+    }
+    const size_t index =
+      static_cast<size_t>(cell.second) * static_cast<size_t>(base.xsize_) +
+      static_cast<size_t>(cell.first);
+    if (updated[index] != 0) {
+      updated[index] = 0;
+      changed = true;
+    }
+  }
   if (!changed) {
-    result.error = "No newly occupied cell changes the base occupancy";
+    result.error = "No newly occupied or freed cell changes the base occupancy";
     return result;
   }
 
@@ -287,6 +303,7 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
   bool declined = false;
   Polymap candidate(base,
                     newly_occupied_cells,
+                    newly_freed_cells,
                     start_x,
                     start_y,
                     start_position,
@@ -326,6 +343,7 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
 
 Polymap::Polymap(const Polymap& base,
                  const std::vector<std::pair<int, int>>& newly_occupied_cells,
+                 const std::vector<std::pair<int, int>>& newly_freed_cells,
                  int start_x,
                  int start_y,
                  const Point2d& start_position,
@@ -354,6 +372,14 @@ Polymap::Polymap(const Polymap& base,
       static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
       static_cast<size_t>(cell.first);
     data_[index] = 1;
+  }
+  // Frees override occupations of the same cell within one update (the
+  // applyOccupancyDelta wrapper pre-computes the same post-update grid).
+  for (const auto& cell : newly_freed_cells) {
+    const size_t index =
+      static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
+      static_cast<size_t>(cell.first);
+    data_[index] = 0;
   }
   vertices_location_x_flat_.resize(cell_count, -1);
   vertices_location_y_flat_.resize(cell_count, -1);

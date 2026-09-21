@@ -225,18 +225,23 @@ public:
                                                   const StopToken& stop_token,
                                                   const PlanningLimits& limits = PlanningLimits{});
 
-  // Incremental occupancy update.  Applies newly occupied cells on top of
-  // this Polymap's occupancy and rebuilds only what the change touches:
-  // contours whose raw (unsimplified) ring is unchanged keep their
-  // obstacle indices and simplified geometry bit-for-bit (see
+  // Incremental occupancy update.  Applies newly occupied and newly freed
+  // cells on top of this Polymap's occupancy and rebuilds only what the
+  // change touches: contours whose raw (unsimplified) ring is unchanged
+  // keep their obstacle indices and simplified geometry bit-for-bit (see
   // PolymapUpdateResult for the contract); changed/merged contours are
   // re-extracted and re-simplified under fresh appended indices; the CDT,
-  // vertex registry, and validation gates are rebuilt in full.  Geometric
-  // or assembly-stage failures fall back to a full rebuild (still a valid
-  // Polymap) and report fell_back_to_full_rebuild; request-admission
-  // failures (endpoints swallowed by new cells, malformed requests) fail
-  // outright, exactly like Polymap::create.  Deletion of occupied cells is
-  // not supported by this entry point.
+  // vertex registry, and validation gates are rebuilt in full.  Deletion
+  // needs no separate machinery: raw contours only bound REACHABLE free
+  // space, so freeing cells inside a sealed cavity changes no ring (a
+  // no-op freeze), while freeing cells that open a new passage changes
+  // the raw rings of every obstacle the newly reachable region touches,
+  // which the matching stage captures automatically (including islands
+  // appearing from a newly opened cavity).
+  // Geometric or assembly-stage failures fall back to a full rebuild
+  // (still a valid Polymap) and report fell_back_to_full_rebuild;
+  // request-admission failures (endpoints swallowed by new cells,
+  // malformed requests) fail outright, exactly like Polymap::create.
   //
   // Resource semantics: the fallback rebuild is budgeted against `limits`
   // like any Polymap::create.  The incremental path itself performs no
@@ -248,6 +253,7 @@ public:
   [[nodiscard]] static PolymapUpdateResult applyOccupancyDelta(
     const Polymap& base,
     const std::vector<std::pair<int, int>>& newly_occupied_cells,
+    const std::vector<std::pair<int, int>>& newly_freed_cells,
     int start_x,
     int start_y,
     const Point2d& start_position,
@@ -699,6 +705,7 @@ private:
   // and runs the assembly pipeline (implemented in polymap_incremental.cpp).
   Polymap(const Polymap& base,
           const std::vector<std::pair<int, int>>& newly_occupied_cells,
+          const std::vector<std::pair<int, int>>& newly_freed_cells,
           int start_x,
           int start_y,
           const Point2d& start_position,
