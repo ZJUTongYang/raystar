@@ -43,17 +43,15 @@ OperationStatus Polymap::getPolyObstacles(int start_x,
   return getPolyObstacles(start_x, start_y, goals, stop_token, std::nullopt);
 }
 
-OperationStatus Polymap::getPolyObstacles(
-  int start_x,
-  int start_y,
-  const std::vector<PolymapEndpoint>& goals,
-  const StopToken& stop_token,
-  std::optional<size_t> max_raw_contour_vertices) {
+OperationStatus Polymap::getPolyObstacles(int start_x,
+                                          int start_y,
+                                          const std::vector<PolymapEndpoint>& goals,
+                                          const StopToken& stop_token,
+                                          std::optional<size_t> max_raw_contour_vertices) {
   if (stop_token.poll())
     return OperationStatus::stopped;
   construction_error_.clear();
-  if (getPolyObstaclesImpl(
-        start_x, start_y, goals, stop_token, max_raw_contour_vertices)) {
+  if (getPolyObstaclesImpl(start_x, start_y, goals, stop_token, max_raw_contour_vertices)) {
     // obs_ now contains a newly extracted, unsimplified contour set.  Any
     // topology registry, CDT, facet table or visibility cache from a previous
     // build refers to different vertex indices and must not remain usable.
@@ -65,8 +63,7 @@ OperationStatus Polymap::getPolyObstacles(
     // reuse unchanged simplified contours under stable indices.
     raw_obstacles_.clear();
     raw_obstacles_.reserve(obs_.size());
-    for (const auto& obstacle : obs_)
-      raw_obstacles_.push_back(obstacle.ordered_vertices_);
+    for (const auto& obstacle : obs_) raw_obstacles_.push_back(obstacle.ordered_vertices_);
     std::fill(vertices_location_x_flat_.begin(), vertices_location_x_flat_.end(), -1);
     std::fill(vertices_location_y_flat_.begin(), vertices_location_y_flat_.end(), -1);
     clearCGALRelatedState();
@@ -88,13 +85,12 @@ OperationStatus Polymap::getPolyObstacles(
   return OperationStatus::failure;
 }
 
-bool Polymap::getPolyObstaclesImpl(
-  int start_x,
-  int start_y,
-  int goal_x,
-  int goal_y,
-  const StopToken& stop_token,
-  std::optional<size_t> max_raw_contour_vertices) {
+bool Polymap::getPolyObstaclesImpl(int start_x,
+                                   int start_y,
+                                   int goal_x,
+                                   int goal_y,
+                                   const StopToken& stop_token,
+                                   std::optional<size_t> max_raw_contour_vertices) {
   return getPolyObstaclesImpl(
     start_x,
     start_y,
@@ -145,9 +141,8 @@ bool Polymap::getPolyObstaclesImpl(int start_x,
     if (max_raw_contour_vertices && edges.size() > *max_raw_contour_vertices) {
       if (insertion.second)
         edges.erase(insertion.first);
-      construction_error_ =
-        "Reference-shortening raw contour exceeds the vertex budget " +
-        std::to_string(*max_raw_contour_vertices);
+      construction_error_ = "Reference-shortening raw contour exceeds the vertex budget " +
+                            std::to_string(*max_raw_contour_vertices);
       return false;
     }
     return true;
@@ -866,14 +861,13 @@ PolymapCreateResult Polymap::create(const GridMap& grid_map,
   return finishCreation(Polymap(grid_map, start_x, start_y, start_position, goals, stop_token));
 }
 
-PolymapCreateResult Polymap::createForReferenceShortening(
-  const GridMap& grid_map,
-  int start_x,
-  int start_y,
-  const Point2d& start_position,
-  const std::vector<PolymapEndpoint>& goals,
-  const StopToken& stop_token,
-  const PlanningLimits& limits) {
+PolymapCreateResult Polymap::createForReferenceShortening(const GridMap& grid_map,
+                                                          int start_x,
+                                                          int start_y,
+                                                          const Point2d& start_position,
+                                                          const std::vector<PolymapEndpoint>& goals,
+                                                          const StopToken& stop_token,
+                                                          const PlanningLimits& limits) {
   PolymapCreateResult result;
   MapResourceEstimate estimate;
   if (!validateMapResourceBudget(static_cast<size_t>(grid_map.width),
@@ -1005,8 +999,7 @@ Polymap::Polymap(const GridMap& grid_map,
     if (!construction_error_.empty()) {
       if (raw_contour_budget) {
         construction_error_ +=
-          " derived from max_map_bytes=" +
-          std::to_string(raw_contour_budget->max_map_bytes);
+          " derived from max_map_bytes=" + std::to_string(raw_contour_budget->max_map_bytes);
       }
       return;
     }
@@ -1024,12 +1017,11 @@ Polymap::Polymap(const GridMap& grid_map,
         return;
       }
       if (raw_contour_vertices > max_raw_contour_vertices ||
-          obstacle.ordered_vertices_.size() >
-            max_raw_contour_vertices - raw_contour_vertices) {
+          obstacle.ordered_vertices_.size() > max_raw_contour_vertices - raw_contour_vertices) {
         construction_error_ =
           "Reference-shortening raw contour exceeds the vertex budget " +
-          std::to_string(max_raw_contour_vertices) + " derived from max_map_bytes=" +
-          std::to_string(raw_contour_budget->max_map_bytes);
+          std::to_string(max_raw_contour_vertices) +
+          " derived from max_map_bytes=" + std::to_string(raw_contour_budget->max_map_bytes);
         return;
       }
       raw_contour_vertices += obstacle.ordered_vertices_.size();

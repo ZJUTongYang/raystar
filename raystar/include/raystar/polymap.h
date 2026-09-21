@@ -529,12 +529,11 @@ private:
                                                  int start_y,
                                                  const std::vector<PolymapEndpoint>& goals,
                                                  const StopToken& stop_token);
-  [[nodiscard]] OperationStatus getPolyObstacles(
-    int start_x,
-    int start_y,
-    const std::vector<PolymapEndpoint>& goals,
-    const StopToken& stop_token,
-    std::optional<size_t> max_raw_contour_vertices);
+  [[nodiscard]] OperationStatus getPolyObstacles(int start_x,
+                                                 int start_y,
+                                                 const std::vector<PolymapEndpoint>& goals,
+                                                 const StopToken& stop_token,
+                                                 std::optional<size_t> max_raw_contour_vertices);
 
   void simplifyPolyObstacles(int start_x, int start_y, int goal_x, int goal_y);
   void simplifyPolyObstacles(const Point2d& start, const Point2d& goal);
@@ -577,13 +576,12 @@ private:
                                        const BoundaryEndpoint& next,
                                        bool& supports,
                                        const StopToken& stop_token) const;
-  bool getPolyObstaclesImpl(
-    int start_x,
-    int start_y,
-    int goal_x,
-    int goal_y,
-    const StopToken& stop_token,
-    std::optional<size_t> max_raw_contour_vertices = std::nullopt);
+  bool getPolyObstaclesImpl(int start_x,
+                            int start_y,
+                            int goal_x,
+                            int goal_y,
+                            const StopToken& stop_token,
+                            std::optional<size_t> max_raw_contour_vertices = std::nullopt);
   bool getPolyObstaclesImpl(int start_x,
                             int start_y,
                             const std::vector<PolymapEndpoint>& goals,

@@ -1138,7 +1138,6 @@ bool Polymap::isInTri(int x1, int y1, int x2, int y2, int x3, int y3, double x, 
   return triangle.bounded_side(exact_geometry::Point(x, y)) != CGAL::ON_UNBOUNDED_SIDE;
 }
 
-
 bool Polymap::getVisibilityRegion(int start_x, int start_y, VisibilityRegion& visibility_region) {
   return getVisibilityRegion(start_x, start_y, visibility_region, nullptr);
 }

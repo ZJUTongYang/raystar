@@ -70,14 +70,13 @@ std::set<std::pair<int, std::pair<int, int>>> vertexMap(const Polymap& polymap) 
   return mapping;
 }
 
-std::set<std::pair<int, std::pair<int, int>>> verticesOf(
-  const std::set<int>& obstacles, const Polymap& polymap) {
+std::set<std::pair<int, std::pair<int, int>>> verticesOf(const std::set<int>& obstacles,
+                                                         const Polymap& polymap) {
   std::set<std::pair<int, std::pair<int, int>>> mapping;
   const auto& all = polymap.obstacles();
   for (const int obstacle : obstacles) {
     const auto& ring = all[static_cast<size_t>(obstacle)].ordered_vertices_;
-    for (const auto& point : ring)
-      mapping.emplace(obstacle, point);
+    for (const auto& point : ring) mapping.emplace(obstacle, point);
   }
   return mapping;
 }
@@ -135,8 +134,8 @@ TEST(PolymapIncremental, UntouchedObstaclesKeepIndicesAndGeometry) {
 
   // Grow the lone obstacle (an island untouched by anything else).
   const std::vector<std::pair<int, int>> cells{{15, 10}, {16, 10}};
-  auto result = Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals,
-                                             StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_FALSE(result.fell_back_to_full_rebuild);
   ASSERT_TRUE(result.value);
@@ -148,9 +147,9 @@ TEST(PolymapIncremental, UntouchedObstaclesKeepIndicesAndGeometry) {
   for (const auto& entry : before) {
     if (retired.count(entry.first))
       continue;
-    EXPECT_TRUE(result.value->isValidTopology({entry.first, 0}) ||
-                !result.value->obstacles()[static_cast<size_t>(entry.first)]
-                   .ordered_vertices_.empty())
+    EXPECT_TRUE(
+      result.value->isValidTopology({entry.first, 0}) ||
+      !result.value->obstacles()[static_cast<size_t>(entry.first)].ordered_vertices_.empty())
       << "non-retired obstacle " << entry.first << " became a tombstone";
   }
   // The change set is non-trivial: the grown island retired exactly one
@@ -173,12 +172,11 @@ TEST(PolymapIncremental, FrozenContourGeometryIsBitIdentical) {
 
   // Snapshot every live obstacle ring, then grow the lone island.
   std::vector<std::vector<std::pair<int, int>>> rings_before;
-  for (const auto& obstacle : base.obstacles())
-    rings_before.push_back(obstacle.ordered_vertices_);
+  for (const auto& obstacle : base.obstacles()) rings_before.push_back(obstacle.ordered_vertices_);
 
   const std::vector<std::pair<int, int>> cells{{16, 11}};
-  auto result = Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals,
-                                             StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   ASSERT_FALSE(result.fell_back_to_full_rebuild);
 
@@ -200,18 +198,15 @@ TEST(PolymapIncremental, FrozenContourGeometryIsBitIdentical) {
 
 TEST(PolymapIncremental, BridgeMergeRetiresBothAndAppendsOne) {
   auto map = makeBorderedMap(24, 20);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 6);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 13);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 6);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 13);
   // Two horizontal walls with a gap; bridging the gap merges them.
   const std::vector<PolymapEndpoint> goals{{21, 9, Point2d{21.5, 9.5}}};
   Polymap base = makeReadyPolymap(map, 2, 9, Point2d{2.5, 9.5}, goals);
 
-  const std::vector<std::pair<int, int>> bridge{{6, 7},  {6, 8},  {6, 9},
-                                                {6, 10}, {6, 11}, {6, 12}};
-  auto result = Polymap::applyOccupancyDelta(base, bridge, {}, 2, 9, Point2d{2.5, 9.5}, goals,
-                                             StopToken{});
+  const std::vector<std::pair<int, int>> bridge{{6, 7}, {6, 8}, {6, 9}, {6, 10}, {6, 11}, {6, 12}};
+  auto result =
+    Polymap::applyOccupancyDelta(base, bridge, {}, 2, 9, Point2d{2.5, 9.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
 
   const std::set<int> retired(result.retired_obstacles.begin(), result.retired_obstacles.end());
@@ -223,8 +218,7 @@ TEST(PolymapIncremental, BridgeMergeRetiresBothAndAppendsOne) {
           return point.first == 1 && point.second == 1;
         })) {
       // Heuristic outer-frame check: a contour touching (1,1).
-      EXPECT_FALSE(retired.count(static_cast<int>(index)))
-        << "the outer contour was affected";
+      EXPECT_FALSE(retired.count(static_cast<int>(index))) << "the outer contour was affected";
       break;
     }
   }
@@ -252,8 +246,8 @@ TEST(PolymapIncremental, OuterContourChangeFallsBack) {
   // ring changes, so the incremental path must decline and the wrapper
   // must fall back to a full rebuild that still succeeds.
   const std::vector<std::pair<int, int>> cells{{1, 1}, {1, 2}};
-  auto result = Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals,
-                                             StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, cells, {}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_TRUE(result.fell_back_to_full_rebuild);
   EXPECT_FALSE(result.retired_obstacles.empty());
@@ -264,8 +258,7 @@ TEST(PolymapIncremental, OuterContourChangeFallsBack) {
 
 TEST(PolymapIncremental, ChainOfUpdatesPreservesUnrelatedIndices) {
   auto map = makeBorderedMap(30, 24);
-  for (int x = 8; x <= 12; ++x)
-    occupy(map, x, 10);
+  for (int x = 8; x <= 12; ++x) occupy(map, x, 10);
   occupy(map, 25, 5);
   occupy(map, 25, 6);
 
@@ -292,8 +285,8 @@ TEST(PolymapIncremental, ChainOfUpdatesPreservesUnrelatedIndices) {
 
   for (int step = 0; step < 3; ++step) {
     const std::vector<std::pair<int, int>> cells{{8 + step * 2, 9}, {9 + step * 2, 9}};
-    auto result = Polymap::applyOccupancyDelta(current, cells, {}, 2, 12, Point2d{2.5, 12.5},
-                                               goals, StopToken{});
+    auto result = Polymap::applyOccupancyDelta(
+      current, cells, {}, 2, 12, Point2d{2.5, 12.5}, goals, StopToken{});
     ASSERT_TRUE(result) << result.error;
     ASSERT_TRUE(result.value);
     for (const int retired : result.retired_obstacles)
@@ -332,10 +325,8 @@ TEST(PolymapIncremental, ChainOfUpdatesPreservesUnrelatedIndices) {
 
 TEST(PolymapIncremental, IncrementalResultIsValidAndHonestAboutChangeSet) {
   auto map = makeBorderedMap(24, 20);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 8);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 14);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 8);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 14);
   occupy(map, 15, 11);
 
   const std::vector<PolymapEndpoint> goals{{21, 10, Point2d{21.5, 10.5}}};
@@ -359,8 +350,7 @@ TEST(PolymapIncremental, IncrementalResultIsValidAndHonestAboutChangeSet) {
   for (size_t index = 0; index < base.obstacles().size(); ++index) {
     if (std::find(sides.incremental.retired_obstacles.begin(),
                   sides.incremental.retired_obstacles.end(),
-                  static_cast<int>(index)) !=
-        sides.incremental.retired_obstacles.end())
+                  static_cast<int>(index)) != sides.incremental.retired_obstacles.end())
       continue;
     EXPECT_EQ(sides.incremental.value->obstacles()[index].ordered_vertices_,
               base.obstacles()[index].ordered_vertices_)
@@ -372,10 +362,8 @@ TEST(PolymapIncremental, IncrementalResultIsValidAndHonestAboutChangeSet) {
 
 TEST(PolymapIncremental, MassiveUpdateFallsBackCleanly) {
   auto map = makeBorderedMap(24, 20);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 8);
-  for (int x = 6; x <= 9; ++x)
-    occupy(map, x, 14);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 8);
+  for (int x = 6; x <= 9; ++x) occupy(map, x, 14);
   for (int x = 14; x <= 17; ++x) {
     occupy(map, x, 6);
     occupy(map, x, 11);
@@ -396,8 +384,8 @@ TEST(PolymapIncremental, MassiveUpdateFallsBackCleanly) {
       if (map.data[static_cast<size_t>(y) * map.width + static_cast<size_t>(x)] == 0)
         flood.emplace_back(x, y);
   ASSERT_GT(flood.size(), 50u);
-  auto result = Polymap::applyOccupancyDelta(base, flood, {}, 2, 17, Point2d{2.5, 17.5}, goals,
-                                             StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, flood, {}, 2, 17, Point2d{2.5, 17.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_TRUE(result.fell_back_to_full_rebuild);
   EXPECT_NE(result.fallback_reason.find("outer contour"), std::string::npos)
@@ -424,8 +412,8 @@ TEST(PolymapIncremental, NoChangeDeltaIsRejected) {
   Polymap base = makeReadyPolymap(map, 2, 10, Point2d{2.5, 10.5}, goals);
 
   const std::vector<std::pair<int, int>> already_occupied{{0, 5}, {0, 6}, {19, 7}};
-  auto result = Polymap::applyOccupancyDelta(base, already_occupied, {}, 2, 10, Point2d{2.5, 10.5},
-                                             goals, StopToken{});
+  auto result = Polymap::applyOccupancyDelta(
+    base, already_occupied, {}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   EXPECT_FALSE(result);
   EXPECT_FALSE(result.value.has_value());
   EXPECT_FALSE(result.error.empty());
@@ -446,8 +434,8 @@ TEST(PolymapIncremental, SealingAWallReportsNoPath) {
   for (int y = 1; y <= 18; ++y)
     if (y != 10)
       seal.emplace_back(11, y);
-  auto result = Polymap::applyOccupancyDelta(base, seal, {}, 2, 15, Point2d{2.5, 15.5}, goals,
-                                             StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, seal, {}, 2, 15, Point2d{2.5, 15.5}, goals, StopToken{});
   EXPECT_EQ(result.status, PolymapCreateStatus::no_path);
 }
 
@@ -495,8 +483,8 @@ TEST(PolymapIncremental, ShrinkingAnObstacleRetiresAndAppends) {
   Polymap base = makeReadyPolymap(map, 2, 10, Point2d{2.5, 10.5}, goals);
 
   // Shrink the lone island by freeing one cell.
-  auto result = Polymap::applyOccupancyDelta(base, {}, {{15, 12}}, 2, 10, Point2d{2.5, 10.5},
-                                             goals, StopToken{});
+  auto result = Polymap::applyOccupancyDelta(
+    base, {}, {{15, 12}}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_FALSE(result.fell_back_to_full_rebuild);
   // The island's raw ring changed: one retirement, one appended ring; the
@@ -523,8 +511,8 @@ TEST(PolymapIncremental, FreeingInsideSealedCavityIsNoOp) {
   // Freeing a wall cell inside the sealed cavity cannot change any raw
   // ring (the cavity is unreachable), so every contour freezes and the
   // change set must be empty.
-  auto result = Polymap::applyOccupancyDelta(base, {}, {{9, 9}}, 2, 10, Point2d{2.5, 10.5},
-                                             goals, StopToken{});
+  auto result =
+    Polymap::applyOccupancyDelta(base, {}, {{9, 9}}, 2, 10, Point2d{2.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_FALSE(result.fell_back_to_full_rebuild);
   EXPECT_TRUE(result.retired_obstacles.empty());
@@ -556,8 +544,8 @@ TEST(PolymapIncremental, OpeningACavityRevealsItsIsland) {
   // Open the ring's west wall: the cavity becomes reachable from the
   // start side (start is west at (5,10); goal stays east).  The ring's
   // raw ring changes and the island appears.
-  auto result = Polymap::applyOccupancyDelta(base, {}, {{7, 9}, {7, 10}}, 5, 10,
-                                             Point2d{5.5, 10.5}, goals, StopToken{});
+  auto result = Polymap::applyOccupancyDelta(
+    base, {}, {{7, 9}, {7, 10}}, 5, 10, Point2d{5.5, 10.5}, goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   // The newly reachable cavity must now carry the island contour.
   size_t live = 0;
@@ -596,8 +584,8 @@ TEST(PolymapIncremental, MovedGoalAgainstFrozenSimplificationFallsBack) {
   // so the incremental path must decline to that fallback instead of
   // failing outright.
   const std::vector<PolymapEndpoint> moved_goals{{2, 2, Point2d{2.5, 2.5}}};
-  auto result = Polymap::applyOccupancyDelta(base, {{12, 17}}, {}, 2, 2, Point2d{2.5, 2.5},
-                                             moved_goals, StopToken{});
+  auto result = Polymap::applyOccupancyDelta(
+    base, {{12, 17}}, {}, 2, 2, Point2d{2.5, 2.5}, moved_goals, StopToken{});
   ASSERT_TRUE(result) << result.error;
   // Either the incremental assembly admitted the moved goal directly, or
   // (expected) the frozen endpoint protection forced a fallback -- both

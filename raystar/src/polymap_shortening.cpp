@@ -241,8 +241,7 @@ bool Polymap::constructCGALRelatedImpl(CdtValidator validator,
     cdt_table_ = std::move(candidate_table);
     cdt_ver_num_ = candidate_vertex_count;
     cdt_ready_ = true;
-    const OperationStatus triangle_environment_status =
-      buildTriangleEnvironment(error, stop_token);
+    const OperationStatus triangle_environment_status = buildTriangleEnvironment(error, stop_token);
     if (triangle_environment_status == OperationStatus::stopped)
       return false;
     if (triangle_environment_status == OperationStatus::failure)
@@ -259,8 +258,7 @@ bool Polymap::constructCGALRelatedImpl(CdtValidator validator,
   }
 }
 
-OperationStatus Polymap::buildTriangleEnvironment(std::string& error,
-                                                  const StopToken& stop_token) {
+OperationStatus Polymap::buildTriangleEnvironment(std::string& error, const StopToken& stop_token) {
   using EdgeKey = std::pair<Point2d, Point2d>;
   struct EdgeUse {
     int face = -1;
@@ -924,6 +922,5 @@ std::vector<Polymap::CDTEdge> Polymap::getCDTEdges(size_t max_edges) const {
   }
   return edges;
 }
-
 
 }  // namespace raystar

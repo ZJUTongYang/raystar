@@ -103,8 +103,7 @@ struct ContourBox {
 };
 
 ContourBox contourBox(const Ring& ring) {
-  ContourBox box{ring.front().first, ring.front().second, ring.front().first,
-                 ring.front().second};
+  ContourBox box{ring.front().first, ring.front().second, ring.front().first, ring.front().second};
   for (const auto& point : ring) {
     box.min_x = std::min(box.min_x, point.first);
     box.max_x = std::max(box.max_x, point.first);
@@ -149,11 +148,11 @@ bool contoursConflict(const Ring& first,
     for (size_t second_edge = 0; second_edge < second.size(); ++second_edge) {
       const auto& second_from = second[second_edge];
       const auto& second_to = second[(second_edge + 1) % second.size()];
-      const auto relation = classifyExactSegments(
-        exact_geometry::Point(first_from.first, first_from.second),
-        exact_geometry::Point(first_to.first, first_to.second),
-        exact_geometry::Point(second_from.first, second_from.second),
-        exact_geometry::Point(second_to.first, second_to.second));
+      const auto relation =
+        classifyExactSegments(exact_geometry::Point(first_from.first, first_from.second),
+                              exact_geometry::Point(first_to.first, first_to.second),
+                              exact_geometry::Point(second_from.first, second_from.second),
+                              exact_geometry::Point(second_to.first, second_to.second));
       if (relation.relation != ExactSegmentRelation::disjoint)
         return true;
     }
@@ -207,15 +206,16 @@ int clockwiseContourIndex(const std::vector<Obs>& obstacles) {
 
 }  // namespace
 
-PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
-                                                 const std::vector<std::pair<int, int>>& newly_occupied_cells,
-                                                 const std::vector<std::pair<int, int>>& newly_freed_cells,
-                                                 int start_x,
-                                                 int start_y,
-                                                 const Point2d& start_position,
-                                                 const std::vector<PolymapEndpoint>& goals,
-                                                 const StopToken& stop_token,
-                                                 const PlanningLimits& limits) {
+PolymapUpdateResult Polymap::applyOccupancyDelta(
+  const Polymap& base,
+  const std::vector<std::pair<int, int>>& newly_occupied_cells,
+  const std::vector<std::pair<int, int>>& newly_freed_cells,
+  int start_x,
+  int start_y,
+  const Point2d& start_position,
+  const std::vector<PolymapEndpoint>& goals,
+  const StopToken& stop_token,
+  const PlanningLimits& limits) {
   PolymapUpdateResult result;
   if (stop_token.poll()) {
     result.status = PolymapCreateStatus::stopped;
@@ -237,9 +237,8 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
                      std::to_string(cell.second) + ") is outside the base occupancy";
       return result;
     }
-    const size_t index =
-      static_cast<size_t>(cell.second) * static_cast<size_t>(base.xsize_) +
-      static_cast<size_t>(cell.first);
+    const size_t index = static_cast<size_t>(cell.second) * static_cast<size_t>(base.xsize_) +
+                         static_cast<size_t>(cell.first);
     if (updated[index] == 0) {
       updated[index] = 1;
       changed = true;
@@ -252,9 +251,8 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
                      std::to_string(cell.second) + ") is outside the base occupancy";
       return result;
     }
-    const size_t index =
-      static_cast<size_t>(cell.second) * static_cast<size_t>(base.xsize_) +
-      static_cast<size_t>(cell.first);
+    const size_t index = static_cast<size_t>(cell.second) * static_cast<size_t>(base.xsize_) +
+                         static_cast<size_t>(cell.first);
     if (updated[index] != 0) {
       updated[index] = 0;
       changed = true;
@@ -320,9 +318,8 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
     // The incremental path reports why it declined through the candidate's
     // construction error only for diagnostics; the fallback decides the
     // final outcome.
-    fall_back(candidate.construction_error_.empty()
-                ? std::string("incremental update declined")
-                : candidate.construction_error_);
+    fall_back(candidate.construction_error_.empty() ? std::string("incremental update declined")
+                                                    : candidate.construction_error_);
     return result;
   }
   if (candidate.no_path_) {
@@ -371,17 +368,15 @@ Polymap::Polymap(const Polymap& base,
   const size_t cell_count = static_cast<size_t>(xsize_) * static_cast<size_t>(ysize_);
   data_ = base.data_;
   for (const auto& cell : newly_occupied_cells) {
-    const size_t index =
-      static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
-      static_cast<size_t>(cell.first);
+    const size_t index = static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
+                         static_cast<size_t>(cell.first);
     data_[index] = 1;
   }
   // Frees override occupations of the same cell within one update (the
   // applyOccupancyDelta wrapper pre-computes the same post-update grid).
   for (const auto& cell : newly_freed_cells) {
-    const size_t index =
-      static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
-      static_cast<size_t>(cell.first);
+    const size_t index = static_cast<size_t>(cell.second) * static_cast<size_t>(xsize_) +
+                         static_cast<size_t>(cell.first);
     data_[index] = 0;
   }
   vertices_location_x_flat_.resize(cell_count, -1);
@@ -566,8 +561,7 @@ Polymap::Polymap(const Polymap& base,
   std::vector<Point2d> protected_points;
   protected_points.reserve(goals.size() + 1);
   protected_points.emplace_back(start_position);
-  for (const auto& goal : goals)
-    protected_points.emplace_back(goal.position);
+  for (const auto& goal : goals) protected_points.emplace_back(goal.position);
   if (!to_simplify.empty()) {
     if (!simplifyPolyObstaclesImpl(protected_points, stop_token, &to_simplify)) {
       if (stop_token.poll()) {
@@ -612,12 +606,10 @@ Polymap::Polymap(const Polymap& base,
         continue;  // unfrozen earlier in this cascade
       bool conflict = false;
       for (const int appended_index : added) {
-        const auto& appended_ring =
-          obs_[static_cast<size_t>(appended_index)].ordered_vertices_;
+        const auto& appended_ring = obs_[static_cast<size_t>(appended_index)].ordered_vertices_;
         if (appended_ring.empty())
           continue;
-        const bool either_is_outer =
-          isClockwiseRing(frozen_ring) || isClockwiseRing(appended_ring);
+        const bool either_is_outer = isClockwiseRing(frozen_ring) || isClockwiseRing(appended_ring);
         if (contoursConflict(frozen_ring, appended_ring, either_is_outer, stop_token)) {
           conflict = true;
           break;
