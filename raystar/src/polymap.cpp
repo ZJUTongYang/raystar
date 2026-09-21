@@ -60,6 +60,13 @@ OperationStatus Polymap::getPolyObstacles(
     solution_exist_ = true;
     construction_stopped_ = false;
     construction_error_.clear();
+    // Capture the raw rings before any simplification mutates obs_; the
+    // incremental update path matches new extractions against them to
+    // reuse unchanged simplified contours under stable indices.
+    raw_obstacles_.clear();
+    raw_obstacles_.reserve(obs_.size());
+    for (const auto& obstacle : obs_)
+      raw_obstacles_.push_back(obstacle.ordered_vertices_);
     std::fill(vertices_location_x_flat_.begin(), vertices_location_x_flat_.end(), -1);
     std::fill(vertices_location_y_flat_.begin(), vertices_location_y_flat_.end(), -1);
     clearCGALRelatedState();
@@ -393,6 +400,12 @@ bool Polymap::validateObstacleTopologyImpl(std::string& error,
     if (stop_token.poll())
       return false;
     const auto& vertices = obs_[obstacle_index].ordered_vertices_;
+    // A retired (tombstone) obstacle keeps an empty ring in its slot so
+    // indices stay stable across incremental updates; it owns no vertices
+    // or edges.  Extraction never produces empty rings, so ordinary maps
+    // are unaffected.
+    if (vertices.empty())
+      continue;
     if (vertices.size() < 3) {
       return fail("obstacle " + std::to_string(obstacle_index) + " has fewer than three vertices");
     }
@@ -1240,10 +1253,18 @@ bool Polymap::simplifyPolyObstaclesImpl(const Point2d& start,
 }
 
 bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
-                                        const StopToken& stop_token) {
+                                        const StopToken& stop_token,
+                                        const std::vector<size_t>* targets) {
+  const auto is_target = [targets](size_t obstacle_index) {
+    if (!targets)
+      return true;
+    return std::find(targets->begin(), targets->end(), obstacle_index) != targets->end();
+  };
   for (auto iter = obs_.begin(); iter != obs_.end(); ++iter) {
     if (stop_token.poll())
       return false;
+    if (!is_target(static_cast<size_t>(iter - obs_.begin())))
+      continue;
     int prev, curr, next;
     bool stable = false;
     curr = 0;

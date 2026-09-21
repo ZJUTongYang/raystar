@@ -45,6 +45,7 @@ endif()
 # or exported as a downstream CMake API.
 add_library(raystar_core STATIC
   src/polymap.cpp
+  src/polymap_incremental.cpp
   src/polymap_visibility.cpp
   src/polymap_shortening.cpp
   src/raystar_core.cpp
@@ -187,6 +188,14 @@ if(BUILD_TESTING)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   )
   target_link_libraries(test_polymap raystar_core)
+
+  ament_add_gtest(test_polymap_incremental
+    test/test_polymap_incremental.cpp
+  )
+  target_include_directories(test_polymap_incremental PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_polymap_incremental raystar_core)
 
   ament_add_gtest(test_raystar_core
     test/test_raystar_core.cpp

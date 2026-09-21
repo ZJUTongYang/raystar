@@ -114,6 +114,7 @@ class Polymap;
 enum class PolymapCreateStatus { ready, no_path, stopped, failure };
 
 struct PolymapCreateResult;
+struct PolymapUpdateResult;
 
 struct PolymapEndpoint {
   int cell_x = 0;
@@ -223,6 +224,25 @@ public:
                                                   const Point2d& goal_position,
                                                   const StopToken& stop_token,
                                                   const PlanningLimits& limits = PlanningLimits{});
+
+  // Incremental occupancy update.  Applies newly occupied cells on top of
+  // this Polymap's occupancy and rebuilds only what the change touches:
+  // contours whose raw (unsimplified) ring is unchanged keep their
+  // obstacle indices and simplified geometry bit-for-bit (see
+  // PolymapUpdateResult for the contract); changed/merged contours are
+  // re-extracted and re-simplified under fresh appended indices; the CDT,
+  // vertex registry, and validation gates are rebuilt in full.  Any
+  // incremental-stage failure falls back to a full rebuild (still a valid
+  // Polymap) and reports fell_back_to_full_rebuild.  Deletion of occupied
+  // cells is not supported by this entry point.
+  [[nodiscard]] static PolymapUpdateResult applyOccupancyDelta(
+    const Polymap& base,
+    const std::vector<std::pair<int, int>>& newly_occupied_cells,
+    int start_x,
+    int start_y,
+    const Point2d& start_position,
+    const std::vector<PolymapEndpoint>& goals,
+    const StopToken& stop_token = StopToken{});
 
   // Build the reusable shortening environment from the exact reachable grid
   // contours.  The normal planner may conservatively replace reflex contour
@@ -561,8 +581,12 @@ private:
   bool simplifyPolyObstaclesImpl(const Point2d& start,
                                  const Point2d& goal,
                                  const StopToken& stop_token);
+  // Simplify only the listed obstacles (null = all).  The legality checks
+  // still scan every obstacle's vertices and edges, so a partial run sees
+  // the same global context as a full one.
   bool simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
-                                 const StopToken& stop_token);
+                                 const StopToken& stop_token,
+                                 const std::vector<size_t>* targets = nullptr);
   bool validateFreeSpaceInteriorImpl(const Point2d& point,
                                      const StopToken& stop_token,
                                      std::string* error) const;
@@ -653,6 +677,26 @@ private:
   std::vector<TriangleMeshFace> triangle_faces_;
   std::vector<TriangleMeshEdge> triangle_edges_;
 
+  // Raw (pre-simplification) contour of every obstacle in obs_, aligned
+  // by index; a tombstone (retired) obstacle has an empty ring here too.
+  // Captured at construction so incremental updates can match new raw
+  // contours against old ones and reuse unchanged simplified geometry
+  // under a stable index.
+  std::vector<std::vector<std::pair<int, int>>> raw_obstacles_;
+
+  // Private incremental constructor: copies base occupancy plus the delta
+  // and runs the assembly pipeline (implemented in polymap_incremental.cpp).
+  Polymap(const Polymap& base,
+          const std::vector<std::pair<int, int>>& newly_occupied_cells,
+          int start_x,
+          int start_y,
+          const Point2d& start_position,
+          const std::vector<PolymapEndpoint>& goals,
+          const StopToken& stop_token,
+          std::vector<int>& retired,
+          std::vector<int>& added,
+          bool& declined);
+
   inline int locateAdjacentFacet(std::pair<int, int> prev, std::pair<int, int> next) const {
     auto it = cdt_table_.find(static_cast<long long>(prev.first + prev.second * xsize_) +
                               static_cast<long long>(next.first + next.second * xsize_) *
@@ -666,6 +710,30 @@ private:
 struct PolymapCreateResult {
   PolymapCreateStatus status = PolymapCreateStatus::failure;
   std::optional<Polymap> value;
+  std::string error;
+
+  [[nodiscard]] explicit operator bool() const noexcept {
+    return status == PolymapCreateStatus::ready && value.has_value();
+  }
+};
+
+// Result of an incremental occupancy update (Polymap::applyOccupancyDelta).
+//
+// Index-stability contract: an old obstacle index appears in
+// retired_obstacles only when its contour changed, merged away, or was
+// unfrozen; every other old (obstacle, vertex) index keeps pointing at a
+// bit-identical contour in the updated Polymap.  appended indices are
+// listed in added_obstacles.  fell_back_to_full_rebuild is true when any
+// incremental stage declined (outer contour affected, unfreeze cascade
+// over budget, validator rejection): the returned Polymap is then a
+// plain full rebuild and retired/added cover every old and new obstacle
+// respectively, so consumers can treat the change set as "everything".
+struct PolymapUpdateResult {
+  PolymapCreateStatus status = PolymapCreateStatus::failure;
+  std::optional<Polymap> value;
+  std::vector<int> retired_obstacles;
+  std::vector<int> added_obstacles;
+  bool fell_back_to_full_rebuild = false;
   std::string error;
 
   [[nodiscard]] explicit operator bool() const noexcept {
