@@ -27,3 +27,8 @@ coverage.info
 *.gcno
 *.profraw
 *.profdata
+
+# stray nested colcon artifacts (never commit)
+raystar/src/build/
+raystar/src/install/
+raystar/src/log/

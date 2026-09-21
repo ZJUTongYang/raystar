@@ -1394,6 +1394,12 @@ bool Polymap::validateFreeSpaceInteriorImpl(const Point2d& point,
     if (stop_token.poll())
       return false;
     const auto& vertices = obs_[obstacle_index].ordered_vertices_;
+    // A retired (tombstone) obstacle keeps an empty ring in its slot so
+    // indices stay stable across incremental updates; it contributes no
+    // geometry here.  Extraction never produces empty rings, so ordinary
+    // maps are unaffected.
+    if (vertices.empty())
+      continue;
     if (vertices.size() < 3)
       return fail("Free-space boundary contains an invalid contour");
     exact_geometry::FT twice_area(0);
@@ -1423,8 +1429,10 @@ bool Polymap::validateFreeSpaceInteriorImpl(const Point2d& point,
   for (size_t obstacle_index = 0; obstacle_index < obs_.size(); ++obstacle_index) {
     if (stop_token.poll())
       return false;
-    const auto location =
-      locateExactPointInContour(obs_[obstacle_index].ordered_vertices_, exact_point, stop_token);
+    const auto& ring = obs_[obstacle_index].ordered_vertices_;
+    if (ring.empty())
+      continue;  // tombstone slot: no geometry
+    const auto location = locateExactPointInContour(ring, exact_point, stop_token);
     if (stop_token.poll())
       return false;
     if (location == ExactContourPointLocation::boundary) {
@@ -1444,8 +1452,10 @@ bool Polymap::validateFreeSpaceInteriorImpl(const Point2d& point,
       continue;
     if (stop_token.poll())
       return false;
-    const auto location =
-      locateExactPointInContour(obs_[obstacle_index].ordered_vertices_, exact_point, stop_token);
+    const auto& ring = obs_[obstacle_index].ordered_vertices_;
+    if (ring.empty())
+      continue;  // tombstone slot: no geometry
+    const auto location = locateExactPointInContour(ring, exact_point, stop_token);
     if (stop_token.poll())
       return false;
     if (location == ExactContourPointLocation::inside)
