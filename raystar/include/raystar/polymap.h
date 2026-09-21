@@ -238,10 +238,14 @@ public:
   // the raw rings of every obstacle the newly reachable region touches,
   // which the matching stage captures automatically (including islands
   // appearing from a newly opened cavity).
-  // Geometric or assembly-stage failures fall back to a full rebuild
-  // (still a valid Polymap) and report fell_back_to_full_rebuild;
-  // request-admission failures (endpoints swallowed by new cells,
-  // malformed requests) fail outright, exactly like Polymap::create.
+  // Geometric or assembly-stage failures -- including endpoint positions
+  // that frozen simplified geometry cannot admit (frozen contours were
+  // simplified with the BASE endpoints as protection points, so a moved
+  // or added endpoint may legitimately require re-simplification) -- fall
+  // back to a full rebuild (still a valid Polymap) and report
+  // fell_back_to_full_rebuild.  Only request-admission failures (a cell
+  // list out of bounds, an endpoint on an occupied cell, non-finite
+  // coordinates) fail outright, exactly like Polymap::create.
   //
   // Resource semantics: the fallback rebuild is budgeted against `limits`
   // like any Polymap::create.  The incremental path itself performs no

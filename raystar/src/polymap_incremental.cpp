@@ -260,7 +260,7 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
       changed = true;
     }
   }
-  if (!changed) {
+  if (!changed || updated == base.data_) {
     result.error = "No newly occupied or freed cell changes the base occupancy";
     return result;
   }
@@ -326,8 +326,9 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
     return result;
   }
   if (candidate.no_path_) {
-    // Same shape as Polymap::create on no_path: status only, no value.
+    // Same shape as Polymap::create on no_path: status and message, no value.
     result.status = PolymapCreateStatus::no_path;
+    result.error = candidate.construction_error_;
     return result;
   }
   if (!candidate.solution_exist_ || !candidate.cdt_ready_) {
@@ -355,8 +356,10 @@ Polymap::Polymap(const Polymap& base,
   : xsize_(base.xsize_), ysize_(base.ysize_) {
   const auto decline = [&](const std::string& message) {
     declined = true;
-    construction_error_ = message;
+    // clearStoppedConstructionState() wipes construction_error_; write the
+    // reason back afterwards so the wrapper can report why we declined.
     clearStoppedConstructionState();
+    construction_error_ = message;
   };
 
   if (stop_token.poll()) {
@@ -529,7 +532,12 @@ Polymap::Polymap(const Polymap& base,
       return;
     }
     if (status == OperationStatus::failure) {
-      construction_error_ = "Invalid start position: " + endpoint_error;
+      // The assembled rings mix raw appended contours with frozen contours
+      // whose simplification protected the BASE endpoints.  A new endpoint
+      // can legitimately fall outside a frozen simplified polygon while a
+      // full rebuild with this endpoint succeeds, so endpoint rejections
+      // decline to the fallback rather than failing outright.
+      decline("Incremental update rejected the start position: " + endpoint_error);
       return;
     }
     for (const auto& goal : goals) {
@@ -539,7 +547,7 @@ Polymap::Polymap(const Polymap& base,
         return;
       }
       if (status == OperationStatus::failure) {
-        construction_error_ = "Invalid goal position: " + endpoint_error;
+        decline("Incremental update rejected a goal position: " + endpoint_error);
         return;
       }
     }
@@ -626,7 +634,12 @@ Polymap::Polymap(const Polymap& base,
     }
     if (victim < 0)
       break;
-    if (++unfrozen >= unfreeze_budget) {
+    // Post-increment comparison: this unfreeze executes, and only a count
+    // STRICTLY beyond the budget declines -- "more than half of the frozen
+    // contours", matching the comment above.  An off-by-one here made
+    // small maps (live_frozen of 2 or 3) fall back on a single legitimate
+    // unfreeze, silently disabling the cascade for them.
+    if (++unfrozen > unfreeze_budget) {
       decline("Incremental unfreeze cascade exceeded its budget");
       return;
     }
@@ -673,7 +686,7 @@ Polymap::Polymap(const Polymap& base,
       return;
     }
     if (status == OperationStatus::failure) {
-      construction_error_ = "Invalid start position: " + endpoint_error;
+      decline("Incremental update rejected the start position: " + endpoint_error);
       return;
     }
     for (const auto& goal : goals) {
@@ -683,7 +696,7 @@ Polymap::Polymap(const Polymap& base,
         return;
       }
       if (status == OperationStatus::failure) {
-        construction_error_ = "Invalid goal position: " + endpoint_error;
+        decline("Incremental update rejected a goal position: " + endpoint_error);
         return;
       }
     }

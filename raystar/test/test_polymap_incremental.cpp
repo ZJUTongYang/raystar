@@ -349,10 +349,10 @@ TEST(PolymapIncremental, IncrementalResultIsValidAndHonestAboutChangeSet) {
   // NOTE on scope: RaystarCore::plan consumes a GridMap only, so running
   // the planner here would exercise the full-build pipeline twice and say
   // nothing about the incremental map.  Class-level equivalence between
-  // an incrementally updated map and a rebuilt one is enforced by the
-  // tree-layer differential tests (rebased tree vs fresh tree grown on
-  // the SAME incremental polymap); here we check admission, the honest
-  // change set, and the C1 index contract.
+  // an incrementally updated map and a rebuilt one is planned to be
+  // enforced by tree-layer differential tests (rebased tree vs fresh
+  // tree grown on the SAME incremental polymap); until then this test
+  // covers admission, the honest change set, and the C1 index contract.
   EXPECT_FALSE(sides.incremental.fell_back_to_full_rebuild);
   EXPECT_EQ(sides.incremental.retired_obstacles.size(), 1u);
   EXPECT_EQ(sides.incremental.added_obstacles.size(), 1u);
@@ -383,12 +383,16 @@ TEST(PolymapIncremental, MassiveUpdateFallsBackCleanly) {
   const std::vector<PolymapEndpoint> goals{{21, 17, Point2d{21.5, 17.5}}};
   Polymap base = makeReadyPolymap(map, 2, 17, Point2d{2.5, 17.5}, goals);
 
-  // Flood a large region around every obstacle: the cascade (or the
-  // budget/outer rule) must decline and the wrapper must deliver a valid
-  // full rebuild with the maximal change-set semantics.
+  // Flood the entire interior up to the border frame: the outer
+  // contour's raw ring changes, so the update must decline and the
+  // wrapper must deliver a valid full rebuild with the maximal
+  // change-set semantics.  (A flood that stops short of the frame is a
+  // plain merge the incremental path handles without any fallback.)
   std::vector<std::pair<int, int>> flood;
-  for (int y = 6; y <= 15; ++y)
-    for (int x = 5; x <= 18; ++x)
+  // Upper two thirds, touching the border frame (row y=1) so the outer
+  // contour changes, while row y=17 stays open to connect start and goal.
+  for (int y = 1; y <= 16; ++y)
+    for (int x = 1; x <= 22; ++x)
       if (map.data[static_cast<size_t>(y) * map.width + static_cast<size_t>(x)] == 0)
         flood.emplace_back(x, y);
   ASSERT_GT(flood.size(), 50u);
@@ -396,7 +400,8 @@ TEST(PolymapIncremental, MassiveUpdateFallsBackCleanly) {
                                              StopToken{});
   ASSERT_TRUE(result) << result.error;
   EXPECT_TRUE(result.fell_back_to_full_rebuild);
-  EXPECT_FALSE(result.fallback_reason.empty());
+  EXPECT_NE(result.fallback_reason.find("outer contour"), std::string::npos)
+    << "reason was: " << result.fallback_reason;
   // Maximal change set: every previously live obstacle retired, every
   // live obstacle of the rebuilt map added.
   size_t live_before = 0;
@@ -562,12 +567,44 @@ TEST(PolymapIncremental, OpeningACavityRevealsItsIsland) {
   EXPECT_GE(live, 3u);  // frame + opened ring + revealed island
   bool island_found = false;
   for (const auto& obstacle : result.value->obstacles()) {
-    for (const auto& point : obstacle.ordered_vertices_) {
-      if (point.first >= 8 && point.first <= 11 && point.second >= 8 && point.second <= 11) {
-        island_found = true;
+    const auto& ring = obstacle.ordered_vertices_;
+    if (ring.empty())
+      continue;
+    bool all_inside = true;
+    for (const auto& point : ring) {
+      if (point.first < 8 || point.first > 11 || point.second < 8 || point.second > 11) {
+        all_inside = false;
         break;
       }
     }
+    if (all_inside)
+      island_found = true;
   }
   EXPECT_TRUE(island_found) << "the cavity island must appear after opening the wall";
+}
+
+// --- Endpoint changes against frozen geometry fall back, not fail -------- –
+
+TEST(PolymapIncremental, MovedGoalAgainstFrozenSimplificationFallsBack) {
+  auto map = makeBorderedMap(24, 20);
+  const std::vector<PolymapEndpoint> base_goals{{21, 10, Point2d{21.5, 10.5}}};
+  Polymap base = makeReadyPolymap(map, 2, 10, Point2d{2.5, 10.5}, base_goals);
+
+  // Freeze the frame's simplification around the base endpoints, then
+  // request an update whose new goal sits in a corner the frozen frame
+  // contour does not cover.  A full rebuild with this endpoint succeeds,
+  // so the incremental path must decline to that fallback instead of
+  // failing outright.
+  const std::vector<PolymapEndpoint> moved_goals{{2, 2, Point2d{2.5, 2.5}}};
+  auto result = Polymap::applyOccupancyDelta(base, {{12, 17}}, {}, 2, 2, Point2d{2.5, 2.5},
+                                             moved_goals, StopToken{});
+  ASSERT_TRUE(result) << result.error;
+  // Either the incremental assembly admitted the moved goal directly, or
+  // (expected) the frozen endpoint protection forced a fallback -- both
+  // are valid; a hard failure is the regression this test pins.
+  if (result.fell_back_to_full_rebuild) {
+    EXPECT_NE(result.fallback_reason.find("position"), std::string::npos)
+      << "reason was: " << result.fallback_reason;
+  }
+  EXPECT_EQ(result.status, PolymapCreateStatus::ready);
 }
