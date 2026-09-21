@@ -81,6 +81,7 @@ OperationStatus Polymap::getPolyObstacles(
   solution_exist_ = false;
   construction_stopped_ = false;
   obs_.clear();
+  raw_obstacles_.clear();
   std::fill(vertices_location_x_flat_.begin(), vertices_location_x_flat_.end(), -1);
   std::fill(vertices_location_y_flat_.begin(), vertices_location_y_flat_.end(), -1);
   clearCGALRelatedState();

@@ -231,10 +231,20 @@ public:
   // obstacle indices and simplified geometry bit-for-bit (see
   // PolymapUpdateResult for the contract); changed/merged contours are
   // re-extracted and re-simplified under fresh appended indices; the CDT,
-  // vertex registry, and validation gates are rebuilt in full.  Any
-  // incremental-stage failure falls back to a full rebuild (still a valid
-  // Polymap) and reports fell_back_to_full_rebuild.  Deletion of occupied
-  // cells is not supported by this entry point.
+  // vertex registry, and validation gates are rebuilt in full.  Geometric
+  // or assembly-stage failures fall back to a full rebuild (still a valid
+  // Polymap) and report fell_back_to_full_rebuild; request-admission
+  // failures (endpoints swallowed by new cells, malformed requests) fail
+  // outright, exactly like Polymap::create.  Deletion of occupied cells is
+  // not supported by this entry point.
+  //
+  // Resource semantics: the fallback rebuild is budgeted against `limits`
+  // like any Polymap::create.  The incremental path itself performs no
+  // independent budget accounting: it starts from an already-admitted
+  // base and adds the extracted rings for changed contours.  Every
+  // Polymap now also retains its raw (pre-simplification) rings for
+  // matching, roughly doubling contour storage; index stability is bought
+  // with tombstone slots that are never reclaimed.
   [[nodiscard]] static PolymapUpdateResult applyOccupancyDelta(
     const Polymap& base,
     const std::vector<std::pair<int, int>>& newly_occupied_cells,
@@ -242,7 +252,8 @@ public:
     int start_y,
     const Point2d& start_position,
     const std::vector<PolymapEndpoint>& goals,
-    const StopToken& stop_token = StopToken{});
+    const StopToken& stop_token = StopToken{},
+    const PlanningLimits& limits = PlanningLimits{});
 
   // Build the reusable shortening environment from the exact reachable grid
   // contours.  The normal planner may conservatively replace reflex contour
@@ -734,6 +745,9 @@ struct PolymapUpdateResult {
   std::vector<int> retired_obstacles;
   std::vector<int> added_obstacles;
   bool fell_back_to_full_rebuild = false;
+  // Why the incremental path declined, kept for diagnostics when the
+  // fallback rebuild succeeded and error stays empty.
+  std::string fallback_reason;
   std::string error;
 
   [[nodiscard]] explicit operator bool() const noexcept {

@@ -128,6 +128,7 @@ void Polymap::clearStoppedConstructionState() {
   construction_stopped_ = true;
   construction_error_.clear();
   obs_.clear();
+  raw_obstacles_.clear();
   std::fill(vertices_location_x_flat_.begin(), vertices_location_x_flat_.end(), -1);
   std::fill(vertices_location_y_flat_.begin(), vertices_location_y_flat_.end(), -1);
   clearCGALRelatedState();

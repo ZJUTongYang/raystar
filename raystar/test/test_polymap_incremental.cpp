@@ -10,7 +10,6 @@
 
 #include <gtest/gtest.h>
 #include <raystar/polymap.h>
-#include <raystar/raystar_core.h>
 
 #include <algorithm>
 #include <set>
@@ -119,7 +118,7 @@ BothSides updateAndRebuild(const Polymap& base,
 
 using namespace raystar;
 
-// --- Contract C1: untouched obstacles keep indices and geometry -------- –
+// --- Contract C1: untouched obstacles keep indices and geometry --------
 
 TEST(PolymapIncremental, UntouchedObstaclesKeepIndicesAndGeometry) {
   auto map = makeBorderedMap(20, 20);
@@ -197,7 +196,7 @@ TEST(PolymapIncremental, FrozenContourGeometryIsBitIdentical) {
   }
 }
 
-// --- Merge: a bridge joins two obstacles into one ----------------------- –
+// --- Merge: a bridge joins two obstacles into one -----------------------
 
 TEST(PolymapIncremental, BridgeMergeRetiresBothAndAppendsOne) {
   auto map = makeBorderedMap(24, 20);
@@ -231,9 +230,10 @@ TEST(PolymapIncremental, BridgeMergeRetiresBothAndAppendsOne) {
   }
 
   if (!result.fell_back_to_full_rebuild) {
-    // The two walls merged: both old rings retired (or unfrozen), exactly
-    // one merged ring appended.  The merged contour must be live and valid.
-    ASSERT_EQ(result.added_obstacles.size(), 1u);
+    // The merged contour is appended; the cascade may append re-
+    // simplifications of unfrozen neighbors, so require at least the
+    // merged ring and check it is live and valid.
+    ASSERT_GE(result.added_obstacles.size(), 1u);
     const auto& merged =
       result.value->obstacles()[static_cast<size_t>(result.added_obstacles.front())]
         .ordered_vertices_;
@@ -241,7 +241,7 @@ TEST(PolymapIncremental, BridgeMergeRetiresBothAndAppendsOne) {
   }
 }
 
-// --- Outer contour protection drives the documented fallback ------------ –
+// --- Outer contour protection drives the documented fallback ------------
 
 TEST(PolymapIncremental, OuterContourChangeFallsBack) {
   auto map = makeBorderedMap(20, 20);
@@ -260,7 +260,7 @@ TEST(PolymapIncremental, OuterContourChangeFallsBack) {
   EXPECT_FALSE(result.added_obstacles.empty());
 }
 
-// --- Repeated updates keep indices stable across a chain ---------------- –
+// --- Repeated updates keep indices stable across a chain ----------------
 
 TEST(PolymapIncremental, ChainOfUpdatesPreservesUnrelatedIndices) {
   auto map = makeBorderedMap(30, 24);
@@ -328,9 +328,9 @@ TEST(PolymapIncremental, ChainOfUpdatesPreservesUnrelatedIndices) {
   }
 }
 
-// --- Same-occupancy incremental vs full rebuild: planning agrees -------- –
+// --- Same-occupancy incremental vs full rebuild: both admit, C1 holds ----
 
-TEST(PolymapIncremental, PlanningMatchesFullRebuildOnSameOccupancy) {
+TEST(PolymapIncremental, IncrementalResultIsValidAndHonestAboutChangeSet) {
   auto map = makeBorderedMap(24, 20);
   for (int x = 6; x <= 9; ++x)
     occupy(map, x, 8);
@@ -346,39 +346,72 @@ TEST(PolymapIncremental, PlanningMatchesFullRebuildOnSameOccupancy) {
   ASSERT_TRUE(sides.incremental) << sides.incremental.error;
   ASSERT_TRUE(sides.rebuilt) << sides.rebuilt.error;
 
-  // Class preservation: enumerate the top classes on both maps and require
-  // identical certified costs (the class-preservation lemma).  The planner
-  // runs directly against the assembled Polymaps through the same grid
-  // copy both sides were built from.
-  GridMap post;
-  post.width = static_cast<unsigned int>(base.width());
-  post.height = static_cast<unsigned int>(base.height());
-  post.resolution = 1.0f;
-  post.data = base.occupancyData();
-  for (const auto& cell : cells)
-    occupy(post, cell.first, cell.second);
-
-  RaystarCore incremental_core;
-  const auto incremental_result =
-    incremental_core.plan(post, Point2d{2.5, 10.5}, Point2d{21.5, 10.5}, 4, false);
-  RaystarCore rebuilt_core;
-  const auto rebuilt_result =
-    rebuilt_core.plan(post, Point2d{2.5, 10.5}, Point2d{21.5, 10.5}, 4, false);
-
-  ASSERT_TRUE(incremental_result.success) << incremental_result.message;
-  ASSERT_TRUE(rebuilt_result.success) << rebuilt_result.message;
-  ASSERT_EQ(incremental_result.path_solutions.size(), rebuilt_result.path_solutions.size());
-  for (size_t index = 0; index < incremental_result.path_solutions.size(); ++index) {
-    // Costs are certified on each map's own simplification; they agree
-    // within a tight tolerance because both conservatively cover the same
-    // occupancy (the lemma bounds the class set, not chord choices).
-    EXPECT_NEAR(incremental_result.path_solutions[index].path_cost_,
-                rebuilt_result.path_solutions[index].path_cost_, 1e-9)
-      << "class " << index << " diverged between incremental and rebuilt maps";
+  // NOTE on scope: RaystarCore::plan consumes a GridMap only, so running
+  // the planner here would exercise the full-build pipeline twice and say
+  // nothing about the incremental map.  Class-level equivalence between
+  // an incrementally updated map and a rebuilt one is enforced by the
+  // tree-layer differential tests (rebased tree vs fresh tree grown on
+  // the SAME incremental polymap); here we check admission, the honest
+  // change set, and the C1 index contract.
+  EXPECT_FALSE(sides.incremental.fell_back_to_full_rebuild);
+  EXPECT_EQ(sides.incremental.retired_obstacles.size(), 1u);
+  EXPECT_EQ(sides.incremental.added_obstacles.size(), 1u);
+  for (size_t index = 0; index < base.obstacles().size(); ++index) {
+    if (std::find(sides.incremental.retired_obstacles.begin(),
+                  sides.incremental.retired_obstacles.end(),
+                  static_cast<int>(index)) !=
+        sides.incremental.retired_obstacles.end())
+      continue;
+    EXPECT_EQ(sides.incremental.value->obstacles()[index].ordered_vertices_,
+              base.obstacles()[index].ordered_vertices_)
+      << "frozen obstacle " << index << " changed geometry";
   }
 }
 
-// --- No-op update is rejected up front ---------------------------------- –
+// --- Massive updates decline honestly to a full rebuild -----------------
+
+TEST(PolymapIncremental, MassiveUpdateFallsBackCleanly) {
+  auto map = makeBorderedMap(24, 20);
+  for (int x = 6; x <= 9; ++x)
+    occupy(map, x, 8);
+  for (int x = 6; x <= 9; ++x)
+    occupy(map, x, 14);
+  for (int x = 14; x <= 17; ++x) {
+    occupy(map, x, 6);
+    occupy(map, x, 11);
+  }
+  const std::vector<PolymapEndpoint> goals{{21, 17, Point2d{21.5, 17.5}}};
+  Polymap base = makeReadyPolymap(map, 2, 17, Point2d{2.5, 17.5}, goals);
+
+  // Flood a large region around every obstacle: the cascade (or the
+  // budget/outer rule) must decline and the wrapper must deliver a valid
+  // full rebuild with the maximal change-set semantics.
+  std::vector<std::pair<int, int>> flood;
+  for (int y = 6; y <= 15; ++y)
+    for (int x = 5; x <= 18; ++x)
+      if (map.data[static_cast<size_t>(y) * map.width + static_cast<size_t>(x)] == 0)
+        flood.emplace_back(x, y);
+  ASSERT_GT(flood.size(), 50u);
+  auto result = Polymap::applyOccupancyDelta(base, flood, 2, 17, Point2d{2.5, 17.5}, goals,
+                                             StopToken{});
+  ASSERT_TRUE(result) << result.error;
+  EXPECT_TRUE(result.fell_back_to_full_rebuild);
+  EXPECT_FALSE(result.fallback_reason.empty());
+  // Maximal change set: every previously live obstacle retired, every
+  // live obstacle of the rebuilt map added.
+  size_t live_before = 0;
+  for (const auto& obstacle : base.obstacles())
+    if (!obstacle.ordered_vertices_.empty())
+      ++live_before;
+  EXPECT_EQ(result.retired_obstacles.size(), live_before);
+  size_t live_after = 0;
+  for (const auto& obstacle : result.value->obstacles())
+    if (!obstacle.ordered_vertices_.empty())
+      ++live_after;
+  EXPECT_EQ(result.added_obstacles.size(), live_after);
+}
+
+// --- No-op update is rejected up front ----------------------------------
 
 TEST(PolymapIncremental, NoChangeDeltaIsRejected) {
   auto map = makeBorderedMap(20, 20);
@@ -393,7 +426,7 @@ TEST(PolymapIncremental, NoChangeDeltaIsRejected) {
   EXPECT_FALSE(result.error.empty());
 }
 
-// --- Disconnected update: no_path is a legitimate incremental outcome ---- –
+// --- Disconnected update: no_path is a legitimate incremental outcome ----
 
 TEST(PolymapIncremental, SealingAWallReportsNoPath) {
   auto map = makeBorderedMap(24, 20);

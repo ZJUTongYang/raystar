@@ -213,7 +213,8 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
                                                  int start_y,
                                                  const Point2d& start_position,
                                                  const std::vector<PolymapEndpoint>& goals,
-                                                 const StopToken& stop_token) {
+                                                 const StopToken& stop_token,
+                                                 const PlanningLimits& limits) {
   PolymapUpdateResult result;
   if (stop_token.poll()) {
     result.status = PolymapCreateStatus::stopped;
@@ -256,17 +257,19 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
     rebuilt.origin_x = 0.0;
     rebuilt.origin_y = 0.0;
     rebuilt.data = updated;
-    auto rebuild = Polymap::create(rebuilt, start_x, start_y, start_position, goals, stop_token);
+    auto rebuild =
+      Polymap::create(rebuilt, start_x, start_y, start_position, goals, stop_token, limits);
     result.status = rebuild.status;
     result.error = rebuild.error;
+    result.fallback_reason = reason;
+    // Reset the partial change lists from the declined incremental path:
+    // on a successful rebuild they cover every live obstacle on both
+    // sides; on a failed one they must not linger half-filled.
+    result.retired_obstacles.clear();
+    result.added_obstacles.clear();
     if (rebuild) {
       result.value = std::move(rebuild.value);
       result.fell_back_to_full_rebuild = true;
-      // A full rebuild shares nothing with the base index space: report
-      // every previously live obstacle as retired and every new one as
-      // added so consumers see the maximal change set.
-      result.retired_obstacles.clear();
-      result.added_obstacles.clear();
       for (size_t index = 0; index < base.obs_.size(); ++index) {
         if (!base.obs_[index].ordered_vertices_.empty())
           result.retired_obstacles.push_back(static_cast<int>(index));
@@ -279,7 +282,6 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
         }
       }
     }
-    (void)reason;
   };
 
   bool declined = false;
@@ -307,8 +309,8 @@ PolymapUpdateResult Polymap::applyOccupancyDelta(const Polymap& base,
     return result;
   }
   if (candidate.no_path_) {
+    // Same shape as Polymap::create on no_path: status only, no value.
     result.status = PolymapCreateStatus::no_path;
-    result.value = std::move(candidate);
     return result;
   }
   if (!candidate.solution_exist_ || !candidate.cdt_ready_) {
@@ -415,17 +417,25 @@ Polymap::Polymap(const Polymap& base,
   raw_obstacles_.clear();
 
   std::unordered_map<std::uint64_t, std::vector<int>> base_by_hash;
+  // canonical ring cached per base index: the bucket is built once and the
+  // equality check below reuses it instead of recomputing the rotation.
+  std::vector<Ring> base_canonical(base.raw_obstacles_.size());
   for (size_t index = 0; index < base.raw_obstacles_.size(); ++index) {
     const auto& ring = base.raw_obstacles_[index];
     if (ring.empty())
       continue;  // historical tombstone stays a tombstone
-    base_by_hash[hashRing(canonicalRing(ring))].push_back(static_cast<int>(index));
+    base_canonical[index] = canonicalRing(ring);
+    base_by_hash[hashRing(base_canonical[index])].push_back(static_cast<int>(index));
   }
 
   const size_t base_obstacle_count = base.obs_.size();
   std::vector<int> match_of_new(new_rings.size(), -1);
   std::vector<char> base_matched(base_obstacle_count, 0);
   for (size_t index = 0; index < new_rings.size(); ++index) {
+    if (stop_token.poll()) {
+      clearStoppedConstructionState();
+      return;
+    }
     const Ring canonical = canonicalRing(new_raw[index]);
     const auto found = base_by_hash.find(hashRing(canonical));
     if (found == base_by_hash.end())
@@ -433,7 +443,7 @@ Polymap::Polymap(const Polymap& base,
     for (const int candidate_index : found->second) {
       if (base_matched[candidate_index])
         continue;
-      if (canonicalRing(base.raw_obstacles_[candidate_index]) == canonical) {
+      if (base_canonical[candidate_index] == canonical) {
         match_of_new[index] = candidate_index;
         base_matched[candidate_index] = 1;
         break;
@@ -548,7 +558,10 @@ Polymap::Polymap(const Polymap& base,
     if (base_matched[index])
       ++live_frozen;
   }
-  const size_t unfreeze_budget = live_frozen + 1;
+  // A proportional budget: when a change would unfreeze more than half of
+  // the frozen contours, a full rebuild is the honest result (and avoids
+  // the O(victims x frozen x appended) rescan of a near-total cascade).
+  const size_t unfreeze_budget = std::max<size_t>(1, live_frozen / 2);
   size_t unfrozen = 0;
   std::vector<size_t> simplify_batch;
   while (true) {
@@ -587,7 +600,7 @@ Polymap::Polymap(const Polymap& base,
     }
     if (victim < 0)
       break;
-    if (++unfrozen > unfreeze_budget) {
+    if (++unfrozen >= unfreeze_budget) {
       decline("Incremental unfreeze cascade exceeded its budget");
       return;
     }
