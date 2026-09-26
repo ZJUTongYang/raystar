@@ -23,11 +23,18 @@
 // Build refuses inputs that would change the legacy semantics or the
 // bookkeeping assumptions -- a duplicate coordinate anywhere or a
 // zero-length edge (the legacy chord check carries a global sentinel for
-// those, polymap.cpp).  The caller must then run the full-scan candidate
-// provider instead.  Production inputs never trip this: every simplify call
-// is preceded by validateObstacleTopology, which rejects both; the gate
-// exists for the incremental Stage 7 unfreeze inputs, which may legally
-// violate the preconditions.
+// zero-length edges, polymap.cpp).  The caller must then run the full-scan
+// candidate provider instead.  Production inputs never trip this: every
+// simplify call is preceded by validateObstacleTopology, which rejects
+// both; the gate exists for the incremental Stage 7 unfreeze inputs, which
+// may legally violate the preconditions.  Overlapping edges (also possible
+// in Stage 7) deliberately do NOT trip the gate: Lemma 1's completeness
+// does not depend on non-overlap, every exemption is (obstacle, id)-based,
+// and the removal bookkeeping is id-keyed, so overlapping candidates are
+// classified by the same exact predicates as in the legacy scan.
+//
+// Not thread-safe: queries mutate the epoch dedup tables (single-threaded
+// use is the Polymap contract).
 
 #include <cstdint>
 #include <utility>
@@ -85,6 +92,7 @@ private:
     std::vector<EdgeRecord> edges;
   };
 
+  void advanceEpoch() const;
   [[nodiscard]] int bucketOf(int x, int y) const;
   void bucketRange(int min_x,
                    int min_y,

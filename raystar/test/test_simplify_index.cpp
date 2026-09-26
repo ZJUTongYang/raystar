@@ -210,19 +210,145 @@ TEST(SimplifyCandidateIndex, ApplyRemovalReplacesEdgesAndKeepsIdsStable) {
   EXPECT_TRUE(std::any_of(edges.begin(), edges.end(), [](const auto& record) {
     return record.obstacle == 0 && record.edge == 3;
   }));
-  // No stale edge-3 registration remains at the old geometry's exclusive
-  // cells: old edge 3 was the segment x=20, y in [20,40]; the chord's bbox
-  // still covers that strip, so instead verify via a point outside the
-  // chord bbox but inside... the old edge's bbox is a subset of the chord
-  // bbox here, so stale-record absence is already covered by the duplicate
-  // guard below.
+  // Dedup cannot prove stale-registration absence (a leftover copy in
+  // another bucket would be deduped into the same single report), so pin it
+  // geometrically below with a removal whose old-edge bboxes own cells the
+  // chord bbox does not touch.
+}
+
+TEST(SimplifyCandidateIndex, ApplyRemovalLeavesNoStaleRegistrations) {
+  // Pentagon; removing vertex 1 = (6,16) replaces edges 0 and 1 (bboxes
+  // reaching y=16) with the horizontal chord (0,10)->(12,10) (bbox y=10
+  // only).  Cells above y~12 belonged exclusively to the old edges.
+  const std::vector<Obs> obstacles = {makeRing({{0, 10}, {6, 16}, {12, 10}, {12, 0}, {0, 0}})};
+  SimplifyCandidateIndex index(4);
+  ASSERT_TRUE(index.build(obstacles));
+
+  index.applyRemoval(0, /*previous=*/0, {0, 10}, /*current=*/1, {6, 16}, /*next=*/2, {12, 10});
+
+  // The old edges' exclusive area must hold no registration for ids 0 or 1.
+  std::vector<SimplifyCandidateIndex::EdgeRecord> edges;
+  index.edgesInBox(0, 14, 12, 16, edges);
+  EXPECT_FALSE(std::any_of(edges.begin(), edges.end(), [](const auto& record) {
+    return record.obstacle == 0 && (record.edge == 0 || record.edge == 1);
+  }));
+  // The chord is found on the y=10 strip under the surviving id 0.
   edges.clear();
-  index.edgesInBox(0, 0, 40, 40, edges);
-  int edge3_reports = 0;
-  for (const auto& record : edges)
-    if (record.obstacle == 0 && record.edge == 3)
-      ++edge3_reports;
-  EXPECT_EQ(edge3_reports, 1);  // exactly one live registration set (deduped)
+  index.edgesInBox(5, 10, 7, 10, edges);
+  EXPECT_TRUE(std::any_of(edges.begin(), edges.end(), [](const auto& record) {
+    return record.obstacle == 0 && record.edge == 0;
+  }));
+  // Edge 1 (source removed) is gone everywhere.
+  edges.clear();
+  index.edgesInBox(0, 0, 12, 16, edges);
+  EXPECT_FALSE(std::any_of(edges.begin(), edges.end(), [](const auto& record) {
+    return record.obstacle == 0 && record.edge == 1;
+  }));
+}
+
+TEST(SimplifyCandidateIndex, RandomizedRemovalsMatchBruteForceMirror) {
+  // Mirrors the index against a live model (alive flags + next links) while
+  // applying random removals; after each removal the box differential must
+  // still hold with the CURRENT geometry -- this pins chord registration
+  // across buckets for arbitrary (non-rectilinear) chords.
+  for (std::uint64_t seed = 1; seed <= 30; ++seed) {
+    Rng rng{20260926ULL * 7 + seed};
+    const auto obstacles = randomRings(rng, rng.range(2, 6));
+    SimplifyCandidateIndex index(rng.range(2, 12));
+    ASSERT_TRUE(index.build(obstacles));
+
+    // Live mirror in original-id space.
+    std::vector<std::vector<char>> alive(obstacles.size());
+    std::vector<std::vector<int>> next(obstacles.size());
+    std::vector<std::vector<int>> prev(obstacles.size());
+    std::vector<int> alive_count(obstacles.size());
+    for (size_t o = 0; o < obstacles.size(); ++o) {
+      const int n = static_cast<int>(obstacles[o].ordered_vertices_.size());
+      alive[o].assign(static_cast<size_t>(n), 1);
+      next[o].resize(static_cast<size_t>(n));
+      prev[o].resize(static_cast<size_t>(n));
+      alive_count[o] = n;
+      for (int v = 0; v < n; ++v) {
+        next[o][static_cast<size_t>(v)] = (v + 1) % n;
+        prev[o][static_cast<size_t>(v)] = (v + n - 1) % n;
+      }
+    }
+    const auto live_brute = [&](int min_x,
+                                int min_y,
+                                int max_x,
+                                int max_y,
+                                std::set<std::pair<int, int>>& vertices,
+                                std::set<std::pair<int, int>>& edges) {
+      for (size_t o = 0; o < obstacles.size(); ++o) {
+        const auto& ring = obstacles[o].ordered_vertices_;
+        for (size_t v = 0; v < ring.size(); ++v) {
+          if (!alive[o][v])
+            continue;
+          const auto& from = ring[v];
+          if (from.first >= min_x && from.first <= max_x && from.second >= min_y &&
+              from.second <= max_y)
+            vertices.insert({static_cast<int>(o), static_cast<int>(v)});
+          const auto& to = ring[static_cast<size_t>(next[o][v])];
+          if (std::min(from.first, to.first) <= max_x && min_x <= std::max(from.first, to.first) &&
+              std::min(from.second, to.second) <= max_y &&
+              min_y <= std::max(from.second, to.second))
+            edges.insert({static_cast<int>(o), static_cast<int>(v)});
+        }
+      }
+    };
+    const auto check_boxes = [&](int rounds) {
+      for (int query = 0; query < rounds; ++query) {
+        const int ax = rng.range(-5, 255), ay = rng.range(-5, 255);
+        const int bx = rng.range(-5, 255), by = rng.range(-5, 255);
+        const int min_x = std::min(ax, bx), max_x = std::max(ax, bx);
+        const int min_y = std::min(ay, by), max_y = std::max(ay, by);
+        std::set<std::pair<int, int>> expected_vertices, expected_edges;
+        live_brute(min_x, min_y, max_x, max_y, expected_vertices, expected_edges);
+        std::vector<SimplifyCandidateIndex::VertexRecord> vertices;
+        std::vector<SimplifyCandidateIndex::EdgeRecord> edges;
+        index.verticesInBox(min_x, min_y, max_x, max_y, vertices);
+        index.edgesInBox(min_x, min_y, max_x, max_y, edges);
+        std::set<std::pair<int, int>> got_vertices, got_edges;
+        for (const auto& record : vertices) got_vertices.insert({record.obstacle, record.vertex});
+        for (const auto& record : edges) got_edges.insert({record.obstacle, record.edge});
+        for (const auto& expected : expected_vertices)
+          ASSERT_TRUE(got_vertices.count(expected)) << "seed " << seed;
+        for (const auto& expected : expected_edges)
+          ASSERT_TRUE(got_edges.count(expected))
+            << "seed " << seed << " edge (" << expected.first << "," << expected.second << ")";
+      }
+    };
+
+    check_boxes(10);
+    for (int removal = 0; removal < 6; ++removal) {
+      // Pick a ring that can still lose a vertex, then a random live vertex.
+      std::vector<size_t> eligible;
+      for (size_t o = 0; o < obstacles.size(); ++o)
+        if (alive_count[o] > 3)
+          eligible.push_back(o);
+      if (eligible.empty())
+        break;
+      const size_t o =
+        eligible[static_cast<size_t>(rng.range(0, static_cast<int>(eligible.size()) - 1))];
+      const auto& ring = obstacles[o].ordered_vertices_;
+      int b = rng.range(0, static_cast<int>(ring.size()) - 1);
+      while (!alive[o][static_cast<size_t>(b)]) b = (b + 1) % static_cast<int>(ring.size());
+      const int a = prev[o][static_cast<size_t>(b)];
+      const int c = next[o][static_cast<size_t>(b)];
+      index.applyRemoval(static_cast<int>(o),
+                         a,
+                         ring[static_cast<size_t>(a)],
+                         b,
+                         ring[static_cast<size_t>(b)],
+                         c,
+                         ring[static_cast<size_t>(c)]);
+      alive[o][static_cast<size_t>(b)] = 0;
+      next[o][static_cast<size_t>(a)] = c;
+      prev[o][static_cast<size_t>(c)] = a;
+      --alive_count[o];
+      check_boxes(10);
+    }
+  }
 }
 
 TEST(SimplifyCandidateIndex, GateRefusesDuplicateCoordinatesAndZeroLengthEdges) {

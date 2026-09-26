@@ -22,87 +22,27 @@
 #include <utility>
 #include <vector>
 
+#include "simplify_test_worlds.h"
+
 namespace raystar {
-namespace {
 
-using Kernel = CGAL::Exact_predicates_exact_constructions_kernel;
-using Polygon = CGAL::Polygon_2<Kernel>;
-
-struct Rng {
-  std::uint64_t state;
-  std::uint32_t next() {
-    state = state * 6364136223846793005ULL + 1442695040888963407ULL;
-    return static_cast<std::uint32_t>(state >> 33);
-  }
-  int range(int lo, int hi) {  // inclusive
-    return lo + static_cast<int>(next() % static_cast<std::uint32_t>(hi - lo + 1));
+// Friend peer (polymap.h): re-runs the private simplification entry point
+// for the maximality assertion.
+class PolymapTestPeer {
+public:
+  static void resimplify(Polymap& polymap, const Point2d& start, const Point2d& goal) {
+    polymap.simplifyPolyObstacles(start, goal);
   }
 };
 
-GridMap randomWorld(Rng& rng, int width, int height) {
-  GridMap map;
-  map.width = static_cast<unsigned int>(width);
-  map.height = static_cast<unsigned int>(height);
-  map.resolution = 1.0F;
-  map.data.assign(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
-  const auto block = [&](int x0, int y0, int x1, int y1) {
-    for (int y = y0; y <= y1; ++y)
-      for (int x = x0; x <= x1; ++x)
-        if (x >= 0 && y >= 0 && x < width && y < height)
-          map.data[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)] =
-            1;
-  };
-  block(0, 0, width - 1, 0);
-  block(0, height - 1, width - 1, height - 1);
-  block(0, 0, 0, height - 1);
-  block(width - 1, 0, width - 1, height - 1);
-  const int walls = rng.range(2, 5);
-  for (int wall = 0; wall < walls; ++wall) {
-    if (rng.range(0, 1) == 1) {
-      const int y = rng.range(4, height - 5);
-      const int x0 = rng.range(2, width - 12);
-      block(x0, y, x0 + rng.range(6, 14), y);
-    } else {
-      const int x = rng.range(4, width - 5);
-      const int y0 = rng.range(2, height - 12);
-      block(x, y0, x, y0 + rng.range(6, 14));
-    }
-  }
-  const int blobs = rng.range(1, 4);
-  for (int blob = 0; blob < blobs; ++blob) {
-    const int x = rng.range(2, width - 6);
-    const int y = rng.range(2, height - 6);
-    block(x, y, x + rng.range(1, 3), y + rng.range(1, 3));
-  }
-  return map;
-}
+namespace {
 
-bool connected(const GridMap& map, int sx, int sy, int gx, int gy) {
-  const int width = static_cast<int>(map.width);
-  const int height = static_cast<int>(map.height);
-  std::vector<char> seen(map.data.size(), 0);
-  std::vector<int> stack{sy * width + sx};
-  seen[static_cast<size_t>(sy * width + sx)] = 1;
-  while (!stack.empty()) {
-    const int cell = stack.back();
-    stack.pop_back();
-    if (cell == gy * width + gx)
-      return true;
-    const int x = cell % width;
-    const int y = cell / width;
-    const int neighbours[4][2] = {{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}};
-    for (const auto& neighbour : neighbours) {
-      if (neighbour[0] < 0 || neighbour[1] < 0 || neighbour[0] >= width || neighbour[1] >= height)
-        continue;
-      const int index = neighbour[1] * width + neighbour[0];
-      if (map.data[static_cast<size_t>(index)] != 0 || seen[static_cast<size_t>(index)])
-        continue;
-      seen[static_cast<size_t>(index)] = 1;
-      stack.push_back(index);
-    }
-  }
-  return false;
-}
+using simplify_test_worlds::connected;
+using simplify_test_worlds::randomWorld;
+using simplify_test_worlds::Rng;
+
+using Kernel = CGAL::Exact_predicates_exact_constructions_kernel;
+using Polygon = CGAL::Polygon_2<Kernel>;
 
 TEST(SimplifyCoverage, EveryOccupiedCellStaysCoveredAndEndpointsStayFree) {
   int worlds_checked = 0;
@@ -210,6 +150,49 @@ TEST(SimplifyCoverage, EveryOccupiedCellStaysCoveredAndEndpointsStayFree) {
   }
   // The property must have been exercised on a healthy share of the seeds.
   EXPECT_GE(worlds_checked, 20);
+}
+
+TEST(SimplifyCoverage, SecondSimplifyPassRemovesNothing) {
+  // Greedy maximality (design Proposition 1): the loop terminates only when
+  // a full lap finds nothing removable, so re-simplifying the output with
+  // the same protected points must be a no-op.  A broken confirmation lap
+  // (early exit, missed far unlock) fails this on some seed.
+  for (std::uint64_t seed = 1; seed <= 15; ++seed) {
+    Rng rng{20260926ULL * 13 + seed};
+    const int width = rng.range(36, 56);
+    const int height = rng.range(30, 44);
+    const GridMap map = randomWorld(rng, width, height);
+    int start_x = -1, start_y = -1, goal_x = -1, goal_y = -1;
+    for (int attempt = 0; attempt < 60 && start_x < 0; ++attempt) {
+      const int sx = rng.range(1, width - 2), sy = rng.range(1, height - 2);
+      const int gx = rng.range(1, width - 2), gy = rng.range(1, height - 2);
+      if ((sx == gx && sy == gy) ||
+          map.data[static_cast<size_t>(sy) * map.width + static_cast<size_t>(sx)] != 0 ||
+          map.data[static_cast<size_t>(gy) * map.width + static_cast<size_t>(gx)] != 0)
+        continue;
+      if (connected(map, sx, sy, gx, gy)) {
+        start_x = sx;
+        start_y = sy;
+        goal_x = gx;
+        goal_y = gy;
+      }
+    }
+    if (start_x < 0)
+      continue;
+    const Point2d start{start_x + 0.5, start_y + 0.5};
+    const Point2d goal{goal_x + 0.5, goal_y + 0.5};
+    auto created = Polymap::create(
+      map, start_x, start_y, start, {PolymapEndpoint{goal_x, goal_y, goal}}, StopToken{});
+    if (!created)
+      continue;
+    Polymap& polymap = *created.value;
+    size_t before = 0;
+    for (const auto& obstacle : polymap.obstacles()) before += obstacle.ordered_vertices_.size();
+    PolymapTestPeer::resimplify(polymap, start, goal);
+    size_t after = 0;
+    for (const auto& obstacle : polymap.obstacles()) after += obstacle.ordered_vertices_.size();
+    EXPECT_EQ(before, after) << "seed " << seed << ": the first pass was not greedy-maximal";
+  }
 }
 
 }  // namespace

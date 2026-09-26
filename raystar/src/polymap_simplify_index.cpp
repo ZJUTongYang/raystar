@@ -151,9 +151,21 @@ void SimplifyCandidateIndex::unregisterEdge(const EdgeRecord& record,
     }
 }
 
+void SimplifyCandidateIndex::advanceEpoch() const {
+  ++epoch_;
+  if (epoch_ == 0) {
+    // uint32 wrap after ~4e9 queries: a record stamped before the wrap could
+    // alias the fresh counter and be silently deduped away -- a missed
+    // candidate.  Re-zero the tables and restart at 1.
+    for (auto& table : vertex_epoch_) std::fill(table.begin(), table.end(), 0);
+    for (auto& table : edge_epoch_) std::fill(table.begin(), table.end(), 0);
+    epoch_ = 1;
+  }
+}
+
 void SimplifyCandidateIndex::verticesInBox(
   int min_x, int min_y, int max_x, int max_y, std::vector<VertexRecord>& out) const {
-  ++epoch_;
+  advanceEpoch();
   int bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y;
   bucketRange(min_x, min_y, max_x, max_y, bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y);
   for (int bucket_y = bucket_min_y; bucket_y <= bucket_max_y; ++bucket_y)
@@ -174,7 +186,7 @@ void SimplifyCandidateIndex::verticesInBox(
 
 void SimplifyCandidateIndex::edgesInBox(
   int min_x, int min_y, int max_x, int max_y, std::vector<EdgeRecord>& out) const {
-  ++epoch_;
+  advanceEpoch();
   int bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y;
   bucketRange(min_x, min_y, max_x, max_y, bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y);
   for (int bucket_y = bucket_min_y; bucket_y <= bucket_max_y; ++bucket_y)

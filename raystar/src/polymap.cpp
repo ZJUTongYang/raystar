@@ -1263,6 +1263,11 @@ bool Polymap::simplifyPolyObstaclesImpl(const Point2d& start,
 // once at the end.  Inputs the index refuses (duplicate coordinates or
 // zero-length edges: incremental Stage 7 unfreeze shapes) run the legacy
 // loop unchanged.
+//
+// Stop semantics: a stopped run returns false BEFORE compaction, leaving
+// obs_ fully unsimplified (the legacy loop erased incrementally).  Every
+// caller treats stop as a full abort and discards the map, so the
+// difference is unobservable; all-or-nothing is the cleaner contract.
 bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
                                         const StopToken& stop_token,
                                         const std::vector<size_t>* targets) {
