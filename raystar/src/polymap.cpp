@@ -15,7 +15,12 @@
 #include <CGAL/exceptions.h>
 #include <CGAL/number_utils.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <deque>
+
 #include "polymap_detail.h"
+#include "polymap_simplify_index.h"
 
 namespace raystar {
 
@@ -1245,9 +1250,318 @@ bool Polymap::simplifyPolyObstaclesImpl(const Point2d& start,
   return simplifyPolyObstaclesImpl(std::vector<Point2d>{start, goal}, stop_token);
 }
 
+// Candidate-index simplification (SIMPLIFY_STACK_SCAN_DESIGN.md).  The
+// removability predicate is the legacy one verbatim -- COLLINEAR removable
+// middle or RIGHT_TURN passing the protected-point, vertex-swallowing and
+// chord-safety checks -- and the termination predicate is the same greedy
+// fixpoint (a full lap with no removal).  Only two things change: removals
+// are driven by a cascading worklist plus confirmation laps (Theorem 1:
+// cascade attempts <= n + 2r), and the two global scans become local
+// candidate queries against the bucket grid (Lemma 1: conservative
+// superset by interval arithmetic).  Ring connectivity lives in
+// original-id overlays so the index keys stay stable; rings are compacted
+// once at the end.  Inputs the index refuses (duplicate coordinates or
+// zero-length edges: incremental Stage 7 unfreeze shapes) run the legacy
+// loop unchanged.
 bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
                                         const StopToken& stop_token,
                                         const std::vector<size_t>* targets) {
+  using polymap_impl::classifyExactSegments;
+  using polymap_impl::ExactSegmentRelation;
+  using polymap_impl::SimplifyCandidateIndex;
+
+  SimplifyCandidateIndex index;
+  if (!index.build(obs_))
+    return simplifyPolyObstaclesFullScanImpl(protected_points, stop_token, targets);
+
+  static const bool shadow = std::getenv("RAYSTAR_SIMPLIFY_SHADOW") != nullptr;
+
+  const auto is_target = [targets](size_t obstacle_index) {
+    if (!targets)
+      return true;
+    return std::find(targets->begin(), targets->end(), obstacle_index) != targets->end();
+  };
+
+  // Original-id ring connectivity; identity for rings never simplified.
+  struct Overlay {
+    std::vector<char> alive;
+    std::vector<int> next;
+    std::vector<int> prev;
+    int alive_count = 0;
+  };
+  std::vector<Overlay> overlays(obs_.size());
+  for (size_t obstacle = 0; obstacle < obs_.size(); ++obstacle) {
+    const int count = static_cast<int>(obs_[obstacle].ordered_vertices_.size());
+    auto& overlay = overlays[obstacle];
+    overlay.alive.assign(static_cast<size_t>(count), 1);
+    overlay.next.resize(static_cast<size_t>(count));
+    overlay.prev.resize(static_cast<size_t>(count));
+    overlay.alive_count = count;
+    for (int vertex = 0; vertex < count; ++vertex) {
+      overlay.next[static_cast<size_t>(vertex)] = (vertex + 1) % count;
+      overlay.prev[static_cast<size_t>(vertex)] = (vertex + count - 1) % count;
+    }
+  }
+
+  const auto vertex_of = [this](size_t obstacle, int vertex) -> const std::pair<int, int>& {
+    return obs_[obstacle].ordered_vertices_[static_cast<size_t>(vertex)];
+  };
+
+  std::vector<SimplifyCandidateIndex::VertexRecord> vertex_candidates;
+  std::vector<SimplifyCandidateIndex::EdgeRecord> edge_candidates;
+
+  // Legacy removability verdict for removing original vertex b between its
+  // live neighbours a and c on ring `obstacle`.  Returns 1 removable, 0 not,
+  // -1 stopped.  use_index=false enumerates every live vertex/edge instead
+  // of querying the grid (the shadow reference).
+  const auto removable = [&](size_t obstacle, int a, int b, int c, bool use_index) -> int {
+    const auto& coordinate_a = vertex_of(obstacle, a);
+    const auto& coordinate_b = vertex_of(obstacle, b);
+    const auto& coordinate_c = vertex_of(obstacle, c);
+    if (coordinate_a == coordinate_c)
+      return 0;  // legacy chord guard: degenerate chord endpoints
+    const exact_geometry::Point point_a(coordinate_a.first, coordinate_a.second);
+    const exact_geometry::Point point_b(coordinate_b.first, coordinate_b.second);
+    const exact_geometry::Point point_c(coordinate_c.first, coordinate_c.second);
+    const CGAL::Orientation turn = CGAL::orientation(point_a, point_b, point_c);
+
+    bool simplifable = false;
+    if (turn == CGAL::COLLINEAR) {
+      // Only a true middle point is redundant; a collinear backtracking
+      // spike changes the contour and must not be erased.
+      simplifable = exact_geometry::isRemovableCollinearMiddle(point_a, point_b, point_c);
+    } else if (turn == CGAL::RIGHT_TURN) {
+      simplifable = true;
+      for (const auto& point : protected_points) {
+        if (isInTri(coordinate_a.first,
+                    coordinate_a.second,
+                    coordinate_b.first,
+                    coordinate_b.second,
+                    coordinate_c.first,
+                    coordinate_c.second,
+                    point.first,
+                    point.second)) {
+          simplifable = false;
+          break;
+        }
+      }
+      if (simplifable) {
+        // Vertex-swallowing check over the closed cut triangle's bbox.
+        const int min_x = std::min({coordinate_a.first, coordinate_b.first, coordinate_c.first});
+        const int max_x = std::max({coordinate_a.first, coordinate_b.first, coordinate_c.first});
+        const int min_y =
+          std::min({coordinate_a.second, coordinate_b.second, coordinate_c.second});
+        const int max_y =
+          std::max({coordinate_a.second, coordinate_b.second, coordinate_c.second});
+        vertex_candidates.clear();
+        if (use_index) {
+          index.verticesInBox(min_x, min_y, max_x, max_y, vertex_candidates);
+        } else {
+          for (size_t other = 0; other < obs_.size(); ++other)
+            for (size_t vertex = 0; vertex < obs_[other].ordered_vertices_.size(); ++vertex)
+              vertex_candidates.push_back(
+                SimplifyCandidateIndex::VertexRecord{static_cast<int>(other),
+                                                     static_cast<int>(vertex)});
+        }
+        for (const auto& record : vertex_candidates) {
+          if (stop_token.poll())
+            return -1;
+          const auto& overlay = overlays[static_cast<size_t>(record.obstacle)];
+          if (!overlay.alive[static_cast<size_t>(record.vertex)])
+            continue;
+          if (static_cast<size_t>(record.obstacle) == obstacle &&
+              (record.vertex == a || record.vertex == b || record.vertex == c))
+            continue;
+          const auto& vertex = vertex_of(static_cast<size_t>(record.obstacle), record.vertex);
+          if (isInTri(coordinate_a.first,
+                      coordinate_a.second,
+                      coordinate_b.first,
+                      coordinate_b.second,
+                      coordinate_c.first,
+                      coordinate_c.second,
+                      static_cast<double>(vertex.first),
+                      static_cast<double>(vertex.second))) {
+            simplifable = false;
+            break;
+          }
+        }
+      }
+    } else {
+      simplifable = false;  // a left turn is never removed
+    }
+    if (!simplifable)
+      return 0;
+
+    // Chord safety over the chord's bbox (also covers the degenerate
+    // COLLINEAR cut, whose triangle has zero area but whose chord passes
+    // through b).
+    const int chord_min_x = std::min(coordinate_a.first, coordinate_c.first);
+    const int chord_max_x = std::max(coordinate_a.first, coordinate_c.first);
+    const int chord_min_y = std::min(coordinate_a.second, coordinate_c.second);
+    const int chord_max_y = std::max(coordinate_a.second, coordinate_c.second);
+    edge_candidates.clear();
+    if (use_index) {
+      index.edgesInBox(chord_min_x, chord_min_y, chord_max_x, chord_max_y, edge_candidates);
+    } else {
+      for (size_t other = 0; other < obs_.size(); ++other)
+        for (size_t edge = 0; edge < obs_[other].ordered_vertices_.size(); ++edge)
+          edge_candidates.push_back(
+            SimplifyCandidateIndex::EdgeRecord{static_cast<int>(other), static_cast<int>(edge)});
+    }
+    for (const auto& record : edge_candidates) {
+      if (stop_token.poll())
+        return -1;
+      const auto& overlay = overlays[static_cast<size_t>(record.obstacle)];
+      if (!overlay.alive[static_cast<size_t>(record.edge)])
+        continue;  // removed source vertex: the edge no longer exists
+      if (static_cast<size_t>(record.obstacle) == obstacle &&
+          (record.edge == a || record.edge == b))
+        continue;  // the two edges being replaced by the chord
+      const auto& edge_from = vertex_of(static_cast<size_t>(record.obstacle), record.edge);
+      const auto& edge_to = vertex_of(static_cast<size_t>(record.obstacle),
+                                      overlay.next[static_cast<size_t>(record.edge)]);
+      if (edge_from == edge_to)
+        return 0;  // legacy zero-length sentinel (unreachable: build gate)
+      const auto relation =
+        classifyExactSegments(point_a,
+                              point_c,
+                              exact_geometry::Point(edge_from.first, edge_from.second),
+                              exact_geometry::Point(edge_to.first, edge_to.second));
+      if (relation.relation == ExactSegmentRelation::disjoint)
+        continue;
+      if (static_cast<size_t>(record.obstacle) == obstacle &&
+          relation.relation == ExactSegmentRelation::endpoint_touch && relation.contact) {
+        // The two own-ring edges that become adjacent to the chord may touch
+        // it at exactly their shared endpoint.
+        if (record.edge == overlays[obstacle].prev[static_cast<size_t>(a)] &&
+            *relation.contact == point_a)
+          continue;
+        if (record.edge == c && *relation.contact == point_c)
+          continue;
+      }
+      return 0;
+    }
+    return 1;
+  };
+
+  for (size_t obstacle = 0; obstacle < obs_.size(); ++obstacle) {
+    if (!is_target(obstacle))
+      continue;
+    auto& overlay = overlays[obstacle];
+    const int count = overlay.alive_count;
+    if (count <= 3)
+      continue;
+
+    std::deque<int> queue;
+    std::vector<char> queued(static_cast<size_t>(count), 1);
+    for (int vertex = 0; vertex < count; ++vertex)
+      queue.push_back(vertex);
+
+    // Attempts one removal; returns 1 removed, 0 kept, -1 stopped.
+    const auto attempt = [&](int b) -> int {
+      if (!overlay.alive[static_cast<size_t>(b)] || overlay.alive_count <= 3)
+        return 0;
+      const int a = overlay.prev[static_cast<size_t>(b)];
+      const int c = overlay.next[static_cast<size_t>(b)];
+      const int verdict = removable(obstacle, a, b, c, /*use_index=*/true);
+      if (verdict < 0)
+        return -1;
+      if (shadow) {
+        const int reference = removable(obstacle, a, b, c, /*use_index=*/false);
+        if (reference >= 0 && reference != verdict) {
+          std::fprintf(stderr,
+                       "RAYSTAR_SIMPLIFY_SHADOW divergence: obstacle %zu vertex %d "
+                       "(indexed=%d full=%d)\n",
+                       obstacle,
+                       b,
+                       verdict,
+                       reference);
+          std::abort();
+        }
+      }
+      if (verdict != 1)
+        return 0;
+      overlay.alive[static_cast<size_t>(b)] = 0;
+      overlay.next[static_cast<size_t>(a)] = c;
+      overlay.prev[static_cast<size_t>(c)] = a;
+      --overlay.alive_count;
+      index.applyRemoval(static_cast<int>(obstacle),
+                         a,
+                         vertex_of(obstacle, a),
+                         b,
+                         vertex_of(obstacle, b),
+                         c,
+                         vertex_of(obstacle, c));
+      if (!queued[static_cast<size_t>(a)]) {
+        queued[static_cast<size_t>(a)] = 1;
+        queue.push_back(a);
+      }
+      if (!queued[static_cast<size_t>(c)]) {
+        queued[static_cast<size_t>(c)] = 1;
+        queue.push_back(c);
+      }
+      return 1;
+    };
+
+    while (true) {
+      // Phase A: cascade (Theorem 1 bounds these attempts by n + 2r).
+      while (!queue.empty()) {
+        if (stop_token.poll())
+          return false;
+        const int b = queue.front();
+        queue.pop_front();
+        queued[static_cast<size_t>(b)] = 0;
+        if (attempt(b) < 0)
+          return false;
+      }
+      if (overlay.alive_count <= 3)
+        break;
+      // Phase B: confirmation lap.  Catches far unlocking (a removal
+      // elsewhere on this ring emptied some cut triangle); a clean full lap
+      // is the same termination predicate as the legacy stable latch.
+      int start = 0;
+      while (!overlay.alive[static_cast<size_t>(start)])
+        ++start;
+      bool removed_any = false;
+      int vertex = start;
+      do {
+        if (stop_token.poll())
+          return false;
+        const int following = overlay.next[static_cast<size_t>(vertex)];
+        const int result = attempt(vertex);
+        if (result < 0)
+          return false;
+        if (result == 1)
+          removed_any = true;
+        vertex = following;
+      } while (vertex != start && overlay.alive[static_cast<size_t>(start)]);
+      if (!removed_any && overlay.alive[static_cast<size_t>(start)])
+        break;
+    }
+  }
+
+  // Compact the target rings once (original cyclic order, removed vertices
+  // dropped) -- the same result shape as the legacy in-place erase loop.
+  for (size_t obstacle = 0; obstacle < obs_.size(); ++obstacle) {
+    if (!is_target(obstacle))
+      continue;
+    const auto& overlay = overlays[obstacle];
+    auto& ring = obs_[obstacle].ordered_vertices_;
+    if (overlay.alive_count == static_cast<int>(ring.size()))
+      continue;
+    std::vector<std::pair<int, int>> compact;
+    compact.reserve(static_cast<size_t>(overlay.alive_count));
+    for (size_t vertex = 0; vertex < ring.size(); ++vertex)
+      if (overlay.alive[vertex])
+        compact.push_back(ring[vertex]);
+    ring = std::move(compact);
+  }
+  return true;
+}
+
+bool Polymap::simplifyPolyObstaclesFullScanImpl(const std::vector<Point2d>& protected_points,
+                                                const StopToken& stop_token,
+                                                const std::vector<size_t>* targets) {
   const auto is_target = [targets](size_t obstacle_index) {
     if (!targets)
       return true;

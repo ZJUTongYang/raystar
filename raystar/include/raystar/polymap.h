@@ -606,6 +606,13 @@ private:
   bool simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_points,
                                  const StopToken& stop_token,
                                  const std::vector<size_t>* targets = nullptr);
+  // The pre-index implementation (global scans, in-place erase loop).  Kept
+  // verbatim as the fallback for inputs the candidate index refuses
+  // (duplicate coordinates / zero-length edges: incremental Stage 7
+  // unfreeze shapes) and as the reference for the peer-tested chord check.
+  bool simplifyPolyObstaclesFullScanImpl(const std::vector<Point2d>& protected_points,
+                                         const StopToken& stop_token,
+                                         const std::vector<size_t>* targets = nullptr);
   bool validateFreeSpaceInteriorImpl(const Point2d& point,
                                      const StopToken& stop_token,
                                      std::string* error) const;
