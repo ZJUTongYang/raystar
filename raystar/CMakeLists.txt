@@ -46,6 +46,7 @@ endif()
 add_library(raystar_core STATIC
   src/polymap.cpp
   src/polymap_incremental.cpp
+  src/polymap_simplify_index.cpp
   src/polymap_visibility.cpp
   src/polymap_shortening.cpp
   src/raystar_core.cpp
@@ -196,6 +197,15 @@ if(BUILD_TESTING)
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   )
   target_link_libraries(test_polymap_incremental raystar_core)
+
+  ament_add_gtest(test_simplify_index
+    test/test_simplify_index.cpp
+  )
+  target_include_directories(test_simplify_index PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  )
+  target_link_libraries(test_simplify_index raystar_core)
 
   ament_add_gtest(test_raystar_core
     test/test_raystar_core.cpp
