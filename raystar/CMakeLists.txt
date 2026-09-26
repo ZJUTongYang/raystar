@@ -207,6 +207,14 @@ if(BUILD_TESTING)
   )
   target_link_libraries(test_simplify_index raystar_core)
 
+  ament_add_gtest(test_simplify_coverage
+    test/test_simplify_coverage.cpp
+  )
+  target_include_directories(test_simplify_coverage PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  )
+  target_link_libraries(test_simplify_coverage raystar_core)
+
   ament_add_gtest(test_raystar_core
     test/test_raystar_core.cpp
   )
