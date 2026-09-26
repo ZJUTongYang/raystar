@@ -62,8 +62,8 @@ public:
   // Append every registration whose bucket range overlaps the closed box
   // [min_x, max_x] x [min_y, max_y].  Each record is reported once per call
   // (epoch-based dedup).  The box may extend beyond the indexed area.
-  void verticesInBox(int min_x, int min_y, int max_x, int max_y,
-                     std::vector<VertexRecord>& out) const;
+  void verticesInBox(
+    int min_x, int min_y, int max_x, int max_y, std::vector<VertexRecord>& out) const;
   void edgesInBox(int min_x, int min_y, int max_x, int max_y, std::vector<EdgeRecord>& out) const;
 
   // Maintenance for one vertex removal (obstacle o, original ids

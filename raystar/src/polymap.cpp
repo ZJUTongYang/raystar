@@ -1349,19 +1349,16 @@ bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_po
         // Vertex-swallowing check over the closed cut triangle's bbox.
         const int min_x = std::min({coordinate_a.first, coordinate_b.first, coordinate_c.first});
         const int max_x = std::max({coordinate_a.first, coordinate_b.first, coordinate_c.first});
-        const int min_y =
-          std::min({coordinate_a.second, coordinate_b.second, coordinate_c.second});
-        const int max_y =
-          std::max({coordinate_a.second, coordinate_b.second, coordinate_c.second});
+        const int min_y = std::min({coordinate_a.second, coordinate_b.second, coordinate_c.second});
+        const int max_y = std::max({coordinate_a.second, coordinate_b.second, coordinate_c.second});
         vertex_candidates.clear();
         if (use_index) {
           index.verticesInBox(min_x, min_y, max_x, max_y, vertex_candidates);
         } else {
           for (size_t other = 0; other < obs_.size(); ++other)
             for (size_t vertex = 0; vertex < obs_[other].ordered_vertices_.size(); ++vertex)
-              vertex_candidates.push_back(
-                SimplifyCandidateIndex::VertexRecord{static_cast<int>(other),
-                                                     static_cast<int>(vertex)});
+              vertex_candidates.push_back(SimplifyCandidateIndex::VertexRecord{
+                static_cast<int>(other), static_cast<int>(vertex)});
         }
         for (const auto& record : vertex_candidates) {
           if (stop_token.poll())
@@ -1454,8 +1451,7 @@ bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_po
 
     std::deque<int> queue;
     std::vector<char> queued(static_cast<size_t>(count), 1);
-    for (int vertex = 0; vertex < count; ++vertex)
-      queue.push_back(vertex);
+    for (int vertex = 0; vertex < count; ++vertex) queue.push_back(vertex);
 
     // Attempts one removal; returns 1 removed, 0 kept, -1 stopped.
     const auto attempt = [&](int b) -> int {
@@ -1520,8 +1516,7 @@ bool Polymap::simplifyPolyObstaclesImpl(const std::vector<Point2d>& protected_po
       // elsewhere on this ring emptied some cut triangle); a clean full lap
       // is the same termination predicate as the legacy stable latch.
       int start = 0;
-      while (!overlay.alive[static_cast<size_t>(start)])
-        ++start;
+      while (!overlay.alive[static_cast<size_t>(start)]) ++start;
       bool removed_any = false;
       int vertex = start;
       do {

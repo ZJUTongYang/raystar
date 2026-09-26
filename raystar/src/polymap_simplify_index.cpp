@@ -96,8 +96,7 @@ bool SimplifyCandidateIndex::build(const std::vector<Obs>& obstacles) {
     for (size_t vertex = 0; vertex < ring.size(); ++vertex) {
       const auto& coordinate = ring[vertex];
       buckets_[static_cast<size_t>(bucketOf(coordinate.first, coordinate.second))]
-        .vertices.push_back(
-          VertexRecord{static_cast<int>(obstacle), static_cast<int>(vertex)});
+        .vertices.push_back(VertexRecord{static_cast<int>(obstacle), static_cast<int>(vertex)});
       registerEdge(EdgeRecord{static_cast<int>(obstacle), static_cast<int>(vertex)},
                    coordinate,
                    ring[(vertex + 1) % ring.size()]);
@@ -152,22 +151,19 @@ void SimplifyCandidateIndex::unregisterEdge(const EdgeRecord& record,
     }
 }
 
-void SimplifyCandidateIndex::verticesInBox(int min_x,
-                                           int min_y,
-                                           int max_x,
-                                           int max_y,
-                                           std::vector<VertexRecord>& out) const {
+void SimplifyCandidateIndex::verticesInBox(
+  int min_x, int min_y, int max_x, int max_y, std::vector<VertexRecord>& out) const {
   ++epoch_;
   int bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y;
   bucketRange(min_x, min_y, max_x, max_y, bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y);
   for (int bucket_y = bucket_min_y; bucket_y <= bucket_max_y; ++bucket_y)
     for (int bucket_x = bucket_min_x; bucket_x <= bucket_max_x; ++bucket_x) {
-      const auto& bucket = buckets_[static_cast<size_t>(bucket_y) *
-                                      static_cast<size_t>(buckets_x_) +
-                                    static_cast<size_t>(bucket_x)];
+      const auto& bucket =
+        buckets_[static_cast<size_t>(bucket_y) * static_cast<size_t>(buckets_x_) +
+                 static_cast<size_t>(bucket_x)];
       for (const auto& record : bucket.vertices) {
-        auto& seen = vertex_epoch_[static_cast<size_t>(record.obstacle)]
-                                  [static_cast<size_t>(record.vertex)];
+        auto& seen =
+          vertex_epoch_[static_cast<size_t>(record.obstacle)][static_cast<size_t>(record.vertex)];
         if (seen == epoch_)
           continue;
         seen = epoch_;
@@ -176,19 +172,16 @@ void SimplifyCandidateIndex::verticesInBox(int min_x,
     }
 }
 
-void SimplifyCandidateIndex::edgesInBox(int min_x,
-                                        int min_y,
-                                        int max_x,
-                                        int max_y,
-                                        std::vector<EdgeRecord>& out) const {
+void SimplifyCandidateIndex::edgesInBox(
+  int min_x, int min_y, int max_x, int max_y, std::vector<EdgeRecord>& out) const {
   ++epoch_;
   int bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y;
   bucketRange(min_x, min_y, max_x, max_y, bucket_min_x, bucket_min_y, bucket_max_x, bucket_max_y);
   for (int bucket_y = bucket_min_y; bucket_y <= bucket_max_y; ++bucket_y)
     for (int bucket_x = bucket_min_x; bucket_x <= bucket_max_x; ++bucket_x) {
-      const auto& bucket = buckets_[static_cast<size_t>(bucket_y) *
-                                      static_cast<size_t>(buckets_x_) +
-                                    static_cast<size_t>(bucket_x)];
+      const auto& bucket =
+        buckets_[static_cast<size_t>(bucket_y) * static_cast<size_t>(buckets_x_) +
+                 static_cast<size_t>(bucket_x)];
       for (const auto& record : bucket.edges) {
         auto& seen =
           edge_epoch_[static_cast<size_t>(record.obstacle)][static_cast<size_t>(record.edge)];
@@ -207,6 +200,7 @@ void SimplifyCandidateIndex::applyRemoval(int obstacle,
                                           const std::pair<int, int>& current_xy,
                                           int next,
                                           const std::pair<int, int>& next_xy) {
+  (void)next;  // identifies the successor for the caller; the chord keeps `previous` as id
   // Drop the removed vertex registration.
   auto& vertices =
     buckets_[static_cast<size_t>(bucketOf(current_xy.first, current_xy.second))].vertices;

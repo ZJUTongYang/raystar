@@ -89,8 +89,7 @@ std::vector<Obs> randomRings(Rng& rng, int count) {
       --index;
       continue;
     }
-    for (const auto& vertex : ring)
-      used.insert(vertex);
+    for (const auto& vertex : ring) used.insert(vertex);
     obstacles.push_back(makeRing(std::move(ring)));
   }
   return obstacles;
@@ -142,9 +141,9 @@ TEST(SimplifyCandidateIndex, DegenerateAndAdversarialQueries) {
   // A long diagonal edge, a vertical edge collinear with a query chord, and
   // an outer-frame ring corner.
   const std::vector<Obs> obstacles = {
-    makeRing({{0, 0}, {100, 0}, {100, 100}, {0, 100}}),      // frame
-    makeRing({{10, 20}, {90, 80}, {10, 80}}),                // long diagonal edge 0
-    makeRing({{50, 5}, {52, 5}, {52, 15}, {50, 15}}),        // tall thin box
+    makeRing({{0, 0}, {100, 0}, {100, 100}, {0, 100}}),  // frame
+    makeRing({{10, 20}, {90, 80}, {10, 80}}),            // long diagonal edge 0
+    makeRing({{50, 5}, {52, 5}, {52, 15}, {50, 15}}),    // tall thin box
   };
   SimplifyCandidateIndex index(8);
   ASSERT_TRUE(index.build(obstacles));
