@@ -70,17 +70,6 @@ std::set<std::pair<int, std::pair<int, int>>> vertexMap(const Polymap& polymap) 
   return mapping;
 }
 
-std::set<std::pair<int, std::pair<int, int>>> verticesOf(const std::set<int>& obstacles,
-                                                         const Polymap& polymap) {
-  std::set<std::pair<int, std::pair<int, int>>> mapping;
-  const auto& all = polymap.obstacles();
-  for (const int obstacle : obstacles) {
-    const auto& ring = all[static_cast<size_t>(obstacle)].ordered_vertices_;
-    for (const auto& point : ring) mapping.emplace(obstacle, point);
-  }
-  return mapping;
-}
-
 // Runs the planner end-to-end on both an incrementally updated map and a
 // full rebuild of the same occupancy, returning both results for class-
 // level comparison (certified lengths must agree; see the class-
